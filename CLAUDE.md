@@ -59,7 +59,7 @@ States loaded from URLs pass through `sanitizeConfig` (state.svelte.ts), which d
 
 ### Environment / build quirks
 
-- Env vars use the `MERMAID_` prefix (`import.meta.env`), read in `src/lib/util/env.ts`. Only `MERMAID_DOCS_URL` (documentation link target) and `MERMAID_BASE_PATH` remain.
+- Env vars use the `MERMAID_` prefix (`import.meta.env`). Only `MERMAID_BASE_PATH` remains (read via `svelte.config.js`); `src/lib/util/env.ts` was removed together with the last external-link features.
 - HMR is deliberately disabled — every change triggers a full page reload (see `alwaysFullReload` in `vite.config.js`) because HMR corrupts app state.
 - `vite.config.js` pins monaco/mermaid/codemirror into named vendor chunks for long-term caching — keep that intact when touching build config.
 

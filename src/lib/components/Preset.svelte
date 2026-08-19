@@ -11,7 +11,7 @@
   const extras: Record<string, SampleExample[]> = {
     ZenUML: [
       {
-        title: 'Order Service',
+        title: '订单服务',
         isDefault: true,
         code: `zenuml
     title Order Service
