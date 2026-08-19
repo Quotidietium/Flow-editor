@@ -5,7 +5,8 @@
   import { Input } from '$/components/ui/input';
   import { Separator } from '$/components/ui/separator';
   import * as ToggleGroup from '$/components/ui/toggle-group';
-  import { updateCodeStore, inputState } from '$lib/util/state.svelte';
+  import { waitForRender } from '$/util/autoSync';
+  import { inputState, updateCodeStore, validatedState } from '$lib/util/state.svelte';
   import dayjs from 'dayjs';
   import { toBase64 } from 'js-base64';
   import DownloadIcon from '~icons/material-symbols/download';
@@ -93,14 +94,37 @@ ${svgString}`);
     a.remove();
   };
 
+  /**
+   * Wait for the panZoom-off re-render to land and hand back the clean SVG,
+   * replacing the previous fixed 1000ms sleep. Resolves as soon as the
+   * container holds an SVG without the pan-zoom viewport wrapper (the render
+   * may be debounced up to ~1s by autoSync on slow diagrams); on a broken
+   * diagram or after the deadline it falls back to whatever is rendered —
+   * the same best-effort semantics the sleep had, without the fixed delay.
+   */
+  const waitForCleanSvg = async (): Promise<HTMLElement> => {
+    const deadline = performance.now() + 5000;
+    for (;;) {
+      await waitForRender();
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      const svg = document.querySelector<HTMLElement>('#container svg');
+      if (
+        (svg && !svg.querySelector('g.svg-pan-zoom_viewport')) ||
+        validatedState.current.error !== undefined ||
+        performance.now() > deadline
+      ) {
+        if (!svg) {
+          throw new Error('svg not found');
+        }
+        return svg;
+      }
+    }
+  };
+
   const exportImage = async (event: Event, exporter: Exporter) => {
     updateCodeStore({ panZoom: false });
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    const svg = await waitForCleanSvg();
     const canvas = document.createElement('canvas');
-    const svg = document.querySelector<HTMLElement>('#container svg');
-    if (!svg) {
-      throw new Error('svg not found');
-    }
 
     const box = svg.getBoundingClientRect();
 
