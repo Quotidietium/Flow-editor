@@ -13,7 +13,7 @@ const verifySerde = (state: State, serde?: SerdeType): string => {
 describe('Serde tests', () => {
   it('should serialize and deserialize with default serde', () => {
     expect(verifySerde(defaultState)).toMatchInlineSnapshot(
-      `"pako:eNpVjMFugzAMQH_F8mmT2h_gUGmFrZeq26Gnkh4sMCQqiaMQhCrg3xfaTdp8svXe84SV1IwZNp2MlaYQ4VwoB2neylwH00dL_RW229184AhWHN9n2L8cBHot3hvXvj79_SpBPh1XjSFq427LE-WP_tPxDEV5JB_FX_-S8ygzvJfmS6f3_4kOnKqP8sQjVBQeEDfYBlNjFsPAG7QcLK0nTitVGDVbVpilteaGhi4qVG5JmSd3EbG_ZZCh1Zg11PXpGnxNkQtDbaAfZfkGqoRdQg"`
+      `"pako:eJxVjMFugzAMQH_F8mmT2h_gUGmFrZeq26Gnkh4sMCQqiaMQhCrg3xfaTdp8svXe84SV1IwZNp2MlaYQ4VwoB2neylwH00dL_RW229184AhWHN9n2L8cBHot3hvXvj79_SpBPh1XjSFq427LE-WP_tPxDEV5JB_FX_-S8ygzvJfmS6f3_4kOnKqP8sQjVBQeEDfYBlNjFsPAG7QcLK0nTitVGDVbVpilteaGhi4qVG5JmSd3EbG_ZZCh1Zg11PXpGnxNkQtDbaAfZfkGqoRdQg"`
     );
   });
 
@@ -25,7 +25,7 @@ describe('Serde tests', () => {
 
   it('should serialize and deserialize with pako serde', () => {
     expect(verifySerde(defaultState, 'pako')).toMatchInlineSnapshot(
-      `"pako:eNpVjMFugzAMQH_F8mmT2h_gUGmFrZeq26Gnkh4sMCQqiaMQhCrg3xfaTdp8svXe84SV1IwZNp2MlaYQ4VwoB2neylwH00dL_RW229184AhWHN9n2L8cBHot3hvXvj79_SpBPh1XjSFq427LE-WP_tPxDEV5JB_FX_-S8ygzvJfmS6f3_4kOnKqP8sQjVBQeEDfYBlNjFsPAG7QcLK0nTitVGDVbVpilteaGhi4qVG5JmSd3EbG_ZZCh1Zg11PXpGnxNkQtDbaAfZfkGqoRdQg"`
+      `"pako:eJxVjMFugzAMQH_F8mmT2h_gUGmFrZeq26Gnkh4sMCQqiaMQhCrg3xfaTdp8svXe84SV1IwZNp2MlaYQ4VwoB2neylwH00dL_RW229184AhWHN9n2L8cBHot3hvXvj79_SpBPh1XjSFq427LE-WP_tPxDEV5JB_FX_-S8ygzvJfmS6f3_4kOnKqP8sQjVBQeEDfYBlNjFsPAG7QcLK0nTitVGDVbVpilteaGhi4qVG5JmSd3EbG_ZZCh1Zg11PXpGnxNkQtDbaAfZfkGqoRdQg"`
     );
   });
 

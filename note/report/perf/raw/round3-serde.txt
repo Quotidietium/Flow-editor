@@ -1,0 +1,32 @@
+[33mBenchmarking is an experimental feature.
+Breaking changes might not follow SemVer, please pin Vitest's version when using it.[39m
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.10 [39m[90mF:/Github/repo/Flow-editor[39m
+
+Warning: A vi.mock("$app/environment") call in "F:/Github/repo/Flow-editor/src/tests/setup.ts" is not at the top level of the module. Although it appears nested, it will be hoisted and executed before any tests run. Move it to the top level to reflect its actual execution order. This will become an error in a future version.
+See: https://vitest.dev/guide/mocking/modules#how-it-works
+
+ [32m✓[39m benchmark/serde.bench.ts[2m > [22mserializeState (pako level 6)[33m 1926[2mms[22m[39m
+     [1mname                             [22m  [1m      hz[22m  [1m    min[22m  [1m    max[22m  [1m   mean[22m  [1m    p75[22m  [1m    p99[22m  [1m   p995[22m  [1m   p999[22m  [1m   rme[22m  [1msamples[22m
+   [32m·[39m 2KB state (typical small diagram)  [34m5,397.59[39m  [36m 0.0717[39m  [36m 6.4688[39m  [36m 0.1853[39m  [36m 0.1639[39m  [36m 0.8327[39m  [36m 1.4353[39m  [36m 5.5667[39m  [2m±5.71%[22m  [2m   2699[22m
+   [32m·[39m 100KB state (large diagram)        [34m  356.87[39m  [36m 2.6467[39m  [36m 7.3836[39m  [36m 2.8021[39m  [36m 2.7786[39m  [36m 4.7860[39m  [36m 7.3836[39m  [36m 7.3836[39m  [2m±2.01%[22m  [2m    179[22m
+   [32m·[39m 1MB state (extreme diagram)        [34m 38.9163[39m  [36m25.2958[39m  [36m26.9892[39m  [36m25.6962[39m  [36m25.7741[39m  [36m26.9892[39m  [36m26.9892[39m  [36m26.9892[39m  [2m±0.66%[22m  [2m     20[22m
+
+ [32m✓[39m benchmark/serde.bench.ts[2m > [22mdeserializeState[33m 625[2mms[22m[39m
+     [1mname                       [22m  [1m    hz[22m  [1m   min[22m  [1m   max[22m  [1m  mean[22m  [1m   p75[22m  [1m   p99[22m  [1m  p995[22m  [1m  p999[22m  [1m   rme[22m  [1msamples[22m
+   [32m·[39m 1MB state round-trip decode  [34m221.41[39m  [36m4.3225[39m  [36m5.8821[39m  [36m4.5165[39m  [36m4.5756[39m  [36m5.3553[39m  [36m5.8821[39m  [36m5.8821[39m  [2m±0.93%[22m  [2m    111[22m
+
+ [32m✓[39m benchmark/serde.bench.ts[2m > [22mJSON.stringify share[33m 604[2mms[22m[39m
+     [1mname               [22m  [1m      hz[22m  [1m   min[22m  [1m   max[22m  [1m  mean[22m  [1m   p75[22m  [1m   p99[22m  [1m  p995[22m  [1m  p999[22m  [1m   rme[22m  [1msamples[22m
+   [32m·[39m 1MB state stringify  [34m2,640.19[39m  [36m0.3093[39m  [36m0.8883[39m  [36m0.3788[39m  [36m0.4195[39m  [36m0.8266[39m  [36m0.8416[39m  [36m0.8751[39m  [2m±1.26%[22m  [2m   1321[22m
+
+[1m[30m[46m BENCH [49m[39m[22m [36mSummary
+[39m
+  2KB state (typical small diagram)[2m - benchmark/serde.bench.ts[2m > [22m[2mserializeState (pako level 6)[22m
+[32m    15.12x [39m[90mfaster than [39m100KB state (large diagram)
+[32m    138.70x [39m[90mfaster than [39m1MB state (extreme diagram)
+
+  1MB state round-trip decode[2m - benchmark/serde.bench.ts[2m > [22m[2mdeserializeState[22m
+
+  1MB state stringify[2m - benchmark/serde.bench.ts[2m > [22m[2mJSON.stringify share[22m
+

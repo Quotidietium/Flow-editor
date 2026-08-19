@@ -39,27 +39,34 @@ const input = $state<State>(readJSON(CODE_STORE_KEY, { ...defaultState }));
 // module, where update() persists and re-validates every change.
 export const inputState: Readonly<State> = input;
 
-const validatedStateOf = (state: State, serialized: string): ValidatedState => ({
-  ...state,
-  editorMode: state.editorMode ?? 'code',
-  error: undefined,
-  errorMarkers: [],
-  serialized
-});
+const validatedStateOf = (state: State): ValidatedState => {
+  let serialized: string | undefined;
+  return {
+    ...state,
+    editorMode: state.editorMode ?? 'code',
+    error: undefined,
+    errorMarkers: [],
+    // Serialized lazily and cached: during fast typing the debounced URL
+    // writers (hash and view link) only ever read the last publish, so
+    // intermediate publishes skip the deflate entirely. Readers get the
+    // exact same string this property always had.
+    get serialized(): string {
+      serialized ??= serializeState(state);
+      return serialized;
+    }
+  };
+};
 
 const initialState = $state.snapshot(input) as State;
 // Only ever replaced wholesale, so raw (shallow) reactivity is enough.
-let validatedCurrent = $state.raw<ValidatedState>(
-  validatedStateOf(initialState, serializeState(initialState))
-);
+let validatedCurrent = $state.raw<ValidatedState>(validatedStateOf(initialState));
 
 let lastDiagramType = '';
 
 const processState = async (state: State) => {
-  const processed = validatedStateOf(state, '');
+  const processed = validatedStateOf(state);
   // No changes should be done to fields part of `state`.
   try {
-    processed.serialized = serializeState(state);
     const { diagramType } = await parse(state.code);
     processed.diagramType = diagramType;
     if (lastDiagramType === 'zenuml' && diagramType !== lastDiagramType) {
@@ -112,7 +119,16 @@ const processState = async (state: State) => {
 };
 
 // Replaces the old URL-hash store subscription; assigned by initURLSubscription.
-let updateHash: ((serialized: string) => void) | undefined;
+// Trailing debounce that reads the LATEST validated state when it fires, so a
+// typing burst coalesces into one hash update — and one serialization.
+let updateHash: (() => void) | undefined;
+
+// The view / full-screen link rides the same trailing cadence as the URL
+// hash: mid-burst values were never observable in the address bar either.
+let viewHrefSerialized = $state(validatedCurrent.serialized);
+const scheduleViewHref = debounce(() => {
+  viewHrefSerialized = validatedCurrent.serialized;
+}, 250);
 
 // Persist the current input state and asynchronously re-validate it,
 // publishing the result to `validatedState` (and the URL hash, once
@@ -123,7 +139,8 @@ const persistAndProcess = (): void => {
   writeJSON(CODE_STORE_KEY, snapshot);
   void processState(snapshot).then((processed) => {
     validatedCurrent = processed;
-    updateHash?.(processed.serialized);
+    updateHash?.();
+    scheduleViewHref();
   });
 };
 
@@ -146,9 +163,13 @@ export const validatedState = {
   }
 };
 
+// `new` always serializes the same default state — compute it once instead
+// of on every recompute of the derived below.
+const newUrlHash = serializeState(defaultState);
+
 const urlsCurrent = $derived.by(() => ({
-  new: `${resolve('/edit', {})}#${serializeState(defaultState)}`,
-  view: `${resolve('/view', {})}#${validatedCurrent.serialized}`
+  new: `${resolve('/edit', {})}#${newUrlHash}`,
+  view: `${resolve('/view', {})}#${viewHrefSerialized}`
 }));
 
 export const urls = {
@@ -264,10 +285,10 @@ export const replaceInputState = (next: State): void => {
 };
 
 export const initURLSubscription = (): void => {
-  updateHash = debounce((serialized: string) => {
-    history.replaceState(undefined, '', `#${serialized}`);
+  updateHash = debounce(() => {
+    history.replaceState(undefined, '', `#${validatedCurrent.serialized}`);
   }, 250);
-  updateHash(validatedCurrent.serialized);
+  updateHash();
 };
 
 export const verifyState = (): void => {

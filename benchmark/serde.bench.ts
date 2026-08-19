@@ -1,8 +1,9 @@
 // Benchmark: serde state serialization
 //
-// Hot path: serializeState runs inside processState on EVERY state publish
-// (each keystroke), even though the URL hash itself is debounced to 250ms.
-// deflate uses level 9, the slowest setting.
+// Hot path: serializeState runs when a validated state's `serialized` is
+// first read (URL hash writer / view links, all debounced to 250ms) — see
+// state.svelte.ts. deflate uses level 6: 2-2.5x faster than level 9 for ~1%
+// larger output (any level decodes through the same inflate).
 //
 // Also isolates the JSON.stringify share of the cost.
 
@@ -15,7 +16,7 @@ const mediumState = genState(100);
 const largeState = genState(1000);
 const largeSerialized = serializeState(largeState);
 
-describe('serializeState (pako level 9)', () => {
+describe('serializeState (pako level 6)', () => {
   bench('2KB state (typical small diagram)', () => {
     serializeState(smallState);
   });
