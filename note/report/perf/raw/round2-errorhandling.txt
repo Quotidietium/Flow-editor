@@ -1,0 +1,18 @@
+[33mBenchmarking is an experimental feature.
+Breaking changes might not follow SemVer, please pin Vitest's version when using it.[39m
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.10 [39m[90mF:/Github/repo/Flow-editor[39m
+
+Warning: A vi.mock("$app/environment") call in "F:/Github/repo/Flow-editor/src/tests/setup.ts" is not at the top level of the module. Although it appears nested, it will be hoisted and executed before any tests run. Move it to the top level to reflect its actual execution order. This will become an error in a future version.
+See: https://vitest.dev/guide/mocking/modules#how-it-works
+
+ [32m✓[39m benchmark/errorHandling.bench.ts[2m > [22mfindMostRelevantLineNumber
+     [1mname                                                   [22m  [1m      hz[22m  [1m   min[22m  [1m   max[22m  [1m  mean[22m  [1m   p75[22m  [1m   p99[22m  [1m  p995[22m  [1m  p999[22m  [1m    rme[22m  [1msamples[22m
+   [32m·[39m 500 lines / 70-char error line (typical broken diagram)  [34m3,305.42[39m  [36m0.2855[39m  [36m0.3137[39m  [36m0.3025[39m  [36m0.3137[39m  [36m0.3137[39m  [36m0.3137[39m  [36m0.3137[39m  [2m±12.31%[22m  [2m      3[22m
+   [32m·[39m 1000 lines / 100-char error line (large broken diagram)  [34m1,630.79[39m  [36m0.6132[39m  [36m0.6132[39m  [36m0.6132[39m  [36m0.6132[39m  [36m0.6132[39m  [36m0.6132[39m  [36m0.6132[39m  [2m ±0.00%[22m  [2m      1[22m
+
+[1m[30m[46m BENCH [49m[39m[22m [36mSummary
+[39m
+  500 lines / 70-char error line (typical broken diagram)[2m - benchmark/errorHandling.bench.ts[2m > [22m[2mfindMostRelevantLineNumber[22m
+[32m    2.03x [39m[90mfaster than [39m1000 lines / 100-char error line (large broken diagram)
+
