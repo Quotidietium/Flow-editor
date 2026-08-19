@@ -1,4 +1,6 @@
+import { defaultState } from '$/constants';
 import type { State } from '$/types';
+import { serializeState } from '$/util/serde';
 import assert from 'node:assert';
 import { expect, test } from './test';
 
@@ -10,11 +12,11 @@ test.describe('Site Loads', () => {
   });
 
   test('should keep code after reload', async ({ editPage, page }) => {
-    await editPage.checkInEditor('Car');
-    await editPage.checkTextInView('Car');
+    await editPage.checkInEditor('New car');
+    await editPage.checkTextInView('New car');
     await page.reload();
-    await editPage.checkInEditor('Car');
-    await editPage.checkTextInView('Car');
+    await editPage.checkInEditor('New car');
+    await editPage.checkTextInView('New car');
   });
 
   test('Check Redirect from old URL', async ({ page, editPage }) => {
@@ -69,7 +71,7 @@ test.describe('Site Loads', () => {
     });
   });
 
-  test('should prompt user to scrub unsafe config', async ({ editPage, page }) => {
+  test('should prompt user to scrub unsafe config', async ({ page }) => {
     let dialogAccepted = false;
     page.on('dialog', async (dialog) => {
       expect(dialog.type()).toBe('confirm');
@@ -77,31 +79,29 @@ test.describe('Site Loads', () => {
       await dialog.accept();
       dialogAccepted = true;
     });
-    await editPage.start(
-      `/edit?${new URLSearchParams({
-        code: `data:application/vnd.mermaid,${encodeURIComponent('flowchart TD\nHello-->World')}`,
-        config: `data:application/json,${encodeURIComponent(
-          JSON.stringify({
-            someOtherSetting: 'Test value',
-            securityLevel: 'loose',
-            secure: [],
-            themeVariables: {
-              nodeBorder: '</style></svg><script>alert("XSS")</script>'
-            }
-          })
-        )}`
-      }).toString()}`
+    await page.goto(
+      `/edit#${serializeState({
+        ...defaultState,
+        code: 'flowchart TD\nHello-->World',
+        mermaid: JSON.stringify({
+          someOtherSetting: 'Test value',
+          securityLevel: 'loose',
+          secure: [],
+          themeVariables: {
+            nodeBorder: '</style></svg><script>alert("XSS")</script>'
+          }
+        })
+      })}`
     );
-    await editPage.checkTextInView('Hello');
+    await expect(page.locator('#view')).toContainText('Hello', { timeout: 10_000 });
     await expect.poll(() => dialogAccepted).toBeTruthy();
     const codeStore = await page.evaluate(() => localStorage.getItem('codeStore'));
     assert(codeStore);
     const parsedStore = JSON.parse(codeStore) as State;
     const parsedConfig = JSON.parse(parsedStore.mermaid) as Record<string, unknown>;
-    expect(parsedConfig).toEqual({
-      someOtherSetting: 'Test value',
-      themeVariables: {}
-    });
+    // The dark-mode sync effect may add `theme` — only the scrub outcome matters.
+    expect(parsedConfig.someOtherSetting).toBe('Test value');
+    expect(parsedConfig.themeVariables).toEqual({});
     // should scrub unsafe securityLevel but keep other settings
     expect(parsedConfig.securityLevel).toBeUndefined();
     expect(parsedConfig.secure).toBeUndefined();

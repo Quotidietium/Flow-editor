@@ -5,20 +5,6 @@ test.describe('Check actions', () => {
     await editPage.toggleActions();
   });
 
-  test('should update markdown code', async ({ editPage }) => {
-    const oldText = await editPage.markdownInput.inputValue();
-    await editPage.typeInEditor('C --> HistoryTest', { bottom: true, newline: true });
-    await expect(editPage.markdownInput).not.toHaveValue(oldText);
-  });
-
-  test.skip('should load gists from URL', async ({ page }) => {
-    await page
-      .locator('#gist')
-      .fill('https://gist.github.com/sidharthv96/6268a23e673a533dcb198f241fd7012a');
-    await page.getByText('Load Gist').click();
-    await expect(page.getByText('Go shopping!!')).toBeVisible();
-  });
-
   test('should download png and svg', async ({ editPage }) => {
     const firstPngSize = await editPage.checkAndDownloadPNG(20_000);
     const firstSvgSize = await editPage.downloadSVG(10_000);

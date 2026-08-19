@@ -23,10 +23,10 @@ A & B & C & D & E --> F & G & H & I & J & K & LongTest`
   });
 
   test('supports commenting code out/in', async ({ editPage }) => {
-    await editPage.toggleComment('fa-car');
-    await editPage.checkTextNotInView('Car');
-    await editPage.toggleComment('fa-car');
-    await editPage.checkTextInView('Car');
+    await editPage.toggleComment('New car');
+    await editPage.checkTextNotInView('New car');
+    await editPage.toggleComment('New car');
+    await editPage.checkTextInView('New car');
   });
 
   test('supports editing code when code is incorrect', async ({ editPage }) => {
