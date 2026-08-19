@@ -5,7 +5,7 @@
 
 ## 1. 功能概述
 
-在编辑页新增第三个标签页 **Visual**（Code / Config / Visual）。用户在画布上通过鼠标完成图形化编辑，编辑器实时生成 Mermaid flowchart 源代码，并通过项目唯一的状态网关 `updateCode()` 同步——右侧预览、URL 分享链接、localStorage 持久化全部自动生效。
+**所见即所得（WYSIWYG）**：导航栏的 **Visual** 开关把可视化编辑器切换进右侧的大预览区（左侧 Code/Config 编辑区保持不变）。用户直接在预览区的画布上用鼠标编辑图形，编辑器实时生成 Mermaid flowchart 源代码，并通过项目唯一的状态网关 `updateCode()` 同步——切回预览即见渲染结果，URL 分享链接、localStorage 持久化全部自动生效。
 
 ### 1.1 画布操作（类 Draw.io）
 
@@ -38,7 +38,7 @@ src/lib/util/visualEditor/model.ts        纯逻辑层（无 DOM，100% 单测�
   └─ sanitizeLabel / nextNodeId ...       标签消毒、ID 生成
 
 src/lib/components/VisualEditor.svelte    画布组件（SVG，Svelte 5 runes）
-src/routes/(app)/edit/+page.svelte        Visual 标签集成（activeTab 本地状态）
+src/routes/(app)/edit/+page.svelte        右栏预览/可视化切换（visualMode 本地状态 + Navbar Toggle）
 src/lib/components/Card/Tabs.svelte       Tab 增加可选 testID 透传
 tests/visualEditor.spec.ts                Playwright e2e（2 个用例，全绿）
 src/lib/util/visualEditor/model.test.ts   单元测试（15 个用例，全绿）
@@ -46,9 +46,9 @@ src/lib/util/visualEditor/model.test.ts   单元测试（15 个用例，全绿�
 
 ### 2.1 状态同步设计（关键决策）
 
-- **写路径**：所有图形操作最终调用 `syncCode()` → `updateCode(generateCode(graph), {updateDiagram: true})`（`state.svelte.ts:257` 的唯一变更网关）。拖拽期间不触发，仅在 pointerup / 提交编辑时同步一次。
-- **读路径**：进入 Visual 标签时 `parseFlowchart(validatedState.current.code)` 导入现有代码（位置由 `layoutGraph` 重排——Mermaid 源码不携带坐标）。
-- **双向一致性**：组件常驻挂载（edit 页用 `hidden` class 切换而非销毁，Monaco 与图状态跨标签保留）；`active` 变为 true 且代码与上次同步不同（用户在 Code 标签改过）时自动重新导入。
+- **写路径**：所有图形操作最终调用 `syncCode()` → `updateCode(generateCode(graph), {updateDiagram: true})`（`state.svelte.ts` 的唯一变更网关）。拖拽期间不触发，仅在 pointerup / 提交编辑时同步一次。
+- **读路径**：进入可视化模式（VisualEditor 挂载）时 `parseFlowchart(validatedState.current.code)` 导入现有代码（位置由 `layoutGraph` 重排——Mermaid 源码不携带坐标）。
+- **布局**：编辑页右栏在 `View`（预览）与 `VisualEditor` 之间条件切换（`visualMode` 本地状态，Navbar Toggle 控制）；由于每次图形操作都即时同步代码，离开再进入可视化模式会经代码确定性还原图形。
 - **往返稳定性**：`generateCode → parseFlowchart → generateCode` 不动点（单测覆盖）；标签含括号等特殊字符时生成 `"引号形式"`，解析时剥引号还原。
 
 ### 2.2 解析器能力边界（尽力而为）
