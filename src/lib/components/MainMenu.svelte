@@ -20,18 +20,18 @@
   }
 
   const menuItems: MenuItem[] = $derived([
-    { href: urls.current.new, icon: AddIcon, label: 'New', renderer: menuItem },
+    { href: urls.current.new, icon: AddIcon, label: '新建', renderer: menuItem },
     {
       href: window.location.href,
       icon: DuplicateIcon,
       isSectionEnd: true,
-      label: 'Duplicate',
+      label: '复制副本',
       renderer: menuItem
     },
     {
       href: '#',
       icon: ContrastIcon,
-      label: 'Dark Mode',
+      label: '深色模式',
       renderer: darkModeMenuItem
     }
   ]);
@@ -60,7 +60,7 @@
     )}>
     <span class="flex items-center gap-2">
       <ContrastIcon />
-      Dark Mode
+      深色模式
     </span>
     <Switch
       checked={mode.current === 'dark'}

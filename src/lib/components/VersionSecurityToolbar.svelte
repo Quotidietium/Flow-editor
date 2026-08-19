@@ -13,7 +13,7 @@
     variant="ghost"
     size="icon"
     data-testid={TID.themeToggleButton}
-    title="Switch to {mode.current === 'dark' ? 'light' : 'dark'} theme"
+    title="切换到{mode.current === 'dark' ? '浅色' : '深色'}主题"
     class="[&_svg]:size-5"
     onclick={() => setMode(mode.current === 'dark' ? 'light' : 'dark')}>
     <ThemeIcon />

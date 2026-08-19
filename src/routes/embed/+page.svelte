@@ -49,7 +49,7 @@
 </script>
 
 <svelte:head>
-  <title>Mermaid diagram</title>
+  <title>Mermaid 图表</title>
   <meta name="robots" content="noindex" />
 </svelte:head>
 
@@ -62,8 +62,7 @@
           class="max-w-md rounded-lg border bg-card p-4 text-center text-sm text-card-foreground shadow-sm">
           <p>{resolved.error}</p>
           <p class="mt-2 text-muted-foreground">
-            Check that the link is complete, or
-            <a class="underline" href={resolve('/edit', {})}>create a new diagram</a>.
+            请检查链接是否完整，或<a class="underline" href={resolve('/edit', {})}>创建新图表</a>。
           </p>
         </div>
       </div>
@@ -88,7 +87,7 @@
           class="absolute top-2 left-2"
           variant="ghost"
           size="icon"
-          title="Toggle light / dark"
+          title="切换浅色 / 深色"
           onclick={flipMode}>
           {#if settings.mode === 'dark'}
             <LightModeIcon />
@@ -112,7 +111,7 @@
           target="_blank"
           rel="noreferrer noopener"
           class="text-muted-foreground hover:text-foreground">
-          Edit
+          编辑
         </a>
       </div>
     </footer>

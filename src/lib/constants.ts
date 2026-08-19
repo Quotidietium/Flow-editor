@@ -37,11 +37,11 @@ export const MERMAID_LOOKS = ['classic', 'handDrawn', 'neo'] as const;
 
 export const defaultState: State = {
   code: `flowchart TD
-    A[Christmas] -->|Get money| B(Go shopping)
-    B --> C{Let me think}
-    C -->|One| D[Laptop]
-    C -->|Two| E[iPhone]
-    C -->|Three| F[New car]
+    A[圣诞节] -->|拿到压岁钱| B(去购物)
+    B --> C{让我想想}
+    C -->|一| D[笔记本电脑]
+    C -->|二| E[iPhone]
+    C -->|三| F[新车]
   `,
   grid: true,
   mermaid: JSON.stringify({ theme: 'default' }, undefined, 2),

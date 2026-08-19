@@ -31,10 +31,10 @@
   dayjs.extend(dayjsRelativeTime);
 
   const baseTabs: Tab[] = [
-    { id: 'manual', title: 'Saved', icon: BookmarkIcon },
-    { id: 'auto', title: 'Timeline', icon: HistoryIcon }
+    { id: 'manual', title: '已保存', icon: BookmarkIcon },
+    { id: 'auto', title: '时间线', icon: HistoryIcon }
   ];
-  const loaderTab: Tab = { id: 'loader', title: 'Revisions', icon: GitAltIcon };
+  const loaderTab: Tab = { id: 'loader', title: '修订版本', icon: GitAltIcon };
 
   const tabs = $derived(
     historyState.loaderEntries.length > 0 ? [loaderTab, ...baseTabs] : baseTabs
@@ -62,8 +62,8 @@
 
   const emptyMessage = $derived(
     historyState.mode === 'auto'
-      ? 'No timeline snapshots yet.\nThe Timeline is saved automatically every minute.'
-      : 'No saved states yet.\nClick the Save button to bookmark the current diagram and restore it later.'
+      ? '暂无时间线快照。\n时间线每分钟自动保存一次。'
+      : '暂无已保存状态。\n点击保存按钮收藏当前图表，稍后可随时恢复。'
   );
 
   const tabSelectHandler = (tab: Tab) => {
@@ -92,19 +92,19 @@
       }
       const data: HistoryEntry[] = JSON.parse(await file.text());
       const { restored, invalid, duplicates } = restoreEntries(data);
-      notify(`${restored} restored, ${duplicates} duplicate, ${invalid} invalid.`);
+      notify(`已恢复 ${restored} 条，重复 ${duplicates} 条，无效 ${invalid} 条。`);
     });
     input.click();
   };
 
   const saveHistory = () => {
     if (!addManualEntry($state.snapshot(inputState))) {
-      notify('State already saved.');
+      notify('该状态已保存过。');
     }
   };
 
   const clearAll = () => {
-    if (prompt('Clear all saved items?')) {
+    if (prompt('确定清空全部已保存项目？')) {
       clearActive();
     }
   };
@@ -131,14 +131,14 @@
         variant="ghost"
         id="uploadHistory"
         onclick={uploadHistory}
-        title="Upload history"><UploadIcon /></Button>
+        title="导入历史"><UploadIcon /></Button>
       {#if historyState.entries.length > 0}
         <Button
           id="downloadHistory"
           size="icon"
           variant="ghost"
           onclick={downloadHistory}
-          title="Download history"><DownloadIcon /></Button>
+          title="导出历史"><DownloadIcon /></Button>
       {/if}
       <Separator orientation="vertical" />
       <Button
@@ -146,7 +146,7 @@
         size="icon"
         variant="ghost"
         onclick={saveHistory}
-        title="Save current state"><SaveIcon /></Button>
+        title="保存当前状态"><SaveIcon /></Button>
       {#if historyState.mode !== 'loader'}
         <Button
           id="clearHistory"
@@ -154,7 +154,7 @@
           variant="ghost"
           class="hover:text-destructive"
           onclick={clearAll}
-          title="Delete all saved states"><TrashAltIcon /></Button>
+          title="清空全部已保存状态"><TrashAltIcon /></Button>
       {/if}
     </div>
   {/snippet}
@@ -170,13 +170,13 @@
                     href={url}
                     target="_blank"
                     rel="noopener"
-                    title="Open revision in new tab"
+                    title="在新标签页打开修订版本"
                     class="min-w-0 truncate text-blue-500 hover:underline">{name}</a>
                 {:else if editingId === id}
                   <input
                     class="min-w-0 flex-1 rounded border px-1 text-sm"
                     bind:value={editValue}
-                    aria-label="Rename entry"
+                    aria-label="重命名条目"
                     onkeydown={(event) => {
                       if (event.key === 'Enter') {
                         commitRename();
@@ -191,7 +191,7 @@
                     <button
                       type="button"
                       class="shrink-0 opacity-50 hover:opacity-100"
-                      title="Rename"
+                      title="重命名"
                       onclick={() => {
                         editingId = id;
                         editValue = name ?? '';
@@ -216,13 +216,13 @@
                 rel="noopener"
                 size="icon"
                 variant="ghost"
-                title="Open in new tab">
+                title="在新标签页打开">
                 <OpenInNewIcon />
               </Button>
               <Button
                 size="icon"
                 variant="ghost"
-                title="Restore this version"
+                title="恢复此版本"
                 onclick={() => restoreHistoryItem(state)}>
                 <UndoIcon />
               </Button>
@@ -231,7 +231,7 @@
                   size="icon"
                   variant="ghost"
                   class="hover:text-destructive"
-                  title="Delete this version"
+                  title="删除此版本"
                   onclick={() => removeEntry(id)}>
                   <TrashAltIcon />
                 </Button>

@@ -1,6 +1,6 @@
 {
-	"short_name": "Mermaid",
-	"name": "Mermaid Live Editor",
+	"short_name": "Flow 编辑器",
+	"name": "Flow 在线图表编辑器",
 	"icons": [
 		{
 			"src": "/favicon.png",
@@ -13,6 +13,6 @@
 	"display": "standalone",
 	"scope": "/edit",
 	"theme_color": "#ff3670",
-	"description": "FlowChart & Diagrams Editor.",
+	"description": "在线流程图与图表编辑器，纯浏览器本地运行。",
 	"orientation": "natural"
 }

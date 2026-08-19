@@ -18,14 +18,14 @@ import { errorDebug, formatJSON } from './util';
 export { defaultState };
 
 const urlParseFailedState = `flowchart TD
-    A[Loading URL failed. We can try to figure out why.] -->|Decode JSON| B(Please check the console to see the JSON and error details.)
-    B --> C{Is the JSON correct?}
-    C -->|Yes| D(Please Click here to Raise an issue in github.<br/>Including the broken link in the issue <br/> will speed up the fix.)
-    C -->|No| E{Did someone <br/>send you this link?}
-    E -->|Yes| F[Ask them to send <br/>you the complete link]
-    E -->|No| G{Did you copy <br/> the complete URL?}
-    G --> |Yes| D
-    G --> |"No :("| H(Try using the Timeline tab in History <br/>from same browser you used to create the diagram.)`;
+    A[链接加载失败，我们可以尝试排查原因] -->|解码 JSON| B(请检查控制台中的 JSON 与错误详情)
+    B --> C{JSON 是否正确?}
+    C -->|是| D(请在 GitHub 提交 Issue 反馈此问题<br/>附上失效链接可以加快修复)
+    C -->|否| E{这个链接是<br/>别人发给你的吗?}
+    E -->|是| F[请对方发送<br/>完整的链接]
+    E -->|否| G{你复制的 URL<br/>完整吗?}
+    G --> |是| D
+    G --> |"否 :("| H(可以尝试在原浏览器的历史记录<br/>时间线标签页中恢复此图表)`;
 
 const CODE_STORE_KEY = 'codeStore';
 
@@ -234,13 +234,11 @@ export const sanitizeConfig = (config: string | MermaidConfig) => {
   if (
     unsafePaths.length > 0 &&
     confirm(
-      `Removing ${unsafePaths
+      `为安全起见，将从配置中移除 ${unsafePaths
         .map((unsafePath) => {
           return `${JSON.stringify(unsafePath.join('.'))}: ${JSON.stringify(lodashGet(mermaidConfig, unsafePath))}`;
         })
-        .join(
-          ',\n'
-        )} from the config for safety.\nClick Cancel if you trust the source of this Diagram.`
+        .join(',\n')}。\n如果你信任此图表的来源，请点击“取消”。`
     )
   ) {
     stripConfigPaths(mermaidConfig, unsafePaths);

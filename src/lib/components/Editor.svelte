@@ -46,7 +46,7 @@
       <div class="flex items-center justify-between gap-2 bg-slate-900 p-2 text-white">
         <div class="flex w-fit items-center gap-2">
           <ExclamationCircleIcon class="size-6 text-destructive" aria-hidden="true" />
-          <p>Syntax error</p>
+          <p>语法错误</p>
         </div>
       </div>
       <output class="max-h-32 overflow-auto bg-muted p-2" name="mermaid-error" for="editor">

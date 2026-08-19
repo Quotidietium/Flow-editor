@@ -18,9 +18,9 @@
     <MermaidIcon class="size-6" />
     <a href={resolve('/', {})} class="whitespace-nowrap text-accent">
       {#if !mobileToggle}
-        Mermaid
+        Flow
       {/if}
-      Live Editor
+      编辑器
     </a>
   </div>
   <div

@@ -15,13 +15,13 @@
   <Toggle
     bind:pressed={() => inputState.rough, (rough) => updateCodeStore({ rough })}
     size="sm"
-    title="Hand-Drawn">
+    title="手绘风格">
     <RoughIcon />
   </Toggle>
   <Toggle
     bind:pressed={() => inputState.grid ?? defaultState.grid, (grid) => updateCodeStore({ grid })}
     size="sm"
-    title="Background Grid">
+    title="背景网格">
     <BackgroundIcon />
   </Toggle>
 </FloatingToolbar>

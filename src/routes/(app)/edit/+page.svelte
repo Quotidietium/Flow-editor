@@ -37,12 +37,12 @@
     {
       icon: CodeIcon,
       id: 'code',
-      title: 'Code'
+      title: '代码'
     },
     {
       icon: GearIcon,
       id: 'config',
-      title: 'Config'
+      title: '配置'
     }
   ];
 
@@ -73,25 +73,25 @@
 <div class="flex h-full flex-col overflow-hidden">
   {#snippet mobileToggle()}
     <div class="flex items-center gap-2">
-      Edit <Switch
+      编辑 <Switch
         id="editorMode"
         class="data-[state=checked]:bg-accent"
-        bind:checked={isViewMode} /> View
+        bind:checked={isViewMode} /> 预览
     </div>
   {/snippet}
 
   <Navbar mobileToggle={isMobile ? mobileToggle : undefined}>
-    <Toggle bind:pressed={isHistoryOpen} size="sm" title="History" aria-label="History">
+    <Toggle bind:pressed={isHistoryOpen} size="sm" title="历史记录" aria-label="历史记录">
       <HistoryIcon />
     </Toggle>
     <Toggle
       bind:pressed={visualMode}
       size="sm"
       data-testid={TID.visualTab}
-      title="Visual editing"
-      aria-label="Visual editing">
+      title="可视化编辑"
+      aria-label="可视化编辑">
       <EditIcon />
-      Visual
+      可视化
     </Toggle>
     <Share />
   </Navbar>

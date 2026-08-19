@@ -106,7 +106,7 @@ export const resolveEmbedSettings = (url: URL): ResolvedEmbed => {
   }
 
   if (hashFailed) {
-    return { error: 'Unable to load the diagram from this URL.' };
+    return { error: '无法从此链接加载图表。' };
   }
 
   const code = hashCode ?? (baseState?.code || defaultState.code);

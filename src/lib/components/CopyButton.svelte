@@ -7,7 +7,7 @@
 
   let {
     onclick,
-    label = 'Copy'
+    label = '复制'
   }: { onclick: (event?: Event) => Promise<unknown>; label?: string } = $props();
 
   let showCheckIcon = $state(false);
@@ -22,7 +22,7 @@
       }, 1000);
       await onclick(event);
     } catch {
-      notify('Failed to copy');
+      notify('复制失败');
     }
   }}>
   <div class="grid">

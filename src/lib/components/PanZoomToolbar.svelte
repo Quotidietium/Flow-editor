@@ -24,7 +24,7 @@
 </script>
 
 <FloatingToolbar>
-  <Button variant="ghost" size="icon" title="Reset view" onclick={() => panZoomState.reset()}>
+  <Button variant="ghost" size="icon" title="重置视图" onclick={() => panZoomState.reset()}>
     <ArrowsToCircleIcon />
   </Button>
   <Separator orientation="vertical" />
@@ -32,7 +32,7 @@
     variant="ghost"
     size="icon"
     class={zoomClass}
-    title="Zoom out"
+    title="缩小"
     onclick={() => panZoomState.zoomOut()}>
     <MagnifyingGlassMinusIcon />
   </Button>
@@ -40,13 +40,13 @@
     variant="ghost"
     size="icon"
     class={zoomClass}
-    title="Zoom in"
+    title="放大"
     onclick={() => panZoomState.zoomIn()}>
     <MagnifyingGlassPlusIcon />
   </Button>
   {#if fullScreenHref}
     <Separator orientation="vertical" class={zoomClass} />
-    <Button variant="ghost" size="icon" title="Full Screen" href={fullScreenHref} target="_blank">
+    <Button variant="ghost" size="icon" title="全屏" href={fullScreenHref} target="_blank">
       <ExpandIcon />
     </Button>
   {/if}

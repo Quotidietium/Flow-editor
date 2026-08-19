@@ -13,19 +13,19 @@ const verifySerde = (state: State, serde?: SerdeType): string => {
 describe('Serde tests', () => {
   it('should serialize and deserialize with default serde', () => {
     expect(verifySerde(defaultState)).toMatchInlineSnapshot(
-      `"pako:eJxVjMFugzAMQH_F8mmT2h_gUGmFrZeq26Gnkh4sMCQqiaMQhCrg3xfaTdp8svXe84SV1IwZNp2MlaYQ4VwoB2neylwH00dL_RW229184AhWHN9n2L8cBHot3hvXvj79_SpBPh1XjSFq427LE-WP_tPxDEV5JB_FX_-S8ygzvJfmS6f3_4kOnKqP8sQjVBQeEDfYBlNjFsPAG7QcLK0nTitVGDVbVpilteaGhi4qVG5JmSd3EbG_ZZCh1Zg11PXpGnxNkQtDbaAfZfkGqoRdQg"`
+      `"pako:eJyrVkrOT0lVslJKy8kvT85ILCpRCHGJyVMAAsfop3MWv1g_70VXU6yCrq5dzbPu_U87Njzt6366qfHlpI01Ck4aT_t2v9iy9nnnSk2IHieQQgXn6hfrVj7rmPiseTMQ1UKknMFmPNnRUKPgEv18zZQX6zY8m7Pm-ZStL1omxqIo2dVTo-AanRmQkZ-Xiiqzo7NGwS362bQNL_YuA8so6SilF2WmKFmVFJWm6ijlphblJoK4StUg2RilkozU3NQYJSsgMyU1LbE0pyRGKSavFqitIDEvKj8_F6azKL80PUPJKi0xpxjIKy1ISSxJdclMTC9KhCqpBQCBtXnh"`
     );
   });
 
   it('should serialize and deserialize with base64 serde', () => {
     expect(verifySerde(defaultState, 'base64')).toMatchInlineSnapshot(
-      `"base64:eyJjb2RlIjoiZmxvd2NoYXJ0IFREXG4gICAgQVtDaHJpc3RtYXNdIC0tPnxHZXQgbW9uZXl8IEIoR28gc2hvcHBpbmcpXG4gICAgQiAtLT4gQ3tMZXQgbWUgdGhpbmt9XG4gICAgQyAtLT58T25lfCBEW0xhcHRvcF1cbiAgICBDIC0tPnxUd298IEVbaVBob25lXVxuICAgIEMgLS0-fFRocmVlfCBGW05ldyBjYXJdXG4gICIsImdyaWQiOnRydWUsIm1lcm1haWQiOiJ7XG4gIFwidGhlbWVcIjogXCJkZWZhdWx0XCJcbn0iLCJwYW5ab29tIjp0cnVlLCJyb3VnaCI6ZmFsc2UsInVwZGF0ZURpYWdyYW0iOnRydWV9"`
+      `"base64:eyJjb2RlIjoiZmxvd2NoYXJ0IFREXG4gICAgQVvlnKPor57oioJdIC0tPnzmi7_liLDljovlsoHpkrF8IEIo5Y676LSt54mpKVxuICAgIEIgLS0-IEN76K6p5oiR5oOz5oOzfVxuICAgIEMgLS0-fOS4gHwgRFvnrJTorrDmnKznlLXohJFdXG4gICAgQyAtLT585LqMfCBFW2lQaG9uZV1cbiAgICBDIC0tPnzkuIl8IEZb5paw6L2mXVxuICAiLCJncmlkIjp0cnVlLCJtZXJtYWlkIjoie1xuICBcInRoZW1lXCI6IFwiZGVmYXVsdFwiXG59IiwicGFuWm9vbSI6dHJ1ZSwicm91Z2giOmZhbHNlLCJ1cGRhdGVEaWFncmFtIjp0cnVlfQ"`
     );
   });
 
   it('should serialize and deserialize with pako serde', () => {
     expect(verifySerde(defaultState, 'pako')).toMatchInlineSnapshot(
-      `"pako:eJxVjMFugzAMQH_F8mmT2h_gUGmFrZeq26Gnkh4sMCQqiaMQhCrg3xfaTdp8svXe84SV1IwZNp2MlaYQ4VwoB2neylwH00dL_RW229184AhWHN9n2L8cBHot3hvXvj79_SpBPh1XjSFq427LE-WP_tPxDEV5JB_FX_-S8ygzvJfmS6f3_4kOnKqP8sQjVBQeEDfYBlNjFsPAG7QcLK0nTitVGDVbVpilteaGhi4qVG5JmSd3EbG_ZZCh1Zg11PXpGnxNkQtDbaAfZfkGqoRdQg"`
+      `"pako:eJyrVkrOT0lVslJKy8kvT85ILCpRCHGJyVMAAsfop3MWv1g_70VXU6yCrq5dzbPu_U87Njzt6366qfHlpI01Ck4aT_t2v9iy9nnnSk2IHieQQgXn6hfrVj7rmPiseTMQ1UKknMFmPNnRUKPgEv18zZQX6zY8m7Pm-ZStL1omxqIo2dVTo-AanRmQkZ-Xiiqzo7NGwS362bQNL_YuA8so6SilF2WmKFmVFJWm6ijlphblJoK4StUg2RilkozU3NQYJSsgMyU1LbE0pyRGKSavFqitIDEvKj8_F6azKL80PUPJKi0xpxjIKy1ISSxJdclMTC9KhCqpBQCBtXnh"`
     );
   });
 

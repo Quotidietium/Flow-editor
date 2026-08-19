@@ -236,14 +236,14 @@ ${svgString}`);
   let imageSize = $state(1080);
 </script>
 
-<Card title="Actions" isStackable icon={{ component: DownloadIcon, class: 'rotate-180' }}>
+<Card title="操作" isStackable icon={{ component: DownloadIcon, class: 'rotate-180' }}>
   <div class="flex min-w-fit flex-col gap-2 p-2">
     <div class="flex w-full items-center gap-2 py-2 whitespace-nowrap">
-      PNG size
+      PNG 尺寸
       <ToggleGroup.Root type="single" variant="outline" bind:value={imageSizeMode}>
-        <ToggleGroup.Item value="auto">Auto</ToggleGroup.Item>
-        <ToggleGroup.Item value="width">Width</ToggleGroup.Item>
-        <ToggleGroup.Item value="height">Height</ToggleGroup.Item>
+        <ToggleGroup.Item value="auto">自动</ToggleGroup.Item>
+        <ToggleGroup.Item value="width">宽度</ToggleGroup.Item>
+        <ToggleGroup.Item value="height">高度</ToggleGroup.Item>
       </ToggleGroup.Root>
       {#if imageSizeMode !== 'auto'}
         <WidthIcon
@@ -268,7 +268,7 @@ ${svgString}`);
     </div>
     <Separator />
     {#if isClipboardAvailable()}
-      <CopyButton onclick={onCopyClipboard} label="Copy Image" />
+      <CopyButton onclick={onCopyClipboard} label="复制图像" />
     {/if}
   </div>
 </Card>
