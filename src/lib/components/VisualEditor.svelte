@@ -50,6 +50,13 @@
   let drag = $state<undefined | { id: string; offX: number; offY: number; moved: boolean }>();
   let showCode = $state(true);
   let svgEl: SVGSVGElement | undefined = $state();
+  let canvasEl: HTMLDivElement | undefined = $state();
+
+  // Cached svg rect for pointer-coordinate math: reading getBoundingClientRect
+  // on every pointermove interleaves layout reads with the drag's attribute
+  // writes (forced synchronous layout per move). Cached per gesture and
+  // invalidated when the canvas scrolls mid-gesture.
+  let svgRect: DOMRect | undefined;
 
   // Last code this editor produced or parsed; used to detect external edits
   // (in the Code tab) so switching back to Visual reloads them.
@@ -62,8 +69,12 @@
   const generated = $derived(generateCode(graph));
 
   const svgPoint = (event: PointerEvent | MouseEvent): { x: number; y: number } => {
-    const rect = svgEl?.getBoundingClientRect();
-    return rect ? { x: event.clientX - rect.left, y: event.clientY - rect.top } : { x: 0, y: 0 };
+    if (!svgRect) {
+      svgRect = svgEl?.getBoundingClientRect();
+    }
+    return svgRect
+      ? { x: event.clientX - svgRect.left, y: event.clientY - svgRect.top }
+      : { x: 0, y: 0 };
   };
 
   const snap = (value: number): number => Math.round(value / SNAP) * SNAP;
@@ -95,7 +106,12 @@
     editing = undefined;
   };
 
-  onMount(() => loadFromCode(false));
+  onMount(() => {
+    // Mid-gesture canvas scrolling shifts the svg origin: drop the cached
+    // rect so the next pointer event re-measures it.
+    canvasEl?.addEventListener('scroll', () => (svgRect = undefined));
+    loadFromCode(false);
+  });
 
   // Reload external code edits made while this tab was hidden.
   $effect(() => {
@@ -230,9 +246,16 @@
     if (drag) {
       const node = nodeById.get(drag.id);
       if (node) {
-        node.x = snap(p.x - drag.offX);
-        node.y = snap(p.y - drag.offY);
-        drag.moved = true;
+        const x = snap(p.x - drag.offX);
+        const y = snap(p.y - drag.offY);
+        // Skip no-op snapped positions: an assignment bumps the property
+        // version and re-renders the node (and its edges) even when the
+        // 10px-snapped coordinates did not change.
+        if (x !== node.x || y !== node.y) {
+          node.x = x;
+          node.y = y;
+          drag.moved = true;
+        }
       }
     } else if (linking) {
       linking.cursor = p;
@@ -244,6 +267,7 @@
       syncCode();
     }
     drag = undefined;
+    svgRect = undefined; // next gesture re-measures (layout may have changed)
     if (linking) {
       const target = nodeAt(svgPoint(event));
       if (target && target.id !== linking.source) {
@@ -349,6 +373,7 @@
   </div>
 
   <div
+    bind:this={canvasEl}
     class="min-h-64 flex-1 overflow-auto"
     data-testid={TID.visualCanvas}
     style="background-image: radial-gradient(circle, var(--border) 1px, transparent 1px); background-size: 20px 20px;">

@@ -1,0 +1,7 @@
+| metric (40-move node drag, 300-edge graph) | value |
+|--------------------------------------------|-------|
+| generateCode calls | 0 |
+| edgeAnchor calls | 34 |
+| getBoundingClientRect calls | 42 |
+| animation frames during drag | 105 |
+| dragged node moved (bbox x changed) | yes |
