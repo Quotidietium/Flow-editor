@@ -1,0 +1,28 @@
+[33mBenchmarking is an experimental feature.
+Breaking changes might not follow SemVer, please pin Vitest's version when using it.[39m
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.10 [39m[90mF:/Github/repo/Flow-editor[39m
+
+Warning: A vi.mock("$app/environment") call in "F:/Github/repo/Flow-editor/src/tests/setup.ts" is not at the top level of the module. Although it appears nested, it will be hoisted and executed before any tests run. Move it to the top level to reflect its actual execution order. This will become an error in a future version.
+See: https://vitest.dev/guide/mocking/modules#how-it-works
+02:32:39 [vite-plugin-svelte] src/lib/util/state.svelte.ts:133:32 This reference only captures the initial value of `validatedCurrent`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally
+(node:34312) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ [32m✓[39m benchmark/publish-pipeline.bench.ts[2m > [22mpublish pipeline (real mermaid.parse)[33m 3392[2mms[22m[39m
+     [1mname                                                          [22m  [1m     hz[22m  [1m    min[22m  [1m    max[22m  [1m   mean[22m  [1m    p75[22m  [1m    p99[22m  [1m   p995[22m  [1m   p999[22m  [1m   rme[22m  [1msamples[22m
+   [32m·[39m harness baseline (until(true), subtract from publishes)         [34m63.4560[39m  [36m15.0940[39m  [36m16.4230[39m  [36m15.7590[39m  [36m15.9957[39m  [36m16.4230[39m  [36m16.4230[39m  [36m16.4230[39m  [2m±0.76%[22m  [2m     32[22m
+   [32m·[39m mermaid.parse alone (cost every publish paid before the cache)  [34m54.8742[39m  [36m17.6667[39m  [36m19.5375[39m  [36m18.2235[39m  [36m18.3929[39m  [36m19.5375[39m  [36m19.5375[39m  [36m19.5375[39m  [2m±0.99%[22m  [2m     28[22m
+   [32m·[39m keystroke publish (code change, parse runs)                     [34m33.3395[39m  [36m19.1079[39m  [36m32.9435[39m  [36m29.9945[39m  [36m31.9423[39m  [36m32.9435[39m  [36m32.9435[39m  [36m32.9435[39m  [2m±6.08%[22m  [2m     20[22m
+   [32m·[39m view-option publish (code unchanged, parse cache hit)           [34m65.0324[39m  [36m 0.2915[39m  [36m16.2111[39m  [36m15.3770[39m  [36m16.0319[39m  [36m16.2111[39m  [36m16.2111[39m  [36m16.2111[39m  [2m±6.29%[22m  [2m     33[22m
+   [32m·[39m share-flush publish (serialized read, deflate runs)             [34m32.7576[39m  [36m19.6566[39m  [36m32.1961[39m  [36m30.5273[39m  [36m31.4283[39m  [36m32.1961[39m  [36m32.1961[39m  [36m32.1961[39m  [2m±4.01%[22m  [2m     20[22m
+
+[1m[30m[46m BENCH [49m[39m[22m [36mSummary
+[39m
+  view-option publish (code unchanged, parse cache hit)[2m - benchmark/publish-pipeline.bench.ts[2m > [22m[2mpublish pipeline (real mermaid.parse)[22m
+[32m    1.02x [39m[90mfaster than [39mharness baseline (until(true), subtract from publishes)
+[32m    1.19x [39m[90mfaster than [39mmermaid.parse alone (cost every publish paid before the cache)
+[32m    1.95x [39m[90mfaster than [39mkeystroke publish (code change, parse runs)
+[32m    1.99x [39m[90mfaster than [39mshare-flush publish (serialized read, deflate runs)
+

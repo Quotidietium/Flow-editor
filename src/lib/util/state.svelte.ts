@@ -63,33 +63,51 @@ let validatedCurrent = $state.raw<ValidatedState>(validatedStateOf(initialState)
 
 let lastDiagramType = '';
 
-const processState = async (state: State) => {
-  const processed = validatedStateOf(state);
-  // No changes should be done to fields part of `state`.
+// mermaid.parse depends only on the code, but until now every publish
+// re-parsed it — including editorMode / pan-zoom / config-only updates
+// (tab switches, canvas pans) that did not touch the code. Memoize the
+// outcome of the last parse so unchanged code skips it entirely. The
+// outcome (diagramType, processed error and markers) is built from the
+// code alone, so reuse is safe; only the newest requested code is cached
+// so an older in-flight parse never shadows a newer one.
+interface ParseOutcome {
+  diagramType?: string;
+  error?: Error;
+  errorMarkers: MarkerData[];
+}
+let parsedCode: string | undefined;
+let parsedOutcome: ParseOutcome | undefined;
+let latestCodeRequested: string | undefined;
+
+const parseAndCache = async (code: string): Promise<ParseOutcome> => {
+  if (code === parsedCode && parsedOutcome) {
+    return parsedOutcome;
+  }
+  latestCodeRequested = code;
+  const outcome: ParseOutcome = { errorMarkers: [] };
   try {
-    const { diagramType } = await parse(state.code);
-    processed.diagramType = diagramType;
+    const { diagramType } = await parse(code);
+    outcome.diagramType = diagramType;
     if (lastDiagramType === 'zenuml' && diagramType !== lastDiagramType) {
       // Temp Hack to refresh page after displaying ZenUML.
       setTimeout(() => window.location.reload(), 500);
     }
     lastDiagramType = diagramType;
-    JSON.parse(state.mermaid);
   } catch (error) {
-    processed.error = error as Error;
+    outcome.error = error as Error;
     errorDebug();
     console.error(error);
     if (error && typeof error === 'object' && 'hash' in error) {
       try {
-        let errorString = processed.error.toString();
+        let errorString = outcome.error.toString();
         const errorLineText = extractErrorLineText(errorString);
-        const realLineNumber = findMostRelevantLineNumber(errorLineText, state.code);
+        const realLineNumber = findMostRelevantLineNumber(errorLineText, code);
 
         let first_line: number, last_line: number, first_column: number, last_column: number;
         try {
           ({ first_line, last_line, first_column, last_column } = (error.hash as ErrorHash).loc);
         } catch {
-          const lineNo = findMostRelevantLineNumber(errorString, state.code);
+          const lineNo = findMostRelevantLineNumber(errorString, code);
           first_line = lineNo;
           last_line = lineNo + 1;
           first_column = 0;
@@ -100,20 +118,43 @@ const processState = async (state: State) => {
           errorString = replaceLineNumberInErrorMessage(errorString, realLineNumber);
         }
 
-        processed.error = new Error(errorString);
-        const marker: MarkerData = {
-          endColumn: last_column + (first_column === last_column ? 0 : 5),
-          endLineNumber: last_line + (realLineNumber - first_line),
-          message: errorString || 'Syntax error',
-          severity: 8, // Error
-          startColumn: first_column,
-          startLineNumber: realLineNumber
-        };
-        processed.errorMarkers = [marker];
+        outcome.error = new Error(errorString);
+        outcome.errorMarkers = [
+          {
+            endColumn: last_column + (first_column === last_column ? 0 : 5),
+            endLineNumber: last_line + (realLineNumber - first_line),
+            message: errorString || 'Syntax error',
+            severity: 8, // Error
+            startColumn: first_column,
+            startLineNumber: realLineNumber
+          }
+        ];
       } catch (error) {
         console.error('Error without line helper', error);
       }
     }
+  }
+  if (latestCodeRequested === code) {
+    parsedCode = code;
+    parsedOutcome = outcome;
+  }
+  return outcome;
+};
+
+const processState = async (state: State) => {
+  const processed = validatedStateOf(state);
+  // No changes should be done to fields part of `state`.
+  const outcome = await parseAndCache(state.code);
+  processed.diagramType = outcome.diagramType;
+  processed.error = outcome.error;
+  processed.errorMarkers = outcome.errorMarkers;
+  try {
+    JSON.parse(state.mermaid);
+  } catch (error) {
+    // Invalid config JSON surfaces the same way a parse error does (no markers).
+    processed.error = error as Error;
+    errorDebug();
+    console.error(error);
   }
   return processed;
 };
