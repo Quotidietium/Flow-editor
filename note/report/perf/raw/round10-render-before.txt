@@ -1,0 +1,16 @@
+[33mBenchmarking is an experimental feature.
+Breaking changes might not follow SemVer, please pin Vitest's version when using it.[39m
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.10 [39m[90mF:/Github/repo/Flow-editor[39m
+
+Warning: A vi.mock("$app/environment") call in "F:/Github/repo/Flow-editor/src/tests/setup.ts" is not at the top level of the module. Although it appears nested, it will be hoisted and executed before any tests run. Move it to the top level to reflect its actual execution order. This will become an error in a future version.
+See: https://vitest.dev/guide/mocking/modules#how-it-works
+
+ [32m✓[39m benchmark/render-placement.bench.ts[2m > [22mrenderAndPlaceDiagram (mocked mermaid render)[33m 607[2mms[22m[39m
+     [1mname                    [22m  [1m       hz[22m  [1m   min[22m  [1m   max[22m  [1m  mean[22m  [1m   p75[22m  [1m   p99[22m  [1m  p995[22m  [1m  p999[22m  [1m   rme[22m  [1msamples[22m
+   [32m·[39m place svg into container  [34m13,974.71[39m  [36m0.0620[39m  [36m1.0661[39m  [36m0.0716[39m  [36m0.0715[39m  [36m0.1303[39m  [36m0.2072[39m  [36m0.6761[39m  [2m±1.12%[22m  [2m   6988[22m
+
+[1m[30m[46m BENCH [49m[39m[22m [36mSummary
+[39m
+  place svg into container[2m - benchmark/render-placement.bench.ts[2m > [22m[2mrenderAndPlaceDiagram (mocked mermaid render)[22m
+

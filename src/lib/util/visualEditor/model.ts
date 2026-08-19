@@ -150,7 +150,7 @@ const edgeTypeOf = (token: string): VLinkType => {
 
 // Rewrite the documented textual link forms into the |label| form so the
 // scanner only has to understand one labeled syntax per link type.
-const normalizeLabeledLinks = (line: string): string =>
+export const normalizeLabeledLinks = (line: string): string =>
   line
     .replace(/-\.\s*([^.|]+?)\s*\.->/g, '-.->|$1|')
     .replace(/--\s+([^.|-][^-]*?)\s+-->/g, '-->|$1|')

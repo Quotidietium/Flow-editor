@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { generateCode, layoutGraph, parseFlowchart } from './model';
+import { generateCode, layoutGraph, normalizeLabeledLinks, parseFlowchart } from './model';
 
 // Golden fixtures: the exact structures parseFlowchart/layoutGraph produce
 // for tricky syntax. They pin behavior for the scanner optimizations —
@@ -186,6 +186,81 @@ describe('parseFlowchart golden fixtures', () => {
       if (twice.ok) {
         expect(generateCode(twice.result.graph)).toBe(once);
       }
+    }
+  });
+});
+
+describe('normalizeLabeledLinks differential (single pass vs sequential)', () => {
+  // The four sequential replaces are the current implementation and the
+  // reference below pins their exact semantics. A single-alternation-pass
+  // rewrite was measured and REJECTED: when a thick-arrow region overlaps
+  // a textual dashed link (e.g. soup producing ' ==> ... -. t .-> ... '),
+  // sequential order rewrites the dashed form first while a leftmost-first
+  // single pass lets the == rule swallow it verbatim - the differential
+  // corpus below caught the divergence (see note/report/perf round 10).
+  // The previous implementation: four sequential replaces.
+  const sequentialReference = (line: string): string =>
+    line
+      .replace(/-\.\s*([^.|]+?)\s*\.->/g, '-.->|$1|')
+      .replace(/--\s+([^.|-][^-]*?)\s+-->/g, '-->|$1|')
+      .replace(/--\s+([^.|-][^-]*?)\s+---/g, '---|$1|')
+      .replace(/==\s*([^=]+?)\s*==>/g, '==>|$1|');
+
+  const lcg = (seed: number) => () => (seed = (seed * 1_664_525 + 1_013_904_223) % 4_294_967_296);
+
+  it('matches the reference on deterministic random line soup', () => {
+    const rand = lcg(20_260_821);
+    const fragments = [
+      'A[Node]',
+      'B{Diamond}',
+      'C(Round)',
+      ' --> ',
+      ' --- ',
+      ' ---> ',
+      ' -.-> ',
+      ' ==> ',
+      ' == ',
+      ' -- ',
+      ' -. ',
+      '|label|',
+      '-- text -->',
+      '-- t ---',
+      '-. t .->',
+      '== t ==>',
+      'text with - hyphen',
+      'plain words',
+      '"quoted (label)"',
+      ';',
+      '%%comment'
+    ];
+    for (let i = 0; i < 2000; i++) {
+      const parts: string[] = [];
+      const count = (rand() % 4) + 1;
+      for (let j = 0; j < count; j++) {
+        parts.push(fragments[rand() % fragments.length]);
+      }
+      const line = parts.join('');
+      expect(normalizeLabeledLinks(line), JSON.stringify(line)).toBe(sequentialReference(line));
+    }
+  });
+
+  it('matches the reference on tricky handcrafted lines', () => {
+    const lines = [
+      'A -- a --> B --- C',
+      'A --- B -- t --> C',
+      'A -. d .-> B == t ==> C',
+      'A -- long-label --> B',
+      'A -->|already| B',
+      'A -- multiple -- links -- t2 --> D',
+      '== spaced  == > after',
+      'A ==a==> B ==b==> C',
+      '--- only dashes ---',
+      'nothing here',
+      'x - y - z',
+      '== equal signs only == =='
+    ];
+    for (const line of lines) {
+      expect(normalizeLabeledLinks(line), line).toBe(sequentialReference(line));
     }
   });
 });
