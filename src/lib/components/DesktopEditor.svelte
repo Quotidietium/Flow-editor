@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { EditorProps } from '$/types';
+  import type { EditorProps, MarkerData } from '$/types';
   import { validatedState } from '$/util/state.svelte';
   import { initEditor } from '$lib/util/monacoExtra';
   import { errorDebug } from '$lib/util/util';
@@ -22,6 +22,11 @@
   } satisfies monaco.editor.IStandaloneEditorConstructionOptions;
   let currentText = '';
   let isUpdatingFromState = false;
+  // Marker applications are deduplicated: the parse cache reuses the same
+  // markers array for unchanged code, and Monaco rebuilds decorations even
+  // for identical markers.
+  let lastMarkers: readonly MarkerData[] | undefined;
+  let lastMarkersModel: monaco.editor.ITextModel | undefined;
 
   const applyEditorTheme = (currentMode: typeof mode.current) => {
     if (!editor) return;
@@ -130,8 +135,12 @@
       }
     }
 
-    // Display/clear errors
-    monaco.editor.setModelMarkers(model, 'mermaid', errorMarkers);
+    // Display/clear errors — only when they (or their model) changed.
+    if (model !== lastMarkersModel || errorMarkers !== lastMarkers) {
+      lastMarkersModel = model;
+      lastMarkers = errorMarkers;
+      monaco.editor.setModelMarkers(model, 'mermaid', errorMarkers);
+    }
   });
 </script>
 

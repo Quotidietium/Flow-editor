@@ -1,0 +1,5 @@
+| interaction | marker applications |
+|-------------|---------------------|
+| canvas drag (30 pointer moves) | 59 |
+| 6 tab switches | 6 |
+| typing broken code (~20 keys) | 41 |
