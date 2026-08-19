@@ -104,9 +104,9 @@ test('visual editor imports the existing flowchart code', async ({ page }) => {
 
   const codeOut = page.getByTestId('visual-code-out');
   await expect(codeOut).toContainText('flowchart TD');
-  await expect(codeOut).toContainText('A[Christmas]');
-  await expect(codeOut).toContainText('C{Let me think}');
-  await expect(codeOut).toContainText('A -->|Get money| B');
+  await expect(codeOut).toContainText('A[圣诞节]');
+  await expect(codeOut).toContainText('C{让我想想}');
+  await expect(codeOut).toContainText('A -->|拿到压岁钱| B');
 
   // Shape cycling on a selected node round-trips into the generated code.
   // The first node's center is read from the rendered SVG, not hardcoded.
@@ -131,5 +131,5 @@ test('visual editor imports the existing flowchart code', async ({ page }) => {
   }
   await page.mouse.click(nodeACenter.x, nodeACenter.y);
   await page.getByRole('button', { name: /形状/ }).click();
-  await expect(codeOut).toContainText('A(Christmas)');
+  await expect(codeOut).toContainText('A(圣诞节)');
 });

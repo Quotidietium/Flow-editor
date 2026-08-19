@@ -6,7 +6,7 @@ test.describe('Auto sync tests', () => {
   }) => {
     test.slow(); // Complex diagram rendering can be slow under parallel load
     // Wait for the default diagram to fully render before typing
-    await editPage.checkTextInView('Christmas');
+    await editPage.checkTextInView('圣诞节');
     await editPage.typeInEditor(
       `
 A & B & C & D & E --> F & G & H & I & J & K
@@ -23,10 +23,10 @@ A & B & C & D & E --> F & G & H & I & J & K & LongTest`
   });
 
   test('supports commenting code out/in', async ({ editPage }) => {
-    await editPage.toggleComment('New car');
-    await editPage.checkTextNotInView('New car');
-    await editPage.toggleComment('New car');
-    await editPage.checkTextInView('New car');
+    await editPage.toggleComment('新车');
+    await editPage.checkTextNotInView('新车');
+    await editPage.toggleComment('新车');
+    await editPage.checkTextInView('新车');
   });
 
   test('supports editing code when code is incorrect', async ({ editPage }) => {

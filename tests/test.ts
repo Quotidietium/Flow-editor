@@ -37,11 +37,11 @@ export class EditorPage {
   }
 
   async toggleActions() {
-    await this.page.getByText('Actions', { exact: true }).click();
+    await this.page.getByText('操作', { exact: true }).click();
   }
 
   async toggleSampleDiagrams() {
-    await this.page.getByText('Sample Diagrams', { exact: true }).click();
+    await this.page.getByText('示例图表', { exact: true }).click();
   }
 
   async checkAndDownloadPNG(expectedSize: number) {
@@ -83,7 +83,7 @@ export class EditorPage {
     await this.page.keyboard.press('Control+/');
   }
 
-  async setEditorMode(mode: 'Code' | 'Config') {
+  async setEditorMode(mode: '代码' | '配置') {
     await this.page.getByRole('tab').getByText(mode).click();
   }
 
@@ -94,7 +94,7 @@ export class EditorPage {
   async checkTheme(theme: 'light' | 'dark') {
     await expect(this.page.getByTestId(TID.themeToggleButton)).toHaveAttribute(
       'title',
-      `Switch to ${theme === 'light' ? 'dark' : 'light'} theme`
+      `切换到${theme === 'light' ? '深色' : '浅色'}主题`
     );
   }
 }

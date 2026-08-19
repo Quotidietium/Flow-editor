@@ -11,7 +11,7 @@ test.describe('Check actions', () => {
 
     // Verify downloaded file is different for different diagrams
     await editPage.toggleSampleDiagrams();
-    await editPage.loadSampleDiagram('Entity Relationship');
+    await editPage.loadSampleDiagram('实体关系图');
 
     const secondPngSize = await editPage.checkAndDownloadPNG(20_000);
     const secondSvgSize = await editPage.downloadSVG(10_000);

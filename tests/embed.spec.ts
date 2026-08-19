@@ -100,13 +100,13 @@ base.describe('Embed page', () => {
 editorTest.describe('Share dialog embed section', () => {
   editorTest('should offer iframe and web component snippets', async ({ editPage, page }) => {
     void editPage;
-    await page.getByRole('button', { name: 'Share' }).click();
+    await page.getByRole('button', { name: '分享' }).click();
     const snippet = page.getByTestId(TID.embedSnippet);
     await expect(snippet).toBeVisible();
     await expect(snippet).toHaveValue(/\/embed\?.*#pako:/);
     await expect(snippet).toHaveValue(/<iframe/);
     await expect(snippet).toHaveValue(/sandbox="allow-scripts allow-same-origin/);
-    await page.getByRole('radio', { name: 'Web component' }).click();
+    await page.getByRole('radio', { name: 'Web 组件' }).click();
     await expect(snippet).toHaveValue(/<mermaid-embed/);
   });
 });

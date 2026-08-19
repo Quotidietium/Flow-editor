@@ -7,7 +7,7 @@ test.describe('Error display tests', () => {
     await editPage.typeInEditor('graph TD\nA --> B -->');
 
     // Verify error is displayed
-    await editPage.checkError('Syntax error');
+    await editPage.checkError('语法错误');
   });
 
   test('should show syntax error for invalid JSON in Config tab', async ({ editPage }) => {
@@ -16,13 +16,13 @@ test.describe('Error display tests', () => {
     await editPage.typeInEditor('graph TD\nA --> B');
 
     // Switch to Config tab
-    await editPage.setEditorMode('Config');
+    await editPage.setEditorMode('配置');
 
     // Enter invalid JSON in config
     await editPage.clearEditor();
     await editPage.typeInEditor('{\n  "theme": "default",\n  invalid json');
 
     // Verify error is displayed
-    await editPage.checkError('Syntax error');
+    await editPage.checkError('语法错误');
   });
 });

@@ -6,17 +6,17 @@ import { expect, test } from './test';
 
 test.describe('Site Loads', () => {
   test('Check Home page load', async ({ editPage }) => {
-    await editPage.setEditorMode('Config');
+    await editPage.setEditorMode('配置');
     const codeStore = await editPage.page.evaluate(() => localStorage.getItem('codeStore'));
     expect(codeStore).toBeTruthy();
   });
 
   test('should keep code after reload', async ({ editPage, page }) => {
-    await editPage.checkInEditor('New car');
-    await editPage.checkTextInView('New car');
+    await editPage.checkInEditor('新车');
+    await editPage.checkTextInView('新车');
     await page.reload();
-    await editPage.checkInEditor('New car');
-    await editPage.checkTextInView('New car');
+    await editPage.checkInEditor('新车');
+    await editPage.checkTextInView('新车');
   });
 
   test('Check Redirect from old URL', async ({ page, editPage }) => {
@@ -30,10 +30,10 @@ test.describe('Site Loads', () => {
 
   test('should load sample diagrams when clicked', async ({ editPage }) => {
     await editPage.toggleSampleDiagrams();
-    await editPage.loadSampleDiagram('Pie');
+    await editPage.loadSampleDiagram('饼图');
     await editPage.checkInEditor('pie title Pets adopted by volunteers');
     await editPage.checkTextInView('Pets adopted by volunteers');
-    await editPage.loadSampleDiagram('Class');
+    await editPage.loadSampleDiagram('类图');
     await editPage.checkInEditor('classDiagram');
   });
 
@@ -77,7 +77,7 @@ test.describe('Site Loads', () => {
     let dialogAccepted = false;
     page.on('dialog', async (dialog) => {
       expect(dialog.type()).toBe('confirm');
-      expect(dialog.message()).toContain('from the config for safety');
+      expect(dialog.message()).toContain('为安全起见');
       await dialog.accept();
       dialogAccepted = true;
     });
@@ -112,7 +112,7 @@ test.describe('Site Loads', () => {
   test('should show troubleshooting steps if loading fails', async ({ editPage, page }) => {
     await editPage.start('/#/edit/eyJjb2RlIjoiZ3JhcGggVERcbiAg');
     await page.reload({ waitUntil: 'networkidle' });
-    await editPage.checkTextInView('Please Click here to Raise an issue in github.');
+    await editPage.checkTextInView('请在 GitHub 提交 Issue 反馈此问题');
   });
 });
 

@@ -24,7 +24,7 @@ const autoHistory = [
   entry('a-1', 'needy-mosquito', 'auto', 'Fireworks')
 ];
 
-const openHistory = (page: Page) => page.getByRole('button', { name: 'History' }).click();
+const openHistory = (page: Page) => page.getByRole('button', { name: '历史记录' }).click();
 
 test.describe('History', () => {
   test.beforeEach(async ({ page }) => {
@@ -53,17 +53,17 @@ test.describe('History', () => {
     await expect(page.locator('#historyList')).toContainText('hollow-art');
     await expect(page.locator('#historyList')).toContainText('helpful-ocean');
 
-    await page.getByRole('button', { name: 'Restore this version' }).first().click();
+    await page.getByRole('button', { name: '恢复此版本' }).first().click();
     await expect(page.locator('#view')).toContainText('Halloween');
 
     // Switching to the Timeline tab shows the auto entries only.
-    await page.getByRole('tab', { name: 'Timeline' }).click();
+    await page.getByRole('tab', { name: '时间线' }).click();
     await expect(page.locator('#historyList li')).toHaveCount(2);
     await expect(page.locator('#historyList')).toContainText('barking-dog');
     await expect(page.locator('#historyList')).toContainText('needy-mosquito');
     await expect(page.locator('#historyList')).not.toContainText('hollow-art');
 
-    await page.getByRole('button', { name: 'Restore this version' }).first().click();
+    await page.getByRole('button', { name: '恢复此版本' }).first().click();
     await expect(page.locator('#view')).toContainText('NewYear');
   });
 
@@ -76,7 +76,7 @@ test.describe('History', () => {
     await openHistory(page);
 
     // It is a real link (so it can be copied / opened in a new tab), not a button.
-    const link = page.getByRole('link', { name: 'Open in new tab' }).first();
+    const link = page.getByRole('link', { name: '在新标签页打开' }).first();
     await expect(link).toHaveAttribute('target', '_blank');
     const href = await link.getAttribute('href');
     expect(href).toContain('/edit#pako:');
@@ -88,8 +88,8 @@ test.describe('History', () => {
 
   test('keeps the active tab highlighted when switching modes', async ({ page }) => {
     await openHistory(page);
-    const saved = page.getByRole('tab', { name: 'Saved' });
-    const timeline = page.getByRole('tab', { name: 'Timeline' });
+    const saved = page.getByRole('tab', { name: '已保存' });
+    const timeline = page.getByRole('tab', { name: '时间线' });
 
     await expect(saved).toHaveClass(/border-b-2/);
     await expect(timeline).not.toHaveClass(/border-b-2/);
@@ -108,12 +108,12 @@ test.describe('History', () => {
 
     // Saving again without changes does not add a duplicate and notifies the user.
     await page.locator('#saveHistory').click();
-    await expect(page.getByText('State already saved.')).toBeVisible();
+    await expect(page.getByText('该状态已保存过。')).toBeVisible();
     await expect(page.locator('#historyList li')).toHaveCount(1);
 
     // Loading a different sample changes the state, so it saves as a new entry.
-    await page.getByRole('button', { name: 'Sequence', exact: true }).click();
-    await expect(page.locator('#view')).not.toContainText('Christmas');
+    await page.getByRole('button', { name: '时序图', exact: true }).click();
+    await expect(page.locator('#view')).not.toContainText('圣诞节');
     await page.locator('#saveHistory').click();
     await expect(page.locator('#historyList li')).toHaveCount(2);
   });
@@ -123,26 +123,26 @@ test.describe('History', () => {
     await page.locator('#saveHistory').click();
     await expect(page.locator('#historyList li')).toHaveCount(1);
 
-    await page.getByRole('tab', { name: 'Timeline' }).click();
+    await page.getByRole('tab', { name: '时间线' }).click();
     // A manual save must not appear under Timeline.
-    await expect(page.locator('#historyList')).toContainText('No timeline snapshots yet.');
+    await expect(page.locator('#historyList')).toContainText('暂无时间线快照。');
   });
 
   test('deletes a single entry and clears all after confirmation', async ({ page }) => {
     await openHistory(page);
     await page.locator('#saveHistory').click();
-    await page.getByRole('button', { name: 'Sequence', exact: true }).click();
-    await expect(page.locator('#view')).not.toContainText('Christmas');
+    await page.getByRole('button', { name: '时序图', exact: true }).click();
+    await expect(page.locator('#view')).not.toContainText('圣诞节');
     await page.locator('#saveHistory').click();
     await expect(page.locator('#historyList li')).toHaveCount(2);
 
-    await page.getByRole('button', { name: 'Delete this version' }).first().click();
+    await page.getByRole('button', { name: '删除此版本' }).first().click();
     await expect(page.locator('#historyList li')).toHaveCount(1);
 
     page.on('dialog', (dialog) => dialog.accept());
     await page.locator('#clearHistory').click();
     await expect(page.locator('#historyList li')).toHaveCount(0);
-    await expect(page.locator('#historyList')).toContainText('No saved states yet.');
+    await expect(page.locator('#historyList')).toContainText('暂无已保存状态。');
   });
 
   test('renames a saved entry inline', async ({ page }) => {
@@ -150,8 +150,8 @@ test.describe('History', () => {
     await page.locator('#saveHistory').click();
     await expect(page.locator('#historyList li')).toHaveCount(1);
 
-    await page.getByRole('button', { name: 'Rename' }).first().click();
-    const input = page.getByRole('textbox', { name: 'Rename entry' });
+    await page.getByRole('button', { name: '重命名' }).first().click();
+    const input = page.getByRole('textbox', { name: '重命名条目' });
     await input.fill('my-custom-name');
     await input.press('Enter');
 

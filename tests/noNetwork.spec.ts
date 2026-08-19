@@ -27,7 +27,7 @@ test('editor loads and edits without any external network request', async ({ pag
   await page.getByTestId('visual-tab').click();
 
   // Share dialog renders embed snippets locally.
-  await page.getByRole('button', { name: 'Share' }).click();
+  await page.getByRole('button', { name: '分享' }).click();
   await expect(page.getByTestId('embed-snippet')).toBeVisible();
 
   expect(external).toEqual([]);
