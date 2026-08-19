@@ -1,4 +1,3 @@
-import { diagramData } from '@mermaid-js/examples';
 import elkLayouts from '@mermaid-js/layout-elk';
 import tidyTreeLayouts from '@mermaid-js/layout-tidy-tree';
 import zenuml from '@mermaid-js/mermaid-zenuml';
@@ -47,7 +46,11 @@ export const standardizeDiagramType = (diagramType: string) => {
   }
 };
 
-type DiagramDefinition = (typeof diagramData)[number];
+// The examples catalogue is only needed by the Sample Diagrams card; it is
+// dynamically imported so its ~63KB (gzip) of data stays out of the startup
+// module graph while still loading in parallel as soon as the edit page
+// mounts the card.
+type DiagramDefinition = (typeof import('@mermaid-js/examples'))['diagramData'][number];
 
 export type SampleExample = DiagramDefinition['examples'][number];
 
@@ -55,7 +58,8 @@ const isValidDiagram = (diagram: DiagramDefinition): diagram is Required<Diagram
   return Boolean(diagram.name && diagram.examples && diagram.examples.length > 0);
 };
 
-export const getSampleDiagrams = (): Record<string, SampleExample[]> => {
+export const getSampleDiagrams = async (): Promise<Record<string, SampleExample[]>> => {
+  const { diagramData } = await import('@mermaid-js/examples');
   const samples: Record<string, SampleExample[]> = {};
   for (const diagram of diagramData.filter((d) => isValidDiagram(d))) {
     // The default example comes first, so it is loaded when clicking the

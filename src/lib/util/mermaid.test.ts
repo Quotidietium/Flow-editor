@@ -1,8 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { getSampleDiagrams } from './mermaid';
 
 describe('getSampleDiagrams', () => {
-  const samples = getSampleDiagrams();
+  let samples: Awaited<ReturnType<typeof getSampleDiagrams>>;
+
+  beforeAll(async () => {
+    samples = await getSampleDiagrams();
+  });
 
   it('should return at least one example per diagram', () => {
     expect(Object.keys(samples).length).toBeGreaterThan(0);

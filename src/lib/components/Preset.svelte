@@ -41,7 +41,15 @@
     ]
   };
 
-  const samples = { ...getSampleDiagrams(), ...extras };
+  // The examples catalogue loads as a separate (non-blocking) chunk; the
+  // ZenUML extras render immediately and the catalogue fills the card the
+  // moment it arrives — from HTTP cache on every visit after the first.
+  let samples = $state<Record<string, SampleExample[]>>({ ...extras });
+  $effect(() => {
+    void getSampleDiagrams().then((loaded) => {
+      samples = { ...loaded, ...extras };
+    });
+  });
 
   const loadSampleDiagram = (diagramType: string, example: SampleExample): void => {
     updateCode(example.code, {
@@ -59,12 +67,15 @@
     'Mindmap'
   ];
 
-  const diagramOrder = [
-    ...mainDiagrams,
+  // Reactive: before the catalogue chunk lands only the extras exist, so
+  // not-yet-loaded diagram names are filtered out instead of rendering
+  // buttons for `undefined` sample lists.
+  const diagramOrder = $derived([
+    ...mainDiagrams.filter((name) => samples[name]),
     ...Object.keys(samples)
       .filter((key) => !mainDiagrams.includes(key))
       .sort()
-  ];
+  ]);
 </script>
 
 <Card title="Sample Diagrams" isOpen isStackable icon={{ component: ShapesIcon }}>
