@@ -157,8 +157,10 @@ const normalizeLabeledLinks = (line: string): string =>
     .replace(/--\s+([^.|-][^-]*?)\s+---/g, '---|$1|')
     .replace(/==\s*([^=]+?)\s*==>/g, '==>|$1|');
 
+// Sticky (`y`): anchored at lastIndex, so scanning can try a node token at
+// the current offset without slicing a copy of the remaining line.
 const NODE_RE =
-  /^([A-Za-z0-9_]+)\s*(?:\(\[([^\]]*)\]\)|\[\[([^\]]*)\]\]|\[([^\]]*)\]|\(([^()]*)\)|\{([^}]*)\})?/;
+  /([A-Za-z0-9_]+)\s*(?:\(\[([^\]]*)\]\)|\[\[([^\]]*)\]\]|\[([^\]]*)\]|\(([^()]*)\)|\{([^}]*)\})?/y;
 
 const shapeOf = (match: RegExpExecArray): VShape | undefined => {
   if (match[2] !== undefined) return 'stadium';
@@ -197,14 +199,17 @@ const scan = (input: string): Token[] => {
       i = end + 1;
       continue;
     }
-    const edge = EDGE_TOKENS.find((token) => line.startsWith(token, i));
-    if (edge) {
-      tokens.push({ kind: 'edge', text: edge });
-      i += edge.length;
-      continue;
+    // Every edge token starts with '-' or '='; skip the token list otherwise.
+    if (c === '-' || c === '=') {
+      const edge = EDGE_TOKENS.find((token) => line.startsWith(token, i));
+      if (edge) {
+        tokens.push({ kind: 'edge', text: edge });
+        i += edge.length;
+        continue;
+      }
     }
-    const rest = line.slice(i);
-    const match = NODE_RE.exec(rest);
+    NODE_RE.lastIndex = i;
+    const match = NODE_RE.exec(line);
     if (match && match[1]) {
       tokens.push({
         id: match[1],
@@ -251,6 +256,10 @@ export const parseFlowchart = (code: string): ParsedFlowchart => {
   const shapedIds = new Set<string>();
   let skipped = 0;
   let inSubgraph = false;
+  // Edges only ever get appended during a parse, so a plain sequence
+  // produces exactly the ids nextEdgeId would — without its O(edges)
+  // scan per edge.
+  let edgeSeq = 0;
 
   const nodeOf = (id: string, label?: string, shape?: VShape): VNode => {
     const existing = nodesById.get(id);
@@ -296,7 +305,7 @@ export const parseFlowchart = (code: string): ParsedFlowchart => {
       continue;
     }
     for (const statement of line.split(';')) {
-      interpretStatement(statement, graph, nodeOf);
+      interpretStatement(statement, graph, nodeOf, () => `E${++edgeSeq}`);
     }
   }
   return { ok: true, result: { graph, skipped } };
@@ -305,7 +314,8 @@ export const parseFlowchart = (code: string): ParsedFlowchart => {
 const interpretStatement = (
   statement: string,
   graph: VGraph,
-  nodeOf: (id: string, label?: string, shape?: VShape) => VNode
+  nodeOf: (id: string, label?: string, shape?: VShape) => VNode,
+  newEdgeId: () => string
 ): void => {
   const tokens = scan(statement);
   let lastNode: VNode | undefined;
@@ -318,7 +328,7 @@ const interpretStatement = (
         const node = nodeOf(token.id as string, token.label, token.shape);
         if (lastNode && pendingType && node.id !== lastNode.id) {
           graph.edges.push({
-            id: nextEdgeId(graph.edges),
+            id: newEdgeId(),
             label: pendingLabel || undefined,
             source: lastNode.id,
             target: node.id,
@@ -388,7 +398,12 @@ export const layoutGraph = (graph: VGraph): VGraph => {
   const layers = new Map<number, string[]>();
   for (const node of graph.nodes) {
     const d = depth.get(node.id) ?? 0;
-    layers.set(d, [...(layers.get(d) ?? []), node.id]);
+    const layer = layers.get(d);
+    if (layer) {
+      layer.push(node.id);
+    } else {
+      layers.set(d, [node.id]);
+    }
   }
 
   const positions = new Map<string, { x: number; y: number }>();

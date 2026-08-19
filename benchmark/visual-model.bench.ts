@@ -19,6 +19,8 @@ const parsedGraph = (edges: number): VGraph => {
 
 const graph100 = parsedGraph(100);
 const graph500 = parsedGraph(500);
+const code100 = genFlowchartCode(100);
+const code500 = genFlowchartCode(500);
 
 describe('parseFlowchart', () => {
   bench('100 edges', () => {
