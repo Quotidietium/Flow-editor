@@ -50,6 +50,8 @@
 | 6    | 可视化编辑器 model（parseFlowchart 扫描器等）                          | ✅   | [round6-visual-model.md](round6-visual-model.md)                                                                          |
 | 7    | PNG 导出等待路径（固定 1s → 事件驱动，1037→75ms）                      | ✅   | [round7-export-latency.md](round7-export-latency.md)                                                                      |
 | 8    | 编辑器标记应用去重（拖拽期间 59→0 次）                                 | ✅   | [round8-editor-markers.md](round8-editor-markers.md)                                                                      |
+| 9    | 画布拖拽布局抖动消除（gBCR 42→1/手势）                                 | ✅   | [round9-visual-drag.md](round9-visual-drag.md)                                                                            |
+| 10   | 渲染放置/文本规范化候选的测量否决（含差分防护资产）                    | ✅   | [round10-measured-rejections.md](round10-measured-rejections.md)                                                          |
 
 ## 数据驱动的范围调整（诚实记录）
 
