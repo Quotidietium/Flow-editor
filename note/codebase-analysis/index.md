@@ -8,13 +8,13 @@
 
 ## 报告目录
 
-| 报告 | 内容概要 |
-|------|---------|
-| [01 项目架构](01-architecture.md) | 分层结构、模块依赖图、状态管理模式、技术栈全景、函数级调用链（击键→状态→渲染） |
-| [02 运行原理](02-operation-principles.md) | 启动时序、三大数据流（编辑循环/渲染管线/URL 分享）、autoSync 节流状态机、History 状态机、embed 子系统、安全模型、错误处理链 |
-| [03 工作流分析](03-workflow.md) | 开发命令、CI/CD 四管线、发布流水线（develop→release-promotion PR→master→Pages/Netlify/Docker）、测试矩阵、8 大业务流程决策树、异常恢复路径 |
-| [04 AI 替代方案](04-ai-substitution.md) | 12 模块六维评分、ROI 矩阵、三阶段改造路线图、函数级契约下钻、负面清单（不可 AI 化部分） |
-| [Skill Blueprint 索引](blueprints/index.md) | 3 份可直接落地的 Skill 设计规格 |
+| 报告                                        | 内容概要                                                                                                                                   |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| [01 项目架构](01-architecture.md)           | 分层结构、模块依赖图、状态管理模式、技术栈全景、函数级调用链（击键→状态→渲染）                                                             |
+| [02 运行原理](02-operation-principles.md)   | 启动时序、三大数据流（编辑循环/渲染管线/URL 分享）、autoSync 节流状态机、History 状态机、embed 子系统、安全模型、错误处理链                |
+| [03 工作流分析](03-workflow.md)             | 开发命令、CI/CD 四管线、发布流水线（develop→release-promotion PR→master→Pages/Netlify/Docker）、测试矩阵、8 大业务流程决策树、异常恢复路径 |
+| [04 AI 替代方案](04-ai-substitution.md)     | 12 模块六维评分、ROI 矩阵、三阶段改造路线图、函数级契约下钻、负面清单（不可 AI 化部分）                                                    |
+| [Skill Blueprint 索引](blueprints/index.md) | 3 份可直接落地的 Skill 设计规格                                                                                                            |
 
 ## 核心发现（TL;DR）
 
@@ -32,4 +32,18 @@
 
 ---
 
-*本报告由 codebase-analyzer 生成；所有论断均附 `文件:行号` 证据，可用 `grep`/IDE 直接复核。*
+_本报告由 codebase-analyzer 生成；所有论断均附 `文件:行号` 证据，可用 `grep`/IDE 直接复核。_
+
+---
+
+## 增补：2026-08-20 性能优化后的技术债状态（v2.0.71）
+
+本报告分析于 2.0.67（develop）。`feat/perf-optimization` 分支（2.0.71）已解决其中
+标记的技术债，量化数据与原始基准见 [`note/report/perf/`](../report/perf/README.md)：
+
+1. **`errorHandling.findMostRelevantLineNumber` 的暴力匹配**（01 报告 §10.2、04 报告
+   §2.6）→ 已用后缀自动机重写（~190x，差分测试保证输出逐字节一致）。
+2. **导出 PNG 的 1s 固定等待**（01 报告 §10.5）→ 未动（导出链路，属功能行为）。
+3. **ZenUML 整页刷新 hack** → 保留（语义风险）。
+4. 其余新增优化：serde deflate L6 + 惰性序列化、mermaid.parse 代码级缓存、示例目录
+   动态 chunk、可视化 model 扫描器/布局优化——详见各轮报告。

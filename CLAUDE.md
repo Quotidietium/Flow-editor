@@ -11,6 +11,8 @@ Uses pnpm (install via `corepack enable pnpm`). Node >= 24 required.
 - `pnpm test:unit` — vitest in watch mode; `pnpm vitest run` for a single pass
 - Single unit test: `pnpm vitest run src/lib/util/serde.test.ts` (or `-t "test name"`)
 - `pnpm test:e2e` — Playwright tests in `tests/`; auto-starts the dev server on port 3000 (reuses one already running). `pnpm test:e2e:ui` / `:debug` for interactive runs
+- `pnpm bench` — vitest-bench performance suite in `benchmark/` (see `benchmark/README.md`; reports in `note/report/perf/`)
+- `node benchmark/studies/deflate-level.mjs` — pako deflate level time/size trade-off study
 - `pnpm test` — unit + e2e
 
 Gotchas:
