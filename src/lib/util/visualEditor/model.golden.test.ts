@@ -26,6 +26,7 @@ describe('parseFlowchart golden fixtures', () => {
     ).toEqual({
       graph: {
         direction: 'TD',
+        kind: 'flowchart',
         edges: [
           { id: 'E1', label: 'Get money', source: 'A', target: 'B', type: 'arrow' },
           { id: 'E2', label: undefined, source: 'B', target: 'C', type: 'arrow' },
@@ -59,6 +60,7 @@ describe('parseFlowchart golden fixtures', () => {
     ).toEqual({
       graph: {
         direction: 'LR',
+        kind: 'flowchart',
         edges: [
           { id: 'E1', label: undefined, source: 'A', target: 'B', type: 'arrow' },
           { id: 'E2', label: undefined, source: 'B', target: 'C', type: 'arrow' },
@@ -93,6 +95,7 @@ describe('parseFlowchart golden fixtures', () => {
     ).toEqual({
       graph: {
         direction: 'TD',
+        kind: 'flowchart',
         edges: [
           { id: 'E1', label: undefined, source: 'A', target: 'B', type: 'arrow' },
           { id: 'E2', label: undefined, source: 'B', target: 'Z', type: 'arrow' }
@@ -137,6 +140,7 @@ describe('parseFlowchart golden fixtures', () => {
               "type": "arrow",
             },
           ],
+          "kind": "flowchart",
           "nodes": [
             {
               "id": "A",
