@@ -48,6 +48,8 @@
 | 4    | 发布管线复合优化（集成基准 updateCode 端到端）                         | ✅   | [round4-publish-pipeline.md](round4-publish-pipeline.md)                                                                  |
 | 5    | 初始包体（构建产物对比 + 懒加载决策）                                  | ✅   | [round5-bundle.md](round5-bundle.md)                                                                                      |
 | 6    | 可视化编辑器 model（parseFlowchart 扫描器等）                          | ✅   | [round6-visual-model.md](round6-visual-model.md)                                                                          |
+| 7    | PNG 导出等待路径（固定 1s → 事件驱动，1037→75ms）                      | ✅   | [round7-export-latency.md](round7-export-latency.md)                                                                      |
+| 8    | 编辑器标记应用去重（拖拽期间 59→0 次）                                 | ✅   | [round8-editor-markers.md](round8-editor-markers.md)                                                                      |
 
 ## 数据驱动的范围调整（诚实记录）
 
