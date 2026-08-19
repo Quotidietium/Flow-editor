@@ -289,7 +289,7 @@ const generateFlowchart = (graph: VGraph): string => {
 };
 
 const classRelation = (edge: VEdge): string => {
-  const syntax = {
+  const syntaxTable: Partial<Record<VLinkType, string>> = {
     aggregation: 'o--',
     arrow: '-->',
     composition: '*--',
@@ -298,7 +298,8 @@ const classRelation = (edge: VEdge): string => {
     inheritance: '--|>',
     line: '--',
     realization: '..|>'
-  }[edge.type];
+  };
+  const syntax = syntaxTable[edge.type] ?? '--';
   // Cardinalities are quoted so bare tokens like `*`/`o` stay unambiguous
   // relation operators (mermaid's own examples use quoted cardinalities).
   const cardL = edge.cardL ? ` "${edge.cardL}"` : '';

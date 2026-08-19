@@ -4,15 +4,16 @@
   import { notify } from '$/util/notify';
   import {
     edgeAnchor,
+    ER_CARDINALITIES,
     generateCode,
+    KIND_SPECS,
     layoutGraph,
-    LINK_ORDER,
     nextEdgeId,
     nextNodeId,
     NODE_H,
+    nodeSize,
     NODE_W,
-    parseFlowchart,
-    SHAPE_ORDER
+    parseCode
   } from '$/util/visualEditor/model';
   import type { VEdge, VGraph, VLinkType, VNode, VShape } from '$/util/visualEditor/model';
   import { updateCode, validatedState } from '$/util/state.svelte';
@@ -21,6 +22,9 @@
   import AutoFixIcon from '~icons/material-symbols/auto-fix-normal-outline-rounded';
   import ResetIcon from '~icons/material-symbols/chrome-restore-outline-rounded';
   import ClearIcon from '~icons/material-symbols/clear-all-rounded';
+  import StartIcon from '~icons/material-symbols/keyboard-double-arrow-right-rounded';
+  import EndIcon from '~icons/material-symbols/keyboard-double-arrow-left-rounded';
+  import DetailIcon from '~icons/material-symbols/notes-rounded';
   import { onMount } from 'svelte';
 
   const CANVAS_W = 3000;
@@ -33,15 +37,40 @@
     round: '圆角',
     stadium: '胶囊'
   };
-  const LINK_NAMES: Record<VLinkType, string> = {
-    arrow: '箭头',
-    dashed: '虚线',
-    line: '直线'
+
+  // Link types drawn with a dashed stroke, regardless of their arrowhead.
+  const DASHED_LINKS = new Set<VLinkType>([
+    'dashed',
+    'dashedArrow',
+    'dashedLine',
+    'msgDashedFilled',
+    'msgDashedOpen',
+    'realization'
+  ]);
+
+  // Target-side arrowhead (SVG marker id) per link type; undefined = no head.
+  const END_MARKERS: Partial<Record<VLinkType, string>> = {
+    arrow: 've-arrow',
+    dashed: 've-arrow',
+    dashedArrow: 've-arrow-open',
+    inheritance: 've-triangle',
+    msgDashedFilled: 've-arrow',
+    msgDashedOpen: 've-arrow-open',
+    msgSolidFilled: 've-arrow',
+    msgSolidOpen: 've-arrow-open',
+    realization: 've-triangle'
+  };
+
+  // Source-side diamond markers (class composition/aggregation).
+  const START_MARKERS: Partial<Record<VLinkType, string>> = {
+    aggregation: 've-diamond-open',
+    composition: 've-diamond'
   };
 
   let { active = true }: { active?: boolean } = $props();
 
-  let graph = $state<VGraph>({ direction: 'TD', nodes: [], edges: [] });
+  let graph = $state<VGraph>({ direction: 'TD', kind: 'flowchart', nodes: [], edges: [] });
+  const kindSpec = $derived(KIND_SPECS[graph.kind ?? 'flowchart']);
   let selected = $state<{ id: string; kind: 'edge' | 'node' } | undefined>();
   let editing = $state<
     undefined | { id: string; kind: 'edge' | 'node'; label: string; x: number; y: number }
@@ -49,6 +78,8 @@
   let linking = $state<undefined | { cursor: { x: number; y: number }; source: string }>();
   let drag = $state<undefined | { id: string; offX: number; offY: number; moved: boolean }>();
   let showCode = $state(true);
+  let editingDetail = $state(false);
+  let detailDraft = $state('');
   let svgEl: SVGSVGElement | undefined = $state();
   let canvasEl: HTMLDivElement | undefined = $state();
 
@@ -85,25 +116,33 @@
   };
 
   const loadFromCode = (announce: boolean): void => {
-    const parsed = parseFlowchart(validatedState.current.code);
+    const parsed = parseCode(validatedState.current.code);
     if (parsed.ok) {
       graph = layoutGraph(parsed.result.graph);
       if (announce) {
         notify(
           parsed.result.skipped > 0
-            ? `已从代码载入（跳过 ${parsed.result.skipped} 行不支持的语法）`
-            : '已从代码载入'
+            ? `已从代码载入${kindLabel(parsed.result.graph.kind)}（跳过 ${parsed.result.skipped} 行不支持的语法）`
+            : `已从代码载入${kindLabel(parsed.result.graph.kind)}`
         );
       }
     } else {
-      graph = { direction: 'TD', nodes: [], edges: [] };
+      graph = { direction: 'TD', kind: 'flowchart', nodes: [], edges: [] };
       if (announce) {
-        notify('当前代码不是 flowchart，已载入空白画布（原代码不会丢失）');
+        notify(
+          '当前图类型暂不支持可视化编辑（支持：流程图/时序图/类图/状态图/ER 图/思维导图），已载入空白画布；绘制新图形将生成流程图，可用「从代码重载」恢复原代码'
+        );
       }
     }
     lastSyncedCode = validatedState.current.code;
     selected = undefined;
     editing = undefined;
+    editingDetail = false;
+  };
+
+  const kindLabel = (kind: VGraph['kind']): string => {
+    const spec = kind ? KIND_SPECS[kind] : undefined;
+    return spec ? `（${spec.label}）` : '';
   };
 
   onMount(() => {
@@ -124,7 +163,7 @@
     const node: VNode = {
       id: nextNodeId(graph.nodes),
       label: '',
-      shape: 'rect',
+      shape: kindSpec.shapes[0] ?? 'rect',
       x: snap(x - NODE_W / 2),
       y: snap(y - NODE_H / 2)
     };
@@ -138,7 +177,31 @@
     addNodeAt(80 + (n % 8) * (NODE_W + 40), 60 + Math.floor(n / 8) * (NODE_H + 40));
   };
 
+  // stateDiagram pseudo nodes: only one start / one end dot can exist.
+  const addSpecial = (kind: 'end' | 'start'): void => {
+    const id = kind === 'start' ? '__start__' : '__end__';
+    if (graph.nodes.some((node) => node.id === id)) {
+      notify(kind === 'start' ? '起点已存在' : '终点已存在');
+      return;
+    }
+    const y = kind === 'start' ? 60 : 60 + (NODE_H + 40) * 2;
+    const node: VNode = {
+      id,
+      label: kind === 'start' ? '起点' : '终点',
+      shape: 'rect',
+      special: kind,
+      x: snap(60),
+      y
+    };
+    graph.nodes.push(node);
+    selected = { id: node.id, kind: 'node' };
+    syncCode();
+  };
+
   const startEdit = (target: VNode | VEdge): void => {
+    if ('special' in target && target.special) {
+      return; // pseudo nodes have a fixed label
+    }
     if ('source' in target) {
       const s = nodeById.get(target.source);
       const t = nodeById.get(target.target);
@@ -194,16 +257,46 @@
 
   const cycleShape = (): void => {
     if (!selectedNode) return;
-    const i = SHAPE_ORDER.indexOf(selectedNode.shape);
-    selectedNode.shape = SHAPE_ORDER[(i + 1) % SHAPE_ORDER.length] ?? 'rect';
+    const shapes = kindSpec.shapes;
+    const i = shapes.indexOf(selectedNode.shape);
+    selectedNode.shape = shapes[(i + 1) % shapes.length] ?? shapes[0] ?? 'rect';
     syncCode();
   };
 
   const cycleLink = (): void => {
     if (!selectedEdge) return;
-    const i = LINK_ORDER.indexOf(selectedEdge.type);
-    selectedEdge.type = LINK_ORDER[(i + 1) % LINK_ORDER.length] ?? 'arrow';
+    const links = kindSpec.links;
+    const i = links.findIndex((link) => link.type === selectedEdge.type);
+    selectedEdge.type = links[(i + 1) % links.length]?.type ?? links[0]?.type ?? 'arrow';
     syncCode();
+  };
+
+  // ER crow's-foot cardinality presets, cycled like the link type.
+  const cycleErCard = (): void => {
+    if (!selectedEdge) return;
+    const i = ER_CARDINALITIES.findIndex(
+      (preset) => preset.cardL === selectedEdge?.cardL && preset.cardR === selectedEdge?.cardR
+    );
+    const preset = ER_CARDINALITIES[(i + 1) % ER_CARDINALITIES.length];
+    if (preset) {
+      selectedEdge.cardL = preset.cardL;
+      selectedEdge.cardR = preset.cardR;
+    }
+    syncCode();
+  };
+
+  const openDetailEditor = (): void => {
+    if (!selectedNode) return;
+    detailDraft = selectedNode.detail ?? '';
+    editingDetail = true;
+  };
+
+  const commitDetail = (): void => {
+    if (selectedNode) {
+      selectedNode.detail = detailDraft.trim() || undefined;
+      syncCode();
+    }
+    editingDetail = false;
   };
 
   const toggleDirection = (): void => {
@@ -217,7 +310,7 @@
   };
 
   const clearAll = (): void => {
-    graph = { direction: graph.direction, nodes: [], edges: [] };
+    graph = { direction: graph.direction, kind: graph.kind, nodes: [], edges: [] };
     selected = undefined;
     syncCode();
   };
@@ -237,9 +330,41 @@
   };
 
   const nodeAt = (p: { x: number; y: number }): VNode | undefined =>
-    graph.nodes.find(
-      (node) => p.x >= node.x && p.x <= node.x + NODE_W && p.y >= node.y && p.y <= node.y + NODE_H
-    );
+    graph.nodes.find((node) => {
+      const size = nodeSize(node);
+      return p.x >= node.x && p.x <= node.x + size.w && p.y >= node.y && p.y <= node.y + size.h;
+    });
+
+  // New edges use the kind's first palette link type; ER edges also seed the
+  // default crow's-foot cardinality.
+  const newEdge = (source: string, target: string): VEdge => {
+    const edge: VEdge = {
+      id: nextEdgeId(graph.edges),
+      source,
+      target,
+      type: kindSpec.links[0]?.type ?? 'line'
+    };
+    if ((graph.kind ?? 'flowchart') === 'er') {
+      edge.cardL = '||';
+      edge.cardR = 'o{';
+    }
+    return edge;
+  };
+
+  // stateDiagram [*] syntax cannot express links back into the start dot or
+  // out of the end dot (nor start->end); block them at creation time.
+  const isBlockedStateLink = (sourceId: string, target: VNode): boolean => {
+    if ((graph.kind ?? 'flowchart') !== 'state') {
+      return false;
+    }
+    if (target.special === 'start') {
+      return true;
+    }
+    if (sourceId === '__end__') {
+      return true;
+    }
+    return sourceId === '__start__' && target.special === 'end';
+  };
 
   const onWindowPointerMove = (event: PointerEvent): void => {
     const p = svgPoint(event);
@@ -270,13 +395,8 @@
     svgRect = undefined; // next gesture re-measures (layout may have changed)
     if (linking) {
       const target = nodeAt(svgPoint(event));
-      if (target && target.id !== linking.source) {
-        const edge: VEdge = {
-          id: nextEdgeId(graph.edges),
-          source: linking.source,
-          target: target.id,
-          type: 'arrow'
-        };
+      if (target && target.id !== linking.source && !isBlockedStateLink(linking.source, target)) {
+        const edge = newEdge(linking.source, target.id);
         graph.edges.push(edge);
         selected = { id: edge.id, kind: 'edge' };
         syncCode();
@@ -319,12 +439,15 @@
   const displayLabel = (label: string): string =>
     label.length > 16 ? `${label.slice(0, 15)}…` : label;
 
-  const handles = (node: VNode): { key: string; x: number; y: number }[] => [
-    { key: 'b', x: node.x + NODE_W / 2, y: node.y + NODE_H },
-    { key: 'l', x: node.x, y: node.y + NODE_H / 2 },
-    { key: 'r', x: node.x + NODE_W, y: node.y + NODE_H / 2 },
-    { key: 't', x: node.x + NODE_W / 2, y: node.y }
-  ];
+  const handles = (node: VNode): { key: string; x: number; y: number }[] => {
+    const size = nodeSize(node);
+    return [
+      { key: 'b', x: node.x + size.w / 2, y: node.y + size.h },
+      { key: 'l', x: node.x, y: node.y + size.h / 2 },
+      { key: 'r', x: node.x + size.w, y: node.y + size.h / 2 },
+      { key: 't', x: node.x + size.w / 2, y: node.y }
+    ];
+  };
 </script>
 
 <svelte:window
@@ -335,17 +458,48 @@
 <div class="flex h-full min-h-80 flex-col select-none">
   <div class="flex flex-wrap items-center gap-1.5 border-b p-1.5 text-xs">
     <Button size="sm" variant="outline" data-testid={TID.visualAddNode} onclick={addNodeStaggered}>
-      <AddIcon /> 节点
+      <AddIcon />
+      {kindSpec.newNode}
     </Button>
-    <Button size="sm" variant="outline" onclick={toggleDirection}>
-      方向 {graph.direction}
-    </Button>
-    <Button size="sm" variant="outline" disabled={!selectedNode} onclick={cycleShape}>
-      形状: {selectedNode ? SHAPE_NAMES[selectedNode.shape] : '—'}
-    </Button>
-    <Button size="sm" variant="outline" disabled={!selectedEdge} onclick={cycleLink}>
-      线型: {selectedEdge ? LINK_NAMES[selectedEdge.type] : '—'}
-    </Button>
+    {#if kindSpec.startEnd}
+      <Button
+        size="sm"
+        variant="outline"
+        onclick={() => addSpecial('start')}
+        title="添加起点（[*]）">
+        <StartIcon /> 起点
+      </Button>
+      <Button size="sm" variant="outline" onclick={() => addSpecial('end')} title="添加终点（[*]）">
+        <EndIcon /> 终点
+      </Button>
+    {/if}
+    {#if kindSpec.direction}
+      <Button size="sm" variant="outline" onclick={toggleDirection}>
+        方向 {graph.direction}
+      </Button>
+    {/if}
+    {#if kindSpec.shapes.length > 1}
+      <Button size="sm" variant="outline" disabled={!selectedNode} onclick={cycleShape}>
+        形状: {selectedNode && !selectedNode.special ? SHAPE_NAMES[selectedNode.shape] : '—'}
+      </Button>
+    {/if}
+    {#if kindSpec.links.length > 1}
+      <Button size="sm" variant="outline" disabled={!selectedEdge} onclick={cycleLink}>
+        线型: {selectedEdge
+          ? (kindSpec.links.find((link) => link.type === selectedEdge?.type)?.name ?? '—')
+          : '—'}
+      </Button>
+    {/if}
+    {#if (graph.kind ?? 'flowchart') === 'er'}
+      <Button size="sm" variant="outline" disabled={!selectedEdge} onclick={cycleErCard}>
+        基数: {selectedEdge ? `${selectedEdge.cardL ?? '||'}--${selectedEdge.cardR ?? 'o{'}` : '—'}
+      </Button>
+    {/if}
+    {#if kindSpec.detail}
+      <Button size="sm" variant="outline" disabled={!selectedNode} onclick={openDetailEditor}>
+        <DetailIcon /> 编辑内容
+      </Button>
+    {/if}
     <Button
       size="sm"
       variant="outline"
@@ -368,7 +522,7 @@
       <ClearIcon /> 清空
     </Button>
     <span class="ml-auto text-muted-foreground">
-      {graph.nodes.length} 节点 · {graph.edges.length} 连线
+      {kindSpec.label} · {graph.nodes.length} 节点 · {graph.edges.length} 连线
     </span>
   </div>
 
@@ -392,6 +546,51 @@
           <marker id="ve-arrow" markerHeight="8" markerWidth="8" orient="auto" refX="7" refY="4">
             <path d="M0,0 L8,4 L0,8 Z" fill="var(--foreground)"></path>
           </marker>
+          <marker
+            id="ve-arrow-open"
+            markerHeight="9"
+            markerWidth="9"
+            orient="auto"
+            refX="7"
+            refY="4.5">
+            <path d="M1,1 L7,4.5 L1,8" fill="none" stroke="var(--foreground)" stroke-width="1.3"
+            ></path>
+          </marker>
+          <marker
+            id="ve-triangle"
+            markerHeight="10"
+            markerWidth="10"
+            orient="auto"
+            refX="8"
+            refY="5">
+            <path
+              d="M1,1 L9,5 L1,9 Z"
+              fill="var(--background)"
+              stroke="var(--foreground)"
+              stroke-width="1.2"></path>
+          </marker>
+          <marker
+            id="ve-diamond"
+            markerHeight="9"
+            markerWidth="11"
+            orient="auto-start-reverse"
+            refX="1"
+            refY="4.5">
+            <path d="M1,4.5 L5.5,1 L10,4.5 L5.5,8 Z" fill="var(--foreground)"></path>
+          </marker>
+          <marker
+            id="ve-diamond-open"
+            markerHeight="9"
+            markerWidth="11"
+            orient="auto-start-reverse"
+            refX="1"
+            refY="4.5">
+            <path
+              d="M1,4.5 L5.5,1 L10,4.5 L5.5,8 Z"
+              fill="var(--background)"
+              stroke="var(--foreground)"
+              stroke-width="1.2"></path>
+          </marker>
         </defs>
         <rect width={CANVAS_W} height={CANVAS_H} fill="transparent"></rect>
 
@@ -399,9 +598,12 @@
           {@const geom = edgeGeom(edge)}
           {#if geom}
             {@const selectedEdgeId = selected?.kind === 'edge' ? selected.id : undefined}
+            {@const endMarker = END_MARKERS[edge.type]}
+            {@const startMarker = START_MARKERS[edge.type]}
             <path
               role="button"
               tabindex="0"
+              data-edge-id={edge.id}
               d="M{geom.x1},{geom.y1} L{geom.x2},{geom.y2}"
               fill="none"
               stroke="transparent"
@@ -427,9 +629,34 @@
               fill="none"
               stroke={selectedEdgeId === edge.id ? 'var(--primary)' : 'var(--foreground)'}
               stroke-width={selectedEdgeId === edge.id ? 2.5 : 1.5}
-              stroke-dasharray={edge.type === 'dashed' ? '6 4' : undefined}
-              marker-end={edge.type === 'arrow' ? 'url(#ve-arrow)' : undefined}
+              stroke-dasharray={DASHED_LINKS.has(edge.type) ? '6 4' : undefined}
+              marker-end={endMarker ? `url(#${endMarker})` : undefined}
+              marker-start={startMarker ? `url(#${startMarker})` : undefined}
               style="pointer-events: none;"></path>
+            {#if edge.cardL || edge.cardR}
+              {#if edge.cardL}
+                <text
+                  x={geom.x1 + (geom.x2 - geom.x1) * 0.15}
+                  y={geom.y1 + (geom.y2 - geom.y1) * 0.15 - 4}
+                  fill="var(--foreground)"
+                  font-size="9"
+                  text-anchor="middle"
+                  style="pointer-events: none;">
+                  {edge.cardL}
+                </text>
+              {/if}
+              {#if edge.cardR}
+                <text
+                  x={geom.x1 + (geom.x2 - geom.x1) * 0.85}
+                  y={geom.y1 + (geom.y2 - geom.y1) * 0.85 - 4}
+                  fill="var(--foreground)"
+                  font-size="9"
+                  text-anchor="middle"
+                  style="pointer-events: none;">
+                  {edge.cardR}
+                </text>
+              {/if}
+            {/if}
             {#if edge.label}
               <text
                 x={(geom.x1 + geom.x2) / 2}
@@ -455,43 +682,90 @@
 
         {#each graph.nodes as node (node.id)}
           {@const isSelected = selected?.kind === 'node' && selected.id === node.id}
+          {@const size = nodeSize(node)}
           <g
             role="button"
             tabindex="-1"
+            data-node-id={node.id}
             style="cursor: move;"
             onpointerdown={(e) => onNodePointerDown(e, node)}
             ondblclick={(e) => {
               e.stopPropagation();
               startEdit(node);
             }}>
-            {#if node.shape === 'diamond'}
+            {#if node.special}
+              {#if node.special === 'start'}
+                <circle
+                  cx={node.x + size.w / 2}
+                  cy={node.y + size.h / 2}
+                  r={11}
+                  fill="var(--foreground)"></circle>
+              {:else}
+                <circle
+                  cx={node.x + size.w / 2}
+                  cy={node.y + size.h / 2}
+                  r={11}
+                  fill="var(--background)"
+                  stroke={isSelected ? 'var(--primary)' : 'var(--foreground)'}
+                  stroke-width={isSelected ? 2.5 : 1.5}></circle>
+                <circle
+                  cx={node.x + size.w / 2}
+                  cy={node.y + size.h / 2}
+                  r={5.5}
+                  fill="var(--foreground)"></circle>
+              {/if}
+              <text
+                x={node.x + size.w / 2}
+                y={node.y + size.h + 11}
+                fill="var(--muted-foreground)"
+                font-size="9"
+                text-anchor="middle"
+                style="pointer-events: none;">
+                {node.label}
+              </text>
+            {:else if node.shape === 'diamond'}
               <polygon
-                points="{node.x + NODE_W / 2},{node.y} {node.x + NODE_W},{node.y +
-                  NODE_H / 2} {node.x + NODE_W / 2},{node.y + NODE_H} {node.x},{node.y +
-                  NODE_H / 2}"
+                points="{node.x + size.w / 2},{node.y} {node.x + size.w},{node.y +
+                  size.h / 2} {node.x + size.w / 2},{node.y + size.h} {node.x},{node.y +
+                  size.h / 2}"
                 fill="var(--background)"
                 stroke={isSelected ? 'var(--primary)' : 'var(--border)'}
                 stroke-width={isSelected ? 2.5 : 1.5}></polygon>
             {:else}
               <rect
-                height={NODE_H}
-                rx={node.shape === 'stadium' ? NODE_H / 2 : node.shape === 'round' ? 12 : 4}
-                width={NODE_W}
+                height={size.h}
+                rx={node.shape === 'stadium' ? size.h / 2 : node.shape === 'round' ? 12 : 4}
+                width={size.w}
                 x={node.x}
                 y={node.y}
                 fill="var(--background)"
                 stroke={isSelected ? 'var(--primary)' : 'var(--border)'}
                 stroke-width={isSelected ? 2.5 : 1.5}></rect>
             {/if}
-            <text
-              x={node.x + NODE_W / 2}
-              y={node.y + NODE_H / 2 + 4}
-              fill="var(--foreground)"
-              font-size="12"
-              text-anchor="middle"
-              style="pointer-events: none;">
-              {displayLabel(node.label || node.id)}
-            </text>
+            {#if !node.special}
+              <text
+                x={node.x + size.w / 2}
+                y={node.y + NODE_H / 2 + 4}
+                fill="var(--foreground)"
+                font-size="12"
+                text-anchor="middle"
+                style="pointer-events: none;">
+                {displayLabel(node.label || node.id)}
+              </text>
+              {#if node.detail}
+                {#each node.detail.split('\n').slice(0, 5) as line, i (i)}
+                  <text
+                    x={node.x + size.w / 2}
+                    y={node.y + NODE_H + 11 + i * 13}
+                    fill="var(--muted-foreground)"
+                    font-size="9"
+                    text-anchor="middle"
+                    style="pointer-events: none;">
+                    {displayLabel(line)}
+                  </text>
+                {/each}
+              {/if}
+            {/if}
           </g>
           {#if isSelected}
             {#each handles(node) as handle (handle.key)}
@@ -515,7 +789,7 @@
             fill="var(--muted-foreground)"
             font-size="14"
             text-anchor="middle">
-            双击画布添加节点；拖动节点边缘圆点创建连线；双击节点/连线修改文字
+            双击画布添加{kindSpec.newNode}；拖动节点边缘圆点创建连线；双击节点/连线修改文字
           </text>
         {/if}
       </svg>
@@ -534,6 +808,26 @@
             if (e.key === 'Escape') editing = undefined;
           }}
           onblur={commitEdit} />
+      {/if}
+
+      {#if editingDetail && selectedNode}
+        <div class="absolute top-2 left-2 z-10 w-64 rounded border bg-background p-2 shadow">
+          <div class="mb-1 text-xs text-muted-foreground">
+            编辑「{displayLabel(selectedNode.label || selectedNode.id)}」的内容（每行一条）
+          </div>
+          <textarea
+            data-testid={TID.visualDetailEditor}
+            bind:value={detailDraft}
+            class="h-24 w-full rounded border border-input bg-background p-1 font-mono text-xs text-foreground"
+            onkeydown={(e) => {
+              e.stopPropagation();
+              if (e.key === 'Escape') editingDetail = false;
+            }}></textarea>
+          <div class="mt-1 flex justify-end gap-1">
+            <Button size="sm" variant="ghost" onclick={() => (editingDetail = false)}>取消</Button>
+            <Button size="sm" onclick={commitDetail}>保存</Button>
+          </div>
+        </div>
       {/if}
     </div>
   </div>
