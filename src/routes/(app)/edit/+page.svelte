@@ -20,6 +20,8 @@
   import { Toggle } from '$/components/ui/toggle';
   import VersionSecurityToolbar from '$/components/VersionSecurityToolbar.svelte';
   import View from '$/components/View.svelte';
+  import VisualEditor from '$/components/VisualEditor.svelte';
+  import { TID } from '$/constants';
   import type { EditorMode, Tab } from '$/types';
   import { shouldShowEditorChooser } from '$/util/migration/domainMigration';
   import { PanZoomState } from '$/util/panZoom';
@@ -29,13 +31,20 @@
   import { onMount } from 'svelte';
   import CodeIcon from '~icons/custom/code';
   import HistoryIcon from '~icons/material-symbols/history';
+  import ShapesIcon from '~icons/material-symbols/account-tree-outline-rounded';
   import GearIcon from '~icons/material-symbols/settings-outline-rounded';
 
   const panZoomState = new PanZoomState();
 
+  // 'visual' is a local-only tab (not persisted in editorMode): the visual
+  // editor keeps its graph state alive across tab switches via `active`.
+  let activeTab = $state<string>('code');
   const tabSelectHandler = (tab: Tab) => {
-    const editorMode: EditorMode = tab.id === 'code' ? 'code' : 'config';
-    updateCodeStore({ editorMode });
+    activeTab = tab.id;
+    if (tab.id !== 'visual') {
+      const editorMode: EditorMode = tab.id === 'code' ? 'code' : 'config';
+      updateCodeStore({ editorMode });
+    }
   };
 
   const editorTabs: Tab[] = [
@@ -48,8 +57,20 @@
       icon: GearIcon,
       id: 'config',
       title: 'Config'
+    },
+    {
+      icon: ShapesIcon,
+      id: 'visual',
+      testID: TID.visualTab,
+      title: 'Visual'
     }
   ];
+
+  $effect(() => {
+    if (activeTab !== 'visual') {
+      activeTab = validatedState.current.editorMode;
+    }
+  });
 
   let width = $state(0);
   let isMobile = $derived(width < 640);
@@ -124,12 +145,19 @@
               onselect={tabSelectHandler}
               isOpen
               tabs={editorTabs}
-              activeTabID={validatedState.current.editorMode}
+              activeTabID={activeTab}
               isClosable={false}>
               {#snippet actions()}
                 <DiagramDocButton />
               {/snippet}
-              <Editor {isMobile} />
+              <!-- Both editors stay mounted; `active` toggles visibility so the
+                   visual graph (and Monaco) survive tab switches. -->
+              <div class={activeTab === 'visual' ? 'hidden' : 'h-full'}>
+                <Editor {isMobile} />
+              </div>
+              <div class={activeTab === 'visual' ? 'h-full' : 'hidden'}>
+                <VisualEditor active={activeTab === 'visual'} />
+              </div>
             </Card>
 
             <div class="group flex flex-wrap justify-between gap-4 sm:gap-6">

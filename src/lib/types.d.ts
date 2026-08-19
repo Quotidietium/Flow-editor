@@ -20,6 +20,8 @@ export interface Tab {
   id: string;
   title: string;
   icon: Component;
+  /** Optional data-testid for e2e targeting. */
+  testID?: string;
 }
 
 export interface State {

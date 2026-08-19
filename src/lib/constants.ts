@@ -17,7 +17,12 @@ export const TID = {
   embedSnippet: 'embed-snippet',
   embedToolbar: 'embed-toolbar',
   errorContainer: 'error-container',
-  themeToggleButton: 'theme-toggle-button'
+  themeToggleButton: 'theme-toggle-button',
+  visualAddNode: 'visual-add-node',
+  visualCanvas: 'visual-canvas',
+  visualClear: 'visual-clear',
+  visualCodeOut: 'visual-code-out',
+  visualTab: 'visual-tab'
 } as const;
 
 export const C = {

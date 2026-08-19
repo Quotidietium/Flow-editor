@@ -31,6 +31,7 @@
       <Button
         role="tab"
         variant="ghost"
+        data-testid={tab.testID}
         class={[
           'px-2',
           effectiveTabID === tab.id && 'rounded-b-none border-b-2 border-b-primary-foreground/50'
