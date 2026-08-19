@@ -1,6 +1,6 @@
 /**
  * Runes-based localStorage persistence, shared by the persisted state in
- * `state.svelte.ts`, `migrations.svelte.ts`, `promo.svelte.ts` and History.
+ * `state.svelte.ts`, `migrations.svelte.ts` and History.
  *
  * Values are stored as plain JSON. Reads of missing or corrupt values fall
  * back to the provided default, so values written by older versions of the

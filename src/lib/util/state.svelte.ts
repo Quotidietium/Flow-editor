@@ -4,7 +4,6 @@ import { resolve } from '$app/paths';
 import { debounce, get as lodashGet } from 'lodash-es';
 import type { MermaidConfig } from 'mermaid';
 import { untrack } from 'svelte';
-import { env } from './env';
 import {
   extractErrorLineText,
   findMostRelevantLineNumber,
@@ -13,8 +12,8 @@ import {
 import { parse } from './mermaid';
 import { readJSON, writeJSON } from './persist.svelte';
 import { findUnsafeConfigPaths, stripConfigPaths } from './sanitize';
-import { deserializeState, pakoSerde, serializeState } from './serde';
-import { errorDebug, formatJSON, getUTMSource, MCBaseURL } from './util';
+import { deserializeState, serializeState } from './serde';
+import { errorDebug, formatJSON } from './util';
 
 export { defaultState };
 
@@ -147,47 +146,10 @@ export const validatedState = {
   }
 };
 
-const urlsCurrent = $derived.by(() => {
-  const { code, serialized } = validatedCurrent;
-  const { krokiRendererUrl, rendererUrl } = env;
-  const png = rendererUrl ? `${rendererUrl}/img/${serialized}?type=png` : '';
-  return {
-    kroki: krokiRendererUrl ? `${krokiRendererUrl}/mermaid/svg/${pakoSerde.serialize(code)}` : '',
-    mdCode: png ? `[![](${png})](${window.location.href})` : '',
-    mermaidChart: ({
-      medium,
-      campaign
-    }: {
-      medium:
-        | 'ai_edit'
-        | 'ai_repair'
-        | 'main_menu'
-        | 'save_diagram'
-        | 'share'
-        | 'vibe_diagramming'
-        | 'visual_edit'
-        | 'voice_edit';
-      campaign?: string;
-    }) => {
-      const utmSource = getUTMSource();
-      const params = new URLSearchParams({
-        utm_source: utmSource,
-        utm_medium: medium,
-        ...(campaign ? { utm_campaign: campaign } : {})
-      }).toString();
-      return {
-        save: `${MCBaseURL}/app/plugin/save?state=${serialized}&${params}`,
-        playground: `${MCBaseURL}/play?${params}#${serialized}`,
-        plugins: `${MCBaseURL}/plugins?${params}`,
-        home: `${MCBaseURL}/?${params}`
-      };
-    },
-    new: `${resolve('/edit', {})}#${serializeState(defaultState)}`,
-    png,
-    svg: rendererUrl ? `${rendererUrl}/svg/${serialized}` : '',
-    view: `${resolve('/view', {})}#${serialized}`
-  };
-});
+const urlsCurrent = $derived.by(() => ({
+  new: `${resolve('/edit', {})}#${serializeState(defaultState)}`,
+  view: `${resolve('/view', {})}#${validatedCurrent.serialized}`
+}));
 
 export const urls = {
   get current() {

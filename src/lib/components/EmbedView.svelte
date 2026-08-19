@@ -2,7 +2,6 @@
   import { TID } from '$/constants';
   import type { PanZoomState } from '$/util/panZoom';
   import { renderAndPlaceDiagram } from '$/util/renderView';
-  import FontAwesome, { mayContainFontAwesome } from '$lib/components/FontAwesome.svelte';
   import uniqueID from 'lodash-es/uniqueId';
   import type { MermaidConfig } from 'mermaid';
 
@@ -31,7 +30,6 @@
 
   let container: HTMLDivElement | undefined = $state();
   let error = $state<string | undefined>();
-  let waitForFontAwesomeToLoad: FontAwesome['waitForFontAwesomeToLoad'] | undefined = $state();
 
   const renderDiagram = async (
     currentCode: string,
@@ -44,9 +42,6 @@
       return;
     }
     try {
-      if (mayContainFontAwesome(currentCode)) {
-        await waitForFontAwesomeToLoad?.();
-      }
       const { graphDiv } = await renderAndPlaceDiagram({
         code: currentCode,
         config: currentConfig,
@@ -85,8 +80,6 @@
     });
   });
 </script>
-
-<FontAwesome bind:waitForFontAwesomeToLoad />
 
 <div
   id="embed-view"

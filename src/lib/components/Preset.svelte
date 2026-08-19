@@ -4,7 +4,6 @@
   import * as Popover from '$/components/ui/popover';
   import { getSampleDiagrams, type SampleExample } from '$/util/mermaid';
   import { updateCode } from '$lib/util/state.svelte';
-  import { logEvent } from '$lib/util/stats';
   import { cn } from '$lib/utils';
   import ShapesIcon from '~icons/material-symbols/account-tree-outline-rounded';
   import ChevronDownIcon from '~icons/material-symbols/keyboard-arrow-down-rounded';
@@ -49,7 +48,6 @@
       resetPanZoom: true,
       updateDiagram: true
     });
-    logEvent('loadSampleDiagram', { diagramType, exampleTitle: example.title });
   };
 
   const mainDiagrams = [

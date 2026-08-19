@@ -1,9 +1,6 @@
 import type { State } from './types';
 
 export const TID = {
-  aiHelpText: 'ai-help-text',
-  aiRepairButton: 'ai-repair-button',
-  copyMarkdown: 'copy-markdown',
   diagramDocumentationButton: 'diagram-documentation-button',
   downloadPNG: 'download-PNG',
   downloadSVG: 'download-SVG',
@@ -13,7 +10,6 @@ export const TID = {
   embedModeToggle: 'embed-mode-toggle',
   embedPreview: 'embed-preview',
   embedRenderError: 'embed-render-error',
-  embedSaveLink: 'embed-save-link',
   embedSnippet: 'embed-snippet',
   embedToolbar: 'embed-toolbar',
   errorContainer: 'error-container',
@@ -23,12 +19,6 @@ export const TID = {
   visualClear: 'visual-clear',
   visualCodeOut: 'visual-code-out',
   visualTab: 'visual-tab'
-} as const;
-
-export const C = {
-  aiLiveEditor: 'ai_live_editor',
-  editorChooserDismissedKey: 'mermaid-editor-chooser-dismissed',
-  utmSource: 'mermaid_live_editor'
 } as const;
 
 export const MERMAID_THEMES = [
@@ -52,7 +42,7 @@ export const defaultState: State = {
     B --> C{Let me think}
     C -->|One| D[Laptop]
     C -->|Two| E[iPhone]
-    C -->|Three| F[fa:fa-car Car]
+    C -->|Three| F[New car]
   `,
   grid: true,
   mermaid: JSON.stringify({ theme: 'default' }, undefined, 2),

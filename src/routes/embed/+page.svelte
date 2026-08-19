@@ -1,12 +1,10 @@
 <script lang="ts">
   import EmbedView from '$/components/EmbedView.svelte';
-  import MermaidChartIcon from '$/components/MermaidChartIcon.svelte';
   import PanZoomToolbar from '$/components/PanZoomToolbar.svelte';
   import { Button } from '$/components/ui/button';
   import { TID } from '$/constants';
   import {
     buildEditUrl,
-    buildSaveUrl,
     resolveEmbedSettings,
     serializeEmbedState,
     toggleMode,
@@ -126,17 +124,6 @@
           class="text-muted-foreground hover:text-foreground">
           Edit
         </a>
-        {#if env.isEnabledMermaidChartLinks}
-          <a
-            data-testid={TID.embedSaveLink}
-            href={buildSaveUrl(serialized)}
-            target="_blank"
-            rel="noreferrer noopener"
-            class="inline-flex items-center gap-1.5 font-medium text-muted-foreground hover:text-foreground hover:underline">
-            <MermaidChartIcon class="h-3.5 w-3.5" />
-            Save in Mermaid Chart
-          </a>
-        {/if}
       </div>
     </footer>
   {/if}

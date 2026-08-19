@@ -29,12 +29,12 @@ SvelteKit 2 + Svelte 5 (runes) SPA using `@sveltejs/adapter-static`. **`docs/` i
 
 - `inputState` — a `$state` rune holding `State` (code, mermaid config JSON, pan/zoom, etc.), initialized from localStorage key `codeStore`. **All writes must go through the exported update functions** (`updateCode`, `updateCodeStore`, `updateConfig`, `replaceInputState`, ...), which call `persistAndProcess()`: persist to localStorage → async re-validate via `mermaid.parse` → publish to `validatedState`. Reads inside update functions are wrapped in `untrack` so calling effects don't depend on the whole input state.
 - `validatedState` — read-only validated snapshot (adds `error`, `errorMarkers`, `serialized`, `diagramType`). Internal reads should use this, but it is never persisted or shared externally.
-- The serialized state is mirrored into the URL hash (debounced) — the URL **is** the sharing mechanism. `src/lib/util/serde.ts` encodes state as `pako:<base64 deflate>` (legacy plain-base64 supported). `mermaid.ink` PNG/SVG links, Kroki, and Mermaid Chart URLs are derived from it in `urls`.
-- App startup goes through `initHandler()` in `src/lib/util/util.ts`: migrations → load state from URL hash → optional gist/URL loading (`fileLoaders/`) → start URL-hash subscription → analytics.
+- The serialized state is mirrored into the URL hash (debounced) — the URL **is** the sharing mechanism. `src/lib/util/serde.ts` encodes state as `pako:<base64 deflate>` (legacy plain-base64 supported). The view/new links in `urls` are derived from it.
+- App startup goes through `initHandler()` in `src/lib/util/util.ts`: load state from URL hash → start URL-hash subscription. This fork is fully offline: no analytics, no external renderers, no commercial links (see note/privacy-simplify.md).
 
 ### Persistence
 
-`src/lib/util/persist.svelte.ts` provides `readJSON`/`writeJSON` and a `persisted()` localStorage-backed rune, shared by state, migrations (`migrations.svelte.ts`), promos, and History. History (`src/lib/components/History/historyState.svelte.ts`) auto-saves a timeline of diagrams for the whole session (`startAutoSave()` in the edit page).
+`src/lib/util/persist.svelte.ts` provides `readJSON`/`writeJSON` and a `persisted()` localStorage-backed rune, shared by state, migrations (`migrations.svelte.ts`), and History. History (`src/lib/components/History/historyState.svelte.ts`) auto-saves a timeline of diagrams for the whole session (`startAutoSave()` in the edit page).
 
 ### Rendering
 
@@ -57,7 +57,7 @@ States loaded from URLs pass through `sanitizeConfig` (state.svelte.ts), which d
 
 ### Environment / build quirks
 
-- Env vars use the `MERMAID_` prefix (`import.meta.env`), read in `src/lib/util/env.ts`. Defaults in `.env`; copy to `.env.local` for local overrides. These control renderer URL (mermaid.ink), Kroki, analytics, and Mermaid Chart integration.
+- Env vars use the `MERMAID_` prefix (`import.meta.env`), read in `src/lib/util/env.ts`. Only `MERMAID_DOCS_URL` (documentation link target) and `MERMAID_BASE_PATH` remain.
 - HMR is deliberately disabled — every change triggers a full page reload (see `alwaysFullReload` in `vite.config.js`) because HMR corrupts app state.
 - `vite.config.js` pins monaco/mermaid/codemirror into named vendor chunks for long-term caching — keep that intact when touching build config.
 

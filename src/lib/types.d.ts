@@ -36,7 +36,6 @@ export interface State {
   editorMode?: EditorMode;
   pan?: { x: number; y: number };
   zoom?: number;
-  loader?: LoaderConfig;
 }
 
 export interface ValidatedState extends State {
@@ -47,27 +46,10 @@ export interface ValidatedState extends State {
   serialized: string;
 }
 
-export interface GistLoaderConfig {
-  url: string;
-}
-
 export interface LoadingState {
   loading: boolean;
   message?: string;
 }
-export interface FileLoaderConfig {
-  codeURL: string;
-  configURL?: string;
-}
-export type LoaderConfig =
-  | {
-      type: 'gist';
-      config: GistLoaderConfig;
-    }
-  | {
-      type: 'files';
-      config: FileLoaderConfig;
-    };
 export type HistoryType = 'auto' | 'manual' | 'loader';
 export type HistoryEntry = { id: string; state: State; time: number; url?: string } & (
   | {
@@ -90,7 +72,6 @@ export type DocumentationConfig = Record<
 
 export type EditorMode = 'code' | 'config';
 
-export type Loader = (url: string) => Promise<State>;
 export type Optional<T, K extends keyof T> = Pick<Partial<T>, K> & Omit<T, K>;
 
 export interface ErrorHash {

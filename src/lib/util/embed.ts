@@ -1,8 +1,6 @@
-import { C, defaultState } from '$/constants';
+import { defaultState } from '$/constants';
 import type { State } from '$/types';
 import type { MermaidConfig } from 'mermaid';
-import { MCBaseURL } from './env';
-import { isOnMermaidAI } from './migration/domainMigration';
 import { silentlySanitizeConfig } from './sanitize';
 import { deserializeState, serializeState } from './serde';
 
@@ -172,10 +170,4 @@ export const serializeEmbedState = (settings: EmbedSettings): string => {
 /** "Edit" link → this site's own editor, carrying the state in the hash. */
 export const buildEditUrl = (serialized: string, editBase: string): string => {
   return `${editBase}#${serialized}`;
-};
-
-/** "Save in Mermaid Chart" link → mermaid.ai, carrying the serialized state. */
-export const buildSaveUrl = (serialized: string): string => {
-  const utmSource = isOnMermaidAI() ? C.aiLiveEditor : C.utmSource;
-  return `${MCBaseURL}/app/plugin/save?state=${encodeURIComponent(serialized)}&utm_source=${utmSource}&utm_medium=embed`;
 };

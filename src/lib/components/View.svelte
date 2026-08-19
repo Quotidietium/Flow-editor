@@ -4,8 +4,6 @@
   import { PanZoomState } from '$/util/panZoom';
   import { renderAndPlaceDiagram } from '$/util/renderView';
   import { updateCodeStore, validatedState } from '$/util/state.svelte';
-  import { saveStatistics } from '$/util/stats';
-  import FontAwesome, { mayContainFontAwesome } from '$lib/components/FontAwesome.svelte';
   import uniqueID from 'lodash-es/uniqueId';
   import type { MermaidConfig } from 'mermaid';
   import { mode } from 'mode-watcher';
@@ -23,7 +21,6 @@
   let error = $state(false);
   let panZoom = true;
   let manualUpdate = true;
-  let waitForFontAwesomeToLoad: FontAwesome['waitForFontAwesomeToLoad'] | undefined = $state();
 
   // Set up panZoom state observer to update the store when pan/zoom changes
   const setupPanZoomObserver = () => {
@@ -47,7 +44,6 @@
       return;
     }
     error = false;
-    let diagramType: string | undefined;
     try {
       if (container) {
         manualUpdate = true;
@@ -70,19 +66,14 @@
         rough = state.rough;
         panZoom = state.panZoom ?? true;
 
-        if (mayContainFontAwesome(code)) {
-          await waitForFontAwesomeToLoad?.();
-        }
-
         const scroll = view?.parentElement?.scrollTop;
-        const { diagramType: detectedDiagramType, graphDiv } = await renderAndPlaceDiagram({
+        const { graphDiv } = await renderAndPlaceDiagram({
           code,
           config: JSON.parse(state.mermaid) as MermaidConfig,
           container,
           rough: state.rough,
           viewId: uniqueID('graph-')
         });
-        diagramType = detectedDiagramType;
         if (graphDiv && state.panZoom) {
           handlePanZoom(state, graphDiv);
         }
@@ -98,7 +89,6 @@
       error = true;
     }
     const renderTime = Date.now() - startTime;
-    saveStatistics({ code, diagramType, isRough: state.rough, renderTime });
     recordRenderTime(renderTime, () => {
       updateCodeStore({ updateDiagram: true });
     });
@@ -116,8 +106,6 @@
     pendingStateChange = pendingStateChange.then(() => handleStateChange(state).catch(() => {}));
   });
 </script>
-
-<FontAwesome bind:waitForFontAwesomeToLoad />
 
 <div
   id="view"
