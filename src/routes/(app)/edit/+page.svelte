@@ -1,7 +1,6 @@
 <script lang="ts">
   import Actions from '$/components/Actions.svelte';
   import Card from '$/components/Card/Card.svelte';
-  import DiagramDocButton from '$/components/DiagramDocumentationButton.svelte';
   import Editor from '$/components/Editor.svelte';
   import History from '$/components/History/History.svelte';
   import { startAutoSave } from '$/components/History/historyState.svelte';
@@ -115,9 +114,6 @@
               tabs={editorTabs}
               activeTabID={validatedState.current.editorMode}
               isClosable={false}>
-              {#snippet actions()}
-                <DiagramDocButton />
-              {/snippet}
               <Editor {isMobile} />
             </Card>
 

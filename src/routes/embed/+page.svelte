@@ -11,9 +11,8 @@
     type EmbedMode,
     type ResolvedEmbed
   } from '$/util/embed';
-  import { env } from '$/util/env';
   import { PanZoomState } from '$/util/panZoom';
-  import { asset, resolve } from '$app/paths';
+  import { resolve } from '$app/paths';
   import { onMount } from 'svelte';
   import DarkModeIcon from '~icons/material-symbols/dark-mode-outline';
   import LightModeIcon from '~icons/material-symbols/light-mode-outline';
@@ -105,16 +104,7 @@
     {@const serialized = serializeEmbedState(resolved.settings)}
     <footer
       data-testid={TID.embedFooter}
-      class="flex items-center justify-between gap-2 border-t bg-card px-3 py-1.5 text-xs">
-      <a
-        href={env.docsUrl}
-        target="_blank"
-        rel="noreferrer noopener"
-        class="flex items-center gap-1.5 text-muted-foreground hover:text-foreground">
-        <img src={asset('/favicon.svg')} alt="" class="h-4 w-4" />
-        Powered by Mermaid
-      </a>
-
+      class="flex items-center justify-end gap-2 border-t bg-card px-3 py-1.5 text-xs">
       <div class="flex items-center gap-3">
         <a
           data-testid={TID.embedEditLink}

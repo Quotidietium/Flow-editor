@@ -87,13 +87,6 @@ export class EditorPage {
     await this.page.getByRole('tab').getByText(mode).click();
   }
 
-  async checkDocURL(url: string | RegExp) {
-    await expect(this.page.getByTestId(TID.diagramDocumentationButton)).toHaveAttribute(
-      'href',
-      url
-    );
-  }
-
   async toggleTheme() {
     await this.page.getByTestId(TID.themeToggleButton).click();
   }

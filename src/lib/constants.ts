@@ -1,7 +1,6 @@
 import type { State } from './types';
 
 export const TID = {
-  diagramDocumentationButton: 'diagram-documentation-button',
   downloadPNG: 'download-PNG',
   downloadSVG: 'download-SVG',
   embedEditLink: 'embed-edit-link',

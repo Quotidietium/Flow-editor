@@ -28,24 +28,6 @@ export const parse = async (code: string) => {
  */
 export const defaultMermaidConfig = mermaid.mermaidAPI.defaultConfig ?? {};
 
-export const standardizeDiagramType = (diagramType: string) => {
-  switch (diagramType) {
-    case 'class':
-    case 'classDiagram': {
-      return 'classDiagram';
-    }
-    case 'graph':
-    case 'flowchart':
-    case 'flowchart-elk':
-    case 'flowchart-v2': {
-      return 'flowchart';
-    }
-    default: {
-      return diagramType;
-    }
-  }
-};
-
 // The examples catalogue is only needed by the Sample Diagrams card; it is
 // dynamically imported so its ~63KB (gzip) of data stays out of the startup
 // module graph while still loading in parallel as soon as the edit page
