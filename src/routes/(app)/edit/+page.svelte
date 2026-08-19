@@ -24,20 +24,14 @@
   import { onMount } from 'svelte';
   import CodeIcon from '~icons/custom/code';
   import HistoryIcon from '~icons/material-symbols/history';
-  import ShapesIcon from '~icons/material-symbols/account-tree-outline-rounded';
+  import EditIcon from '~icons/material-symbols/edit-note-rounded';
   import GearIcon from '~icons/material-symbols/settings-outline-rounded';
 
   const panZoomState = new PanZoomState();
 
-  // 'visual' is a local-only tab (not persisted in editorMode): the visual
-  // editor keeps its graph state alive across tab switches via `active`.
-  let activeTab = $state<string>('code');
   const tabSelectHandler = (tab: Tab) => {
-    activeTab = tab.id;
-    if (tab.id !== 'visual') {
-      const editorMode: EditorMode = tab.id === 'code' ? 'code' : 'config';
-      updateCodeStore({ editorMode });
-    }
+    const editorMode: EditorMode = tab.id === 'code' ? 'code' : 'config';
+    updateCodeStore({ editorMode });
   };
 
   const editorTabs: Tab[] = [
@@ -50,20 +44,13 @@
       icon: GearIcon,
       id: 'config',
       title: 'Config'
-    },
-    {
-      icon: ShapesIcon,
-      id: 'visual',
-      testID: TID.visualTab,
-      title: 'Visual'
     }
   ];
 
-  $effect(() => {
-    if (activeTab !== 'visual') {
-      activeTab = validatedState.current.editorMode;
-    }
-  });
+  // WYSIWYG: the visual editor takes over the large preview pane; the left
+  // editor keeps the code. `active` makes the visual editor reload external
+  // code edits whenever the mode is entered.
+  let visualMode = $state(false);
 
   let width = $state(0);
   let isMobile = $derived(width < 640);
@@ -98,6 +85,15 @@
     <Toggle bind:pressed={isHistoryOpen} size="sm" title="History" aria-label="History">
       <HistoryIcon />
     </Toggle>
+    <Toggle
+      bind:pressed={visualMode}
+      size="sm"
+      data-testid={TID.visualTab}
+      title="Visual editing"
+      aria-label="Visual editing">
+      <EditIcon />
+      Visual
+    </Toggle>
     <Share />
   </Navbar>
 
@@ -117,19 +113,12 @@
               onselect={tabSelectHandler}
               isOpen
               tabs={editorTabs}
-              activeTabID={activeTab}
+              activeTabID={validatedState.current.editorMode}
               isClosable={false}>
               {#snippet actions()}
                 <DiagramDocButton />
               {/snippet}
-              <!-- Both editors stay mounted; `active` toggles visibility so the
-                   visual graph (and Monaco) survive tab switches. -->
-              <div class={activeTab === 'visual' ? 'hidden' : 'h-full'}>
-                <Editor {isMobile} />
-              </div>
-              <div class={activeTab === 'visual' ? 'h-full' : 'hidden'}>
-                <VisualEditor active={activeTab === 'visual'} />
-              </div>
+              <Editor {isMobile} />
             </Card>
 
             <div class="group flex flex-wrap justify-between gap-4 sm:gap-6">
@@ -140,12 +129,16 @@
         </Resizable.Pane>
         <Resizable.Handle class="mr-1 hidden opacity-0 sm:block" />
         <Resizable.Pane minSize={15} class="relative flex h-full flex-1 flex-col overflow-hidden">
-          <View {panZoomState} shouldShowGrid={validatedState.current.grid} />
-          <div class="absolute top-0 right-0">
-            <PanZoomToolbar {panZoomState} fullScreenHref={urls.current.view} />
-          </div>
-          <div class="absolute right-0 bottom-0"><VersionSecurityToolbar /></div>
-          <div class="absolute bottom-0 left-0 sm:left-5"><SyncRoughToolbar /></div>
+          {#if visualMode}
+            <VisualEditor active={visualMode} />
+          {:else}
+            <View {panZoomState} shouldShowGrid={validatedState.current.grid} />
+            <div class="absolute top-0 right-0">
+              <PanZoomToolbar {panZoomState} fullScreenHref={urls.current.view} />
+            </div>
+            <div class="absolute right-0 bottom-0"><VersionSecurityToolbar /></div>
+            <div class="absolute bottom-0 left-0 sm:left-5"><SyncRoughToolbar /></div>
+          {/if}
         </Resizable.Pane>
         {#if isHistoryOpen}
           <Resizable.Handle class="ml-1 hidden opacity-0 sm:block" />

@@ -18,13 +18,13 @@ test('editor loads and edits without any external network request', async ({ pag
   await page.waitForTimeout(1200);
   await page.goto('/edit');
   await expect(page.locator('#view')).toBeVisible();
-  // Trigger a code change → re-render pipeline.
-  await page.getByRole('tab', { name: 'Visual' }).click();
+  // Trigger a code change → re-render pipeline via the visual editor.
+  await page.getByTestId('visual-tab').click();
   await expect(page.getByTestId('visual-canvas')).toBeVisible();
   await page.getByTestId('visual-clear').click();
   await page.getByTestId('visual-add-node').click();
   await expect(page.getByTestId('visual-code-out')).toContainText('N1[N1]');
-  await page.getByRole('tab', { name: 'Code' }).click();
+  await page.getByTestId('visual-tab').click();
 
   // Share dialog renders embed snippets locally.
   await page.getByRole('button', { name: 'Share' }).click();

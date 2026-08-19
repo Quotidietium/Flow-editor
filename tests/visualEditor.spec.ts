@@ -25,6 +25,8 @@ const openEditor = async (page: Page): Promise<void> => {
 
 test('visual editor generates flowchart code from canvas interactions', async ({ page }) => {
   await openEditor(page);
+
+  // Enter WYSIWYG mode: the visual editor takes over the large preview pane.
   await page.getByTestId('visual-tab').click();
 
   const canvas = page.getByTestId('visual-canvas');
@@ -33,8 +35,10 @@ test('visual editor generates flowchart code from canvas interactions', async ({
   if (!box) {
     throw new Error('canvas has no bounding box');
   }
+  // The canvas lives in the right (preview) pane, not the narrow editor pane.
+  expect(box.width).toBeGreaterThan(700);
   // Keep all points well inside the visible canvas area.
-  const cx = Math.min(200, box.width * 0.4);
+  const cx = Math.min(240, box.width * 0.35);
   const y1 = box.height * 0.3;
   const y2 = box.height * 0.75;
 
@@ -59,19 +63,17 @@ test('visual editor generates flowchart code from canvas interactions', async ({
 
   // Select the first node (click) to reveal its link handles, then drag the
   // bottom handle onto the second node to create an edge.
-  await page.mouse.click(p1.x, p1.y);
-  const handle = at(box, cx, y1 + 22); // bottom handle of the first node
-  await page.mouse.move(handle.x, handle.y);
-  await page.mouse.down();
-  await page.mouse.move(p2.x, p2.y, { steps: 8 });
-  await page.mouse.up();
+  const connect = async (): Promise<void> => {
+    await page.mouse.click(p1.x, p1.y);
+    const handle = at(box, cx, y1 + 22); // bottom handle of the first node
+    await page.mouse.move(handle.x, handle.y);
+    await page.mouse.down();
+    await page.mouse.move(p2.x, p2.y, { steps: 8 });
+    await page.mouse.up();
+  };
+  await connect();
 
   await expect(codeOut).toContainText('N1 --> N2');
-
-  // The generated code is synced through the state gateway, so the preview
-  // pane renders it as a real Mermaid diagram.
-  await expect(page.locator('#container').getByText('Start', { exact: true })).toBeVisible();
-  await expect(page.locator('#container').getByText('End', { exact: true })).toBeVisible();
 
   // Select the edge by clicking its midpoint and delete it with the keyboard.
   const mid = at(box, cx, (y1 + y2) / 2 + 11);
@@ -79,10 +81,16 @@ test('visual editor generates flowchart code from canvas interactions', async ({
   await page.keyboard.press('Delete');
   await expect(codeOut).not.toContainText('N1 --> N2');
 
-  // Switching back to the Code tab shows the generated source, and the state
-  // gateway has persisted it (localStorage 'codeStore').
-  await page.getByRole('tab', { name: 'Code' }).click();
-  await expect(page.locator('#editor')).toBeVisible();
+  // Recreate the edge so the final diagram has both nodes connected.
+  await connect();
+  await expect(codeOut).toContainText('N1 --> N2');
+
+  // Leave visual mode: the preview renders the generated code (WYSIWYG loop).
+  await page.getByTestId('visual-tab').click();
+  await expect(page.locator('#container').getByText('Start', { exact: true })).toBeVisible();
+  await expect(page.locator('#container').getByText('End', { exact: true })).toBeVisible();
+
+  // The state gateway persisted the generated source.
   const store = await page.evaluate(() => localStorage.getItem('codeStore'));
   expect(store).toContain('N1[Start]');
 });
@@ -112,7 +120,10 @@ test('visual editor imports the existing flowchart code', async ({ page }) => {
     const cb = canvas?.getBoundingClientRect();
     const rb = rect.getBoundingClientRect();
     return cb
-      ? { x: cb.x + (rb.x - cb.x) + rb.width / 2, y: cb.y + (rb.y - cb.y) + rb.height / 2 }
+      ? {
+          x: cb.x + (rb.x - cb.x) + rb.width / 2,
+          y: cb.y + (rb.y - cb.y) + rb.height / 2
+        }
       : null;
   });
   if (!nodeACenter) {
