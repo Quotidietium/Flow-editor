@@ -95,6 +95,73 @@ test('visual editor generates flowchart code from canvas interactions', async ({
   expect(store).toContain('N1[Start]');
 });
 
+// Replace the editor content via the clipboard (a single atomic paste —
+// typing `( )` char-by-char races Monaco's state sync and drops keys).
+const typeCode = async (page: Page, code: string): Promise<void> => {
+  const editor = page.locator('.monaco-editor');
+  await editor.click();
+  await page.evaluate((c) => navigator.clipboard.writeText(c), code);
+  await page.keyboard.press('Control+KeyA');
+  await page.keyboard.press('Control+V');
+  await expect(editor).toContainText(code.split('\n')[1]?.trim() ?? '');
+};
+
+test('visual editor imports and edits sequence diagrams', async ({ page }) => {
+  await openEditor(page);
+  await typeCode(page, 'sequenceDiagram\n  Alice->>Bob: Hello\n  Bob-->>Alice: Hi');
+  await page.getByTestId('visual-tab').click();
+
+  const codeOut = page.getByTestId('visual-code-out');
+  await expect(codeOut).toContainText('participant Alice');
+  await expect(codeOut).toContainText('Alice->>Bob: Hello');
+  await expect(codeOut).toContainText('Bob-->>Alice: Hi');
+
+  // The add-node button is kind-aware (参与者); the new node keeps its minted
+  // id with the typed name as the display label.
+  await page.getByTestId('visual-add-node').click();
+  await page.keyboard.type('Carol');
+  await page.keyboard.press('Enter');
+  await expect(codeOut).toContainText('participant N3 as Carol');
+
+  // Leaving visual mode renders the generated sequence diagram.
+  await page.getByTestId('visual-tab').click();
+  await expect(page.locator('#container').getByText('Hello', { exact: true })).toBeVisible();
+});
+
+test('visual editor imports and edits class diagrams', async ({ page }) => {
+  await openEditor(page);
+  await typeCode(page, 'classDiagram\n  class Foo {\n    +bar() void\n  }\n  Foo --> Bar : uses');
+  await page.getByTestId('visual-tab').click();
+
+  const codeOut = page.getByTestId('visual-code-out');
+  await expect(codeOut).toContainText('classDiagram');
+  await expect(codeOut).toContainText('+bar() void');
+  await expect(codeOut).toContainText('Foo --> Bar : uses');
+
+  // Select Foo and edit its members through the detail editor.
+  await page.locator('[data-node-id="Foo"]').click();
+  await page.getByRole('button', { name: '编辑内容' }).click();
+  const detail = page.getByTestId('visual-detail-editor');
+  await detail.fill('+bar() void\n+baz() int');
+  await page.getByRole('button', { name: '保存', exact: true }).click();
+  await expect(codeOut).toContainText('+baz() int');
+
+  // Cycle the selected relation: 关联 (--) → 虚线关联 (..). The edge's hit
+  // path has zero geometric width (vertical line), so click its midpoint
+  // with absolute coordinates derived from the two node boxes.
+  const fooBox = await page.locator('[data-node-id="Foo"]').boundingBox();
+  const barBox = await page.locator('[data-node-id="Bar"]').boundingBox();
+  if (!fooBox || !barBox) {
+    throw new Error('class nodes not found in canvas');
+  }
+  await page.mouse.click(
+    (fooBox.x + fooBox.width / 2 + barBox.x + barBox.width / 2) / 2,
+    (fooBox.y + fooBox.height + barBox.y) / 2
+  );
+  await page.getByRole('button', { name: '线型: 箭头关联' }).click();
+  await expect(codeOut).toContainText('Foo .. Bar');
+});
+
 test('visual editor imports the existing flowchart code', async ({ page }) => {
   await openEditor(page);
 

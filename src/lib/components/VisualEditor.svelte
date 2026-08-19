@@ -439,6 +439,13 @@
   const displayLabel = (label: string): string =>
     label.length > 16 ? `${label.slice(0, 15)}…` : label;
 
+  // Focus on mount: more reliable than the autofocus attribute, which does
+  // not steal focus when the click that opened the editor left focus on a
+  // toolbar button (Enter would then re-trigger that button).
+  const focusEditor = (el: HTMLElement): void => {
+    el.focus();
+  };
+
   const handles = (node: VNode): { key: string; x: number; y: number }[] => {
     const size = nodeSize(node);
     return [
@@ -795,13 +802,12 @@
       </svg>
 
       {#if editing}
-        <!-- svelte-ignore a11y_autofocus -->
         <input
           type="text"
           class="absolute z-10 w-44 rounded border bg-background px-1 py-0.5 text-xs text-foreground"
           style="left: {editing.x - 88}px; top: {editing.y - 12}px;"
           bind:value={editing.label}
-          autofocus
+          use:focusEditor
           onkeydown={(e) => {
             e.stopPropagation();
             if (e.key === 'Enter') commitEdit();

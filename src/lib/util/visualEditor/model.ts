@@ -93,6 +93,7 @@ export const KIND_SPECS: Record<DiagramKind, KindSpec> = {
     label: '类图',
     links: [
       { name: '关联', type: 'line' },
+      { name: '箭头关联', type: 'arrow' },
       { name: '虚线关联', type: 'dashedLine' },
       { name: '依赖', type: 'dashedArrow' },
       { name: '继承', type: 'inheritance' },
