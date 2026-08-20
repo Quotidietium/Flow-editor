@@ -12,6 +12,8 @@ export const TID = {
   embedSnippet: 'embed-snippet',
   embedToolbar: 'embed-toolbar',
   errorContainer: 'error-container',
+  exportMenu: 'export-menu',
+  exportMenuList: 'export-menu-list',
   themeToggleButton: 'theme-toggle-button',
   visualAddNode: 'visual-add-node',
   visualCanvas: 'visual-canvas',

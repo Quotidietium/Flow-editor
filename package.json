@@ -1,6 +1,6 @@
 {
   "name": "mermaid-live-editor",
-  "version": "2.0.90",
+  "version": "2.0.91",
   "type": "module",
   "license": "MIT",
   "scripts": {
@@ -107,6 +107,7 @@
     "dayjs": "^1.11.21",
     "hammerjs": "^2.0.8",
     "js-base64": "3.7.8",
+    "jspdf": "^4.2.1",
     "lodash-es": "^4.18.1",
     "mermaid": "^11.16.1",
     "mode-watcher": "^1.1.0",

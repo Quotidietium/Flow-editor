@@ -44,14 +44,44 @@ export class EditorPage {
     await this.page.getByText('示例图表', { exact: true }).click();
   }
 
+  // Opening the 示例图表 card collapses the stacked 操作 card — expand it if
+  // needed before touching any of its controls.
+  async ensureActionsOpen() {
+    if (
+      !(await this.page
+        .getByTestId(TID.exportMenu)
+        .isVisible()
+        .catch(() => false))
+    ) {
+      await this.page.getByText('操作', { exact: true }).click();
+    }
+    await this.page.getByTestId(TID.exportMenu).waitFor({ state: 'visible' });
+  }
+
+  async openExportMenu() {
+    await this.ensureActionsOpen();
+    // Selections auto-close the menu — only click when it is closed.
+    if (
+      !(await this.page
+        .getByTestId(TID.exportMenuList)
+        .isVisible()
+        .catch(() => false))
+    ) {
+      await this.page.getByTestId(TID.exportMenu).click();
+    }
+    await this.page.getByTestId(TID.exportMenuList).waitFor({ state: 'visible' });
+  }
+
   async checkAndDownloadPNG(expectedSize: number) {
     const downloadPNGPromise = verifyFileSizeGreaterThan(this.page, 'diagram', 'png', expectedSize);
+    await this.openExportMenu();
     await this.page.getByTestId(TID.downloadPNG).click();
     return await downloadPNGPromise;
   }
 
   async downloadSVG(expectedSize: number) {
     const downloadSVGPromise = verifyFileSizeGreaterThan(this.page, 'diagram', 'svg', expectedSize);
+    await this.openExportMenu();
     await this.page.getByTestId(TID.downloadSVG).click();
     return await downloadSVGPromise;
   }

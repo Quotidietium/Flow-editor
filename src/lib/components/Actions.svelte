@@ -7,11 +7,21 @@
   import * as ToggleGroup from '$/components/ui/toggle-group';
   import { waitForRender } from '$/util/autoSync';
   import { notify } from '$/util/notify';
-  import { inputState, updateCodeStore, validatedState } from '$lib/util/state.svelte';
+  import {
+    diagramFileName,
+    downloadTextFile,
+    markdownOf,
+    openTextFile,
+    parseOpenedFile,
+    stateFileOf
+  } from '$/util/fileIO';
+  import { inputState, updateCode, updateCodeStore, validatedState } from '$lib/util/state.svelte';
   import dayjs from 'dayjs';
   import { toBase64 } from 'js-base64';
   import DownloadIcon from '~icons/material-symbols/download';
   import WidthIcon from '~icons/material-symbols/width-rounded';
+  import SaveIcon from '~icons/material-symbols/save';
+  import FolderIcon from '~icons/material-symbols/folder-open-rounded';
 
   type Exporter = (context: CanvasRenderingContext2D, image: HTMLImageElement) => () => void;
 
@@ -203,6 +213,36 @@ ${svgString}`);
     };
   };
 
+  const canvasExporter = (mime: 'image/webp' | 'image/jpeg'): Exporter => {
+    return (context, image) => {
+      return () => {
+        const { canvas } = context;
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        simulateDownload(
+          getFileName(mime === 'image/webp' ? 'webp' : 'jpg'),
+          canvas.toDataURL(mime, 0.95).replace(mime, 'image/octet-stream')
+        );
+      };
+    };
+  };
+
+  const pdfExporter: Exporter = (context, image) => {
+    return () => {
+      const { canvas } = context;
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      // jsPDF is lazily imported so its ~150KB stays out of the startup chunk.
+      void import('jspdf').then(({ jsPDF }) => {
+        const pdf = new jsPDF({
+          orientation: canvas.width >= canvas.height ? 'landscape' : 'portrait',
+          unit: 'px',
+          format: [canvas.width, canvas.height]
+        });
+        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, canvas.width, canvas.height);
+        pdf.save(getFileName('pdf'));
+      });
+    };
+  };
+
   const isClipboardAvailable = (): boolean => {
     return Object.prototype.hasOwnProperty.call(window, 'ClipboardItem');
   };
@@ -254,6 +294,83 @@ ${svgString}`);
     simulateDownload(getFileName('svg'), `data:image/svg+xml;base64,${getBase64SVG()}`);
   };
 
+  // --- local file save / open / extra export formats ---
+
+  let exportOpen = $state(false);
+  let exportRef: HTMLDivElement | undefined = $state();
+
+  const onWindowPointerDown = (event: PointerEvent): void => {
+    if (exportOpen && exportRef && !exportRef.contains(event.target as Node)) {
+      exportOpen = false;
+    }
+  };
+
+  const onSaveMmd = () => {
+    downloadTextFile(diagramFileName('mmd'), validatedState.current.code, 'text/plain');
+  };
+
+  const onDownloadMarkdown = () => {
+    downloadTextFile(
+      diagramFileName('md'),
+      markdownOf(validatedState.current.code),
+      'text/markdown'
+    );
+  };
+
+  const onDownloadState = () => {
+    downloadTextFile(
+      diagramFileName('json'),
+      JSON.stringify(
+        stateFileOf(validatedState.current.code, validatedState.current.mermaid),
+        null,
+        2
+      ),
+      'application/json'
+    );
+  };
+
+  const onOpenFile = async () => {
+    const file = await openTextFile('.mmd,.md,.txt,.json,.mermaid');
+    if (!file) {
+      return;
+    }
+    const parsed = parseOpenedFile(file.name, file.text);
+    if (!parsed) {
+      notify(`无法识别文件「${file.name}」的内容`);
+      return;
+    }
+    if (parsed.mermaid !== undefined) {
+      updateCodeStore({ code: parsed.code, mermaid: parsed.mermaid });
+    } else {
+      updateCode(parsed.code, { updateDiagram: true });
+    }
+    notify(`已载入「${file.name}」`);
+  };
+
+  const onDownloadWebP = async (event: Event) => {
+    try {
+      await exportImage(event, canvasExporter('image/webp'));
+    } catch {
+      notify('导出 WebP 失败：当前没有可导出的图形');
+    }
+  };
+
+  const onDownloadJPEG = async (event: Event) => {
+    try {
+      await exportImage(event, canvasExporter('image/jpeg'));
+    } catch {
+      notify('导出 JPEG 失败：当前没有可导出的图形');
+    }
+  };
+
+  const onDownloadPDF = async (event: Event) => {
+    try {
+      await exportImage(event, pdfExporter);
+    } catch {
+      notify('导出 PDF 失败：当前没有可导出的图形');
+    }
+  };
+
   let imageSizeMode: 'auto' | 'width' | 'height' = $state('auto');
 
   $effect(() => {
@@ -264,6 +381,8 @@ ${svgString}`);
 
   let imageSize = $state(1080);
 </script>
+
+<svelte:window onpointerdown={onWindowPointerDown} />
 
 <Card title="操作" isStackable icon={{ component: DownloadIcon, class: 'rotate-180' }}>
   <div class="flex min-w-fit flex-col gap-2 p-2">
@@ -288,20 +407,101 @@ ${svgString}`);
     <div class="flex gap-2">
       <Button
         class="flex-grow"
-        disabled={exporting}
-        onclick={onDownloadPNG}
-        data-testid="download-PNG">
-        <DownloadIcon />
-        PNG
+        onclick={onSaveMmd}
+        data-testid="save-mmd"
+        title="保存源码到本地（.mmd）">
+        <SaveIcon />
+        保存
       </Button>
       <Button
         class="flex-grow"
-        disabled={exporting}
-        onclick={onDownloadSVG}
-        data-testid="download-SVG">
-        <DownloadIcon />
-        SVG
+        onclick={() => void onOpenFile()}
+        data-testid="open-file"
+        title="打开本地 .mmd/.md/.json 文件">
+        <FolderIcon />
+        打开
       </Button>
+    </div>
+    <div class="relative" bind:this={exportRef}>
+      <Button
+        class="w-full"
+        disabled={exporting}
+        data-testid="export-menu"
+        onclick={() => (exportOpen = !exportOpen)}>
+        <DownloadIcon />
+        导出 ▾
+      </Button>
+      {#if exportOpen}
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+          class="absolute right-0 z-20 mt-1 min-w-44 rounded-md border bg-popover p-1 text-xs text-popover-foreground shadow-md"
+          data-testid="export-menu-list"
+          onpointerdown={(e) => e.stopPropagation()}>
+          <button
+            class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
+            data-testid="download-PNG"
+            onclick={(e) => {
+              exportOpen = false;
+              void onDownloadPNG(e);
+            }}>
+            PNG 图像
+          </button>
+          <button
+            class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
+            data-testid="download-SVG"
+            onclick={() => {
+              exportOpen = false;
+              onDownloadSVG();
+            }}>
+            SVG 矢量图
+          </button>
+          <button
+            class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
+            data-testid="download-webp"
+            onclick={(e) => {
+              exportOpen = false;
+              void onDownloadWebP(e);
+            }}>
+            WebP 图像
+          </button>
+          <button
+            class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
+            data-testid="download-jpeg"
+            onclick={(e) => {
+              exportOpen = false;
+              void onDownloadJPEG(e);
+            }}>
+            JPEG 图像
+          </button>
+          <button
+            class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
+            data-testid="download-pdf"
+            onclick={(e) => {
+              exportOpen = false;
+              void onDownloadPDF(e);
+            }}>
+            PDF 文档
+          </button>
+          <div class="my-1 border-t"></div>
+          <button
+            class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
+            onclick={onDownloadMarkdown}>
+            Markdown（代码块）
+          </button>
+          <button
+            class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
+            onclick={() => {
+              onSaveMmd();
+            }}>
+            Mermaid 源码（.mmd）
+          </button>
+          <button
+            class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
+            onclick={onDownloadState}>
+            状态文件（.json）
+          </button>
+        </div>
+      {/if}
     </div>
     <Separator />
     {#if isClipboardAvailable()}
