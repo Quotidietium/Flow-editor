@@ -41,7 +41,7 @@ localStorage（同源可手改：codeStore、history、visualEditorLayout 等）
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | 新增单测                         | 18 个（quota 2、publish-order 2、restore 2、hardening 3、autoSync 4、embed clamp 2、panZoom 1、serde 炸弹 2） |
 | 测试有效性负证                   | 临时移除发布序号守卫 → 乱序测试转红 → 恢复 → 转绿                                                             |
-| 全量单测                         | 170 通过 / 15 本机预存失败（与 2.0.67 基线一致）                                                              |
+| 全量单测                         | 172 通过 / 15 本机预存失败（与 2.0.67 基线一致）                                                              |
 | 全量 e2e                         | 42 通过 / 3 预存 skip / 0 失败（每轮修复后复跑）                                                              |
 | svelte-check / eslint / prettier | 0/0 / 通过 / 通过                                                                                             |
 
@@ -78,6 +78,14 @@ localStorage（同源可手改：codeStore、history、visualEditorLayout 等）
 | 1   | `redirect.buildRedirectUrl` 未校验路由段：恶意 hash 的 `parts[1]`（如 `../evil`）直接进 `resolve()` | **修复**：合法路由白名单（edit/view），其余回落 /edit；测试                                                                              |
 | 2   | `embedCode.ts` 分享片段输出                                                                         | 干净：SAFE_DIMENSION 白名单挡属性注入；web component 体 `&`/`<` 转义（文本节点充分）；URL 经 searchParams/serde 编码；host 为自身 origin |
 
+## 第 7 轮：已登记候选逐项核查（commit a6e0ed32）
+
+| #   | 候选                                         | 结论                                                                                                                                                                                                                                                                                                                           |
+| --- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | 分享链接对极端大图的 URL 长度退化            | **修复**：`history.replaceState` 对超长 hash 抛异常时防抖定时器每次击键重抛未捕获错误——改为 catch + warn，编辑/发布链不受影响（localStorage 为真相源，Share 对话框按需序列化）；双编辑周期测试钉住                                                                                                                             |
+| 2   | 多标签 last-writer-wins 是否存在数据损坏路径 | **修复（丢更新）**：历史 addEntry/removeEntry 原先整替写本标签的陈旧内存副本，**静默丢弃其他标签页的手动保存**（自页面加载以来的整个窗口）。写前重读最新持久值再合并（新条目头插/仅删自身 id）；残余竞窗从「整个会话」缩到毫秒级；跨标签保存合并与删除保留测试。codeStore 的 last-writer-wins 为完整合法快照，属预期语义，保持 |
+| 3   | rememberPositions 高频拖拽写入频率与配额     | 测量结论：写频为每次已提交手势一次（pointerup/提交），常规图 ~KB 级可接受；**补充护栏**：超过 100KB 的病态位置表跳过入库（本会话内存仍生效），避免千节点级图形每次拖拽同步 stringify+setItem 六位数负载                                                                                                                        |
+
 ## 已知接受的残留风险（记录在案）
 
 - **巨型 `#code:` hash**：浏览器 URL 长度上限天然约束（~2MB）；单次巨型渲染只影响打开者自身，无跨用户放大
@@ -87,6 +95,7 @@ localStorage（同源可手改：codeStore、history、visualEditorLayout 等）
 
 ## 后续轮次候选（未发现新问题前不动作）
 
-- service worker 缓存版本策略复查（PWA 升级路径）
-- 分享链接生成的 URL 长度对极端大图的退化行为
-- VisualEditor 高频拖拽下 `rememberPositions` 写入频率（当前每次 pointerup 一次，可接受）
+- ~~service worker 缓存版本策略~~（第 4 轮已核：空 pass-through）
+- ~~分享链接 URL 极端长度退化~~（第 7 轮已修：replaceState 容错）
+- ~~VisualEditor 高频拖拽写频~~（第 7 轮已核+加 100KB 护栏）
+- 多标签 codeStore last-writer-wins（预期语义，第 7 轮确认无损坏路径；历史丢更新已修）
