@@ -141,8 +141,8 @@ src/lib/util/visualEditor/model.test.ts   单元测试（15 个用例，全绿�
 
 **目标**：mermaid 注册表中的每一个用户可编辑图类型都能进入可视化编辑。
 以 `@mermaid-js/examples` 全部 31 个类目 + 应用注册的 zenuml 外部图为基准
-逐一验证 `mermaid.parse` 通过后，新增 **24 个 kind**（`kinds.extra.ts`，
-约 1600 行），连同原有 6 类共 **31 个 kind / 33 种头关键字**。
+逐一验证 `mermaid.parse` 通过后，新增 **25 个 kind**（`kinds.extra.ts`），连同原有 6 类共 **31 个 kind**
+（42 种头关键字/变体，含 C4×5、railroad×4、packet/ishikawa/treemap 的 -beta 变体）。
 唯一排除：`info` 调试图（仅渲染 mermaid 版本号，无任何用户内容可编辑）。
 
 ### 7.1 新增类型与建模方式

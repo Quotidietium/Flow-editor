@@ -8,7 +8,7 @@
  * existing code back into the model (positions are re-laid-out, since Mermaid
  * source does not carry them). Supported kinds are declared in
  * {@link KIND_SPECS}: the six classic families are implemented here, every
- * remaining Mermaid diagram family (24 kinds — journey, gantt, pie, git, C4,
+ * remaining Mermaid diagram family (25 kinds — journey, gantt, pie, git, C4,
  * architecture, radar, wardley, …) lives in kinds.extra.ts behind the same
  * registry interface. Only the `info` debug diagram (it renders the Mermaid
  * version string and nothing else) is rejected by {@link parseCode}.
