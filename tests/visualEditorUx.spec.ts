@@ -221,3 +221,110 @@ test('alignment guides snap a dragged node to its neighbour', async ({ page }) =
   const snapped = await page.locator('[data-node-id="N2"]').boundingBox();
   expect(Math.abs((snapped?.x ?? -1) - anchor.x)).toBeLessThanOrEqual(1);
 });
+
+test('AutoConnect arrow spawns a connected node', async ({ page }) => {
+  await openEditor(page);
+  const codeOut = await enterVisual(page);
+  await page.getByTestId('visual-clear').click();
+
+  const box = await canvasBox(page);
+  await addNode(page, box.x + 240, box.y + 180, 'First');
+  await page.mouse.click(box.x + 240, box.y + 180);
+
+  await page.getByTestId('visual-autoconnect-right').click();
+  await page.keyboard.type('Second');
+  await page.keyboard.press('Enter');
+
+  await expect(codeOut).toContainText('N1 --> N2');
+  await expect(codeOut).toContainText('N2[Second]');
+});
+
+test('AutoConnect arrow connects the nearest existing node', async ({ page }) => {
+  await openEditor(page);
+  const codeOut = await enterVisual(page);
+  await page.getByTestId('visual-clear').click();
+
+  const box = await canvasBox(page);
+  await addNode(page, box.x + 200, box.y + 180, 'A');
+  await addNode(page, box.x + 460, box.y + 185, 'B');
+  await page.mouse.click(box.x + 200, box.y + 180);
+
+  await page.getByTestId('visual-autoconnect-right').click();
+  await expect(codeOut).toContainText('N1 --> N2');
+  // No new node was spawned: still exactly two nodes.
+  await expect(codeOut).not.toContainText('N3');
+});
+
+test('Alt+Shift+Arrow clones the selection and connects it', async ({ page }) => {
+  await openEditor(page);
+  const codeOut = await enterVisual(page);
+  await page.getByTestId('visual-clear').click();
+
+  const box = await canvasBox(page);
+  await addNode(page, box.x + 240, box.y + 180, 'Orig');
+  await page.mouse.click(box.x + 240, box.y + 180);
+  await page.keyboard.press('Alt+Shift+ArrowRight');
+
+  await expect(codeOut).toContainText('N1[Orig]');
+  await expect(codeOut).toContainText('N2[Orig]');
+  await expect(codeOut).toContainText('N1 --> N2');
+});
+
+test('insert palette creates a specific shape', async ({ page }) => {
+  await openEditor(page);
+  const codeOut = await enterVisual(page);
+  await page.getByTestId('visual-clear').click();
+
+  await page.getByTestId('visual-insert').click();
+  const menu = page.getByTestId('visual-insert-menu');
+  await expect(menu).toBeVisible();
+  await menu.getByRole('button', { name: '形状：菱形' }).click();
+  await page.keyboard.type('Decision');
+  await page.keyboard.press('Enter');
+
+  await expect(codeOut).toContainText('N1{Decision}');
+});
+
+test('ctrl+wheel zooms the canvas and Ctrl+H resets it', async ({ page }) => {
+  await openEditor(page);
+  await enterVisual(page);
+  await page.getByTestId('visual-clear').click();
+
+  const box = await canvasBox(page);
+  await addNode(page, box.x + 240, box.y + 180, 'Zoom');
+  const node = page.locator('[data-node-id="N1"]');
+  const before = await node.boundingBox();
+  if (!before) {
+    throw new Error('node missing');
+  }
+
+  await page.mouse.move(box.x + 300, box.y + 200);
+  await page.keyboard.down('Control');
+  await page.mouse.wheel(0, -120);
+  await page.keyboard.up('Control');
+  const zoomed = await node.boundingBox();
+  expect(zoomed?.width ?? 0).toBeGreaterThan(before.width * 1.08);
+
+  await page.keyboard.press('Control+KeyH');
+  const reset = await node.boundingBox();
+  expect(Math.abs((reset?.width ?? 0) - before.width)).toBeLessThanOrEqual(2);
+});
+
+test('space+drag pans the canvas', async ({ page }) => {
+  await openEditor(page);
+  await enterVisual(page);
+  const canvas = page.getByTestId('visual-canvas');
+  const box = await canvasBox(page);
+
+  // Click empty canvas first so space cannot activate a focused toolbar button.
+  await page.mouse.click(box.x + 600, box.y + 500);
+  const before = await canvas.evaluate((el) => el.scrollLeft);
+  await page.keyboard.down(' ');
+  await page.mouse.move(box.x + 300, box.y + 200);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 200, box.y + 200, { steps: 3 });
+  await page.mouse.up();
+  await page.keyboard.up(' ');
+  const after = await canvas.evaluate((el) => el.scrollLeft);
+  expect(after).toBeGreaterThan(before);
+});

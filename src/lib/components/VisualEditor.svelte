@@ -6,7 +6,9 @@
   import {
     alignSelection,
     alignmentGuides,
+    autoConnect,
     distributeSelection,
+    layoutGroupedGrid,
     nodesInRect,
     remintIds,
     snapshotGraph
@@ -14,6 +16,7 @@
   import type {
     AlignMode,
     ClipboardPayload,
+    Direction,
     DistributeAxis,
     GuideLine
   } from '$/util/visualEditor/interaction';
@@ -182,6 +185,9 @@
   >();
   // Internal clipboard (draw.io scope: shapes + connectors between them).
   let clipboard = $state<ClipboardPayload | undefined>(undefined);
+  // 插入 ▾ stencil list (nodeTypes × shapes per kind) and 整理 ▾ layout menu.
+  let insertOpen = $state<undefined | { x: number; y: number }>(undefined);
+  let layoutMenuOpen = $state(false);
   let showCode = $state(true);
   let editingDetail = $state(false);
   let detailDraft = $state('');
@@ -237,6 +243,49 @@
   // invalidated when the canvas scrolls mid-gesture.
   let svgRect: DOMRect | undefined;
 
+  // Canvas viewport: CSS-scale zoom on the world content + programmatic
+  // scroll panning (space-drag / middle-drag), like every office canvas.
+  let view = $state({ k: 1 });
+  let panning = $state<undefined | { lastX: number; lastY: number }>();
+  let spaceDown = false;
+
+  const ZOOM_MIN = 0.4;
+  const ZOOM_MAX = 2.5;
+
+  const zoomAt = (clientX: number, clientY: number, factor: number): void => {
+    if (!canvasEl) {
+      return;
+    }
+    const k0 = view.k;
+    const k1 = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, k0 * factor));
+    if (k1 === k0) {
+      return;
+    }
+    const box = canvasEl.getBoundingClientRect();
+    // Keep the world point under the pointer stationary while zooming.
+    const worldX = (canvasEl.scrollLeft + clientX - box.left) / k0;
+    const worldY = (canvasEl.scrollTop + clientY - box.top) / k0;
+    view = { k: k1 };
+    canvasEl.scrollLeft = worldX * k1 - (clientX - box.left);
+    canvasEl.scrollTop = worldY * k1 - (clientY - box.top);
+  };
+
+  const resetView = (): void => {
+    view = { k: 1 };
+    if (canvasEl) {
+      canvasEl.scrollLeft = 0;
+      canvasEl.scrollTop = 0;
+    }
+  };
+
+  const onCanvasWheel = (event: WheelEvent): void => {
+    if (!event.ctrlKey && !event.metaKey) {
+      return; // plain wheel keeps scrolling the container
+    }
+    event.preventDefault();
+    zoomAt(event.clientX, event.clientY, event.deltaY < 0 ? 1.1 : 1 / 1.1);
+  };
+
   // Last code this editor produced or parsed; used to detect external edits
   // (in the Code tab) so switching back to Visual reloads them.
   let lastSyncedCode = '';
@@ -246,7 +295,10 @@
       svgRect = svgEl?.getBoundingClientRect();
     }
     return svgRect
-      ? { x: event.clientX - svgRect.left, y: event.clientY - svgRect.top }
+      ? {
+          x: (event.clientX - svgRect.left) / view.k,
+          y: (event.clientY - svgRect.top) / view.k
+        }
       : { x: 0, y: 0 };
   };
 
@@ -389,6 +441,36 @@
   const addNodeStaggered = (): void => {
     const n = graph.nodes.length;
     addNodeAt(80 + (n % 8) * (NODE_W + 40), 60 + Math.floor(n / 8) * (NODE_H + 40));
+  };
+
+  // 插入 ▾ palette creation: explicit shape/role from the stencil list.
+  const insertNode = (options: { role?: string; roleData?: string; shape?: VShape }): void => {
+    pushUndo();
+    const n = graph.nodes.length;
+    const host = selectedNode;
+    const defaultType = kindSpec.nodeTypes?.[0];
+    const node: VNode = {
+      id: nextNodeId(graph.nodes),
+      label: '',
+      role: options.role ?? defaultType?.role,
+      roleData: options.roleData ?? defaultType?.data,
+      shape: options.shape ?? kindSpec.shapes[0] ?? 'rect',
+      x: snap(80 + (n % 8) * (NODE_W + 40) - NODE_W / 2 + NODE_W / 2),
+      y: snap(60 + Math.floor(n / 8) * (NODE_H + 40))
+    };
+    graph.nodes.push(node);
+    if (host && host.role && AUTO_ATTACH_ROLES.has(host.role)) {
+      graph.edges.push({
+        id: nextEdgeId(graph.edges),
+        source: host.id,
+        target: node.id,
+        type: 'line'
+      });
+    }
+    selected = [{ id: node.id, kind: 'node' }];
+    insertOpen = undefined;
+    syncCode();
+    startEdit(node);
   };
 
   // stateDiagram pseudo nodes: only one start / one end dot can exist.
@@ -587,6 +669,87 @@
     syncCode();
   };
 
+  // Visio AutoConnect arrows: connect the nearest unconnected node in the
+  // direction, or spawn a fresh connected node there (draw.io drop-on-arrow).
+  const GROUP_ROLE_BY_KIND: Partial<Record<string, string>> = {
+    cynefin: 'domain',
+    gantt: 'section',
+    journey: 'section',
+    kanban: 'column',
+    timeline: 'period'
+  };
+
+  const autoConnectAction = (source: VNode, direction: Direction): void => {
+    const { existingId, spawn } = autoConnect(graph.nodes, graph.edges, source, direction);
+    if (existingId) {
+      if (isBlockedStateLink(source.id, nodeById.get(existingId) as VNode)) {
+        return;
+      }
+      pushUndo();
+      graph.edges.push(newEdge(source.id, existingId));
+      selectOnly(existingId, 'node');
+      syncCode();
+      return;
+    }
+    pushUndo();
+    const defaultType = kindSpec.nodeTypes?.[0];
+    const node: VNode = {
+      id: nextNodeId(graph.nodes),
+      label: '',
+      role: defaultType?.role,
+      roleData: defaultType?.data,
+      shape: kindSpec.shapes[0] ?? 'rect',
+      x: snap(spawn.x),
+      y: snap(spawn.y)
+    };
+    graph.nodes.push(node);
+    if (!isBlockedStateLink(source.id, node)) {
+      graph.edges.push(newEdge(source.id, node.id));
+    }
+    selected = [{ id: node.id, kind: 'node' }];
+    syncCode();
+    startEdit(node);
+  };
+
+  const cloneConnect = (direction: Direction): void => {
+    if (!selectedNode) {
+      return;
+    }
+    const source = selectedNode;
+    const { spawn } = autoConnect(graph.nodes, graph.edges, source, direction);
+    pushUndo();
+    const node: VNode = {
+      ...(snapshotGraph({ direction: 'TD', edges: [], nodes: [source] }).nodes[0] as VNode),
+      id: nextNodeId(graph.nodes),
+      x: snap(spawn.x),
+      y: snap(spawn.y)
+    };
+    graph.nodes.push(node);
+    if (!isBlockedStateLink(source.id, node)) {
+      graph.edges.push(newEdge(source.id, node.id));
+    }
+    selected = [{ id: node.id, kind: 'node' }];
+    syncCode();
+  };
+
+  const groupedLayout = (): void => {
+    const role = GROUP_ROLE_BY_KIND[graph.kind ?? 'flowchart'];
+    if (!role) {
+      autoLayout();
+      return;
+    }
+    pushUndo();
+    const moves = layoutGroupedGrid(graph, role);
+    for (const node of graph.nodes) {
+      const move = moves[node.id];
+      if (move) {
+        node.x = move.x;
+        node.y = move.y;
+      }
+    }
+    syncCode();
+  };
+
   const cycleShape = (): void => {
     if (!selectedNode) return;
     const shapes = kindSpec.shapes;
@@ -769,6 +932,12 @@
   };
 
   const onCanvasPointerDown = (event: PointerEvent): void => {
+    // Middle button or space+drag pans the canvas (office convention).
+    if (event.button === 1 || spaceDown) {
+      event.preventDefault();
+      panning = { lastX: event.clientX, lastY: event.clientY };
+      return;
+    }
     if (event.button !== 0) {
       return;
     }
@@ -826,6 +995,12 @@
   };
 
   const onWindowPointerMove = (event: PointerEvent): void => {
+    if (panning && canvasEl) {
+      canvasEl.scrollLeft -= event.clientX - panning.lastX;
+      canvasEl.scrollTop -= event.clientY - panning.lastY;
+      panning = { lastX: event.clientX, lastY: event.clientY };
+      return;
+    }
     const p = svgPoint(event);
     if (drag) {
       const node = nodeById.get(drag.id);
@@ -869,6 +1044,7 @@
   };
 
   const onWindowPointerUp = (event: PointerEvent): void => {
+    panning = undefined;
     if (drag?.moved) {
       // Snapshot taken at gesture start (drag.preState) — see onNodePointerDown.
       undoStack = [...undoStack.slice(-(UNDO_LIMIT - 1)), drag.preState];
@@ -977,6 +1153,15 @@
 
   const onWindowKeydown = (event: KeyboardEvent): void => {
     if (!active) return;
+    if (event.code === 'Space') {
+      spaceDown = true;
+      return;
+    }
+    if (event.ctrlKey && event.key.toLowerCase() === 'h') {
+      event.preventDefault();
+      resetView();
+      return;
+    }
     if (event.key === 'Escape') {
       if (menu) {
         closeMenu();
@@ -1045,6 +1230,19 @@
       openMenuAtSelection();
       return;
     }
+    if (event.altKey && event.shiftKey && event.key.startsWith('Arrow') && selectedNode) {
+      event.preventDefault();
+      cloneConnect(
+        event.key === 'ArrowLeft'
+          ? 'left'
+          : event.key === 'ArrowRight'
+            ? 'right'
+            : event.key === 'ArrowUp'
+              ? 'up'
+              : 'down'
+      );
+      return;
+    }
     if (event.key.startsWith('Arrow') && selectedNodeIds.size > 0) {
       event.preventDefault();
       const step = event.shiftKey ? 10 : 1;
@@ -1062,6 +1260,18 @@
   const onWindowPointerDown = (): void => {
     if (menu) {
       closeMenu();
+    }
+    if (insertOpen) {
+      insertOpen = undefined;
+    }
+    if (layoutMenuOpen) {
+      layoutMenuOpen = false;
+    }
+  };
+
+  const onWindowKeyup = (event: KeyboardEvent): void => {
+    if (event.code === 'Space') {
+      spaceDown = false;
     }
   };
 
@@ -1116,6 +1326,7 @@
 
 <svelte:window
   onkeydown={onWindowKeydown}
+  onkeyup={onWindowKeyup}
   onpointerdown={onWindowPointerDown}
   onpointermove={onWindowPointerMove}
   onpointerup={onWindowPointerUp} />
@@ -1126,6 +1337,19 @@
       <AddIcon />
       {kindSpec.newNode}
     </Button>
+    {#if (kindSpec.nodeTypes?.length ?? 0) > 1 || kindSpec.shapes.length > 1}
+      <Button
+        size="sm"
+        variant="outline"
+        data-testid={TID.visualInsert}
+        onclick={(e) => {
+          e.stopPropagation();
+          const box = e.currentTarget.getBoundingClientRect();
+          insertOpen = insertOpen ? undefined : { x: box.left, y: box.bottom + 4 };
+        }}>
+        插入 ▾
+      </Button>
+    {/if}
     {#if kindSpec.startEnd}
       <Button
         size="sm"
@@ -1208,8 +1432,15 @@
       title="Delete 键亦可删除">
       <DeleteIcon /> 删除
     </Button>
-    <Button size="sm" variant="outline" onclick={autoLayout} title="自动整理节点位置">
-      <AutoFixIcon /> 整理布局
+    <Button
+      size="sm"
+      variant="outline"
+      data-testid={TID.visualLayoutMenu}
+      onclick={(e) => {
+        e.stopPropagation();
+        layoutMenuOpen = !layoutMenuOpen;
+      }}>
+      <AutoFixIcon /> 整理 ▾
     </Button>
     <Button
       size="sm"
@@ -1234,7 +1465,8 @@
       <ClearIcon /> 清空
     </Button>
     <span class="ml-auto text-muted-foreground">
-      {kindSpec.label} · {graph.nodes.length} 节点 · {graph.edges.length} 连线
+      {kindSpec.label} · {graph.nodes.length} 节点 · {graph.edges.length} 连线 ·
+      {Math.round(view.k * 100)}%
     </span>
   </div>
 
@@ -1242,371 +1474,404 @@
     bind:this={canvasEl}
     class="min-h-64 flex-1 overflow-auto"
     data-testid={TID.visualCanvas}
-    style="background-image: radial-gradient(circle, var(--border) 1px, transparent 1px); background-size: 20px 20px;">
-    <div class="relative" style="width:{CANVAS_W}px; height:{CANVAS_H}px;">
-      <svg
-        bind:this={svgEl}
-        class="absolute inset-0 block h-full w-full"
-        style="touch-action: none;"
-        ondblclick={(e) => {
-          const p = svgPoint(e);
-          addNodeAt(p.x, p.y);
-        }}
-        onpointerdown={onCanvasPointerDown}
-        role="application"
-        aria-label="可视化画布">
-        <defs>
-          <marker id="ve-arrow" markerHeight="8" markerWidth="8" orient="auto" refX="7" refY="4">
-            <path d="M0,0 L8,4 L0,8 Z" fill="var(--foreground)"></path>
-          </marker>
-          <marker
-            id="ve-arrow-open"
-            markerHeight="9"
-            markerWidth="9"
-            orient="auto"
-            refX="7"
-            refY="4.5">
-            <path d="M1,1 L7,4.5 L1,8" fill="none" stroke="var(--foreground)" stroke-width="1.3"
-            ></path>
-          </marker>
-          <marker
-            id="ve-triangle"
-            markerHeight="10"
-            markerWidth="10"
-            orient="auto"
-            refX="8"
-            refY="5">
-            <path
-              d="M1,1 L9,5 L1,9 Z"
-              fill="var(--background)"
-              stroke="var(--foreground)"
-              stroke-width="1.2"></path>
-          </marker>
-          <marker
-            id="ve-diamond"
-            markerHeight="9"
-            markerWidth="11"
-            orient="auto-start-reverse"
-            refX="1"
-            refY="4.5">
-            <path d="M1,4.5 L5.5,1 L10,4.5 L5.5,8 Z" fill="var(--foreground)"></path>
-          </marker>
-          <marker
-            id="ve-diamond-open"
-            markerHeight="9"
-            markerWidth="11"
-            orient="auto-start-reverse"
-            refX="1"
-            refY="4.5">
-            <path
-              d="M1,4.5 L5.5,1 L10,4.5 L5.5,8 Z"
-              fill="var(--background)"
-              stroke="var(--foreground)"
-              stroke-width="1.2"></path>
-          </marker>
-        </defs>
-        <rect width={CANVAS_W} height={CANVAS_H} fill="transparent"></rect>
+    style="background-image: radial-gradient(circle, var(--border) 1px, transparent 1px); background-size: 20px 20px;"
+    onwheel={onCanvasWheel}>
+    <div class="relative" style="width:{CANVAS_W * view.k}px; height:{CANVAS_H * view.k}px;">
+      <div
+        class="absolute top-0 left-0 origin-top-left"
+        style="width:{CANVAS_W}px; height:{CANVAS_H}px; transform: scale({view.k});">
+        <svg
+          bind:this={svgEl}
+          class="absolute inset-0 block h-full w-full"
+          style="touch-action: none;"
+          ondblclick={(e) => {
+            const p = svgPoint(e);
+            addNodeAt(p.x, p.y);
+          }}
+          onpointerdown={onCanvasPointerDown}
+          role="application"
+          aria-label="可视化画布">
+          <defs>
+            <marker id="ve-arrow" markerHeight="8" markerWidth="8" orient="auto" refX="7" refY="4">
+              <path d="M0,0 L8,4 L0,8 Z" fill="var(--foreground)"></path>
+            </marker>
+            <marker
+              id="ve-arrow-open"
+              markerHeight="9"
+              markerWidth="9"
+              orient="auto"
+              refX="7"
+              refY="4.5">
+              <path d="M1,1 L7,4.5 L1,8" fill="none" stroke="var(--foreground)" stroke-width="1.3"
+              ></path>
+            </marker>
+            <marker
+              id="ve-triangle"
+              markerHeight="10"
+              markerWidth="10"
+              orient="auto"
+              refX="8"
+              refY="5">
+              <path
+                d="M1,1 L9,5 L1,9 Z"
+                fill="var(--background)"
+                stroke="var(--foreground)"
+                stroke-width="1.2"></path>
+            </marker>
+            <marker
+              id="ve-diamond"
+              markerHeight="9"
+              markerWidth="11"
+              orient="auto-start-reverse"
+              refX="1"
+              refY="4.5">
+              <path d="M1,4.5 L5.5,1 L10,4.5 L5.5,8 Z" fill="var(--foreground)"></path>
+            </marker>
+            <marker
+              id="ve-diamond-open"
+              markerHeight="9"
+              markerWidth="11"
+              orient="auto-start-reverse"
+              refX="1"
+              refY="4.5">
+              <path
+                d="M1,4.5 L5.5,1 L10,4.5 L5.5,8 Z"
+                fill="var(--background)"
+                stroke="var(--foreground)"
+                stroke-width="1.2"></path>
+            </marker>
+          </defs>
+          <rect width={CANVAS_W} height={CANVAS_H} fill="transparent"></rect>
 
-        {#each graph.edges as edge (edge.id)}
-          {@const geom = edgeGeom(edge)}
-          {#if geom}
-            {@const selectedEdgeId = selectedEdgeIds.has(edge.id) ? edge.id : undefined}
-            {@const endMarker = END_MARKERS[edge.type]}
-            {@const startMarker = START_MARKERS[edge.type]}
-            <path
-              role="button"
-              tabindex="0"
-              data-edge-id={edge.id}
-              d="M{geom.x1},{geom.y1} L{geom.x2},{geom.y2}"
-              fill="none"
-              stroke="transparent"
-              stroke-width="14"
-              style="pointer-events: stroke; cursor: pointer;"
-              onpointerdown={(e) => e.stopPropagation()}
-              onclick={(e) => {
-                e.stopPropagation();
-                selectOnly(edge.id, 'edge');
-              }}
-              onkeydown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
+          {#each graph.edges as edge (edge.id)}
+            {@const geom = edgeGeom(edge)}
+            {#if geom}
+              {@const selectedEdgeId = selectedEdgeIds.has(edge.id) ? edge.id : undefined}
+              {@const endMarker = END_MARKERS[edge.type]}
+              {@const startMarker = START_MARKERS[edge.type]}
+              <path
+                role="button"
+                tabindex="0"
+                data-edge-id={edge.id}
+                d="M{geom.x1},{geom.y1} L{geom.x2},{geom.y2}"
+                fill="none"
+                stroke="transparent"
+                stroke-width="14"
+                style="pointer-events: stroke; cursor: pointer;"
+                onpointerdown={(e) => e.stopPropagation()}
+                onclick={(e) => {
+                  e.stopPropagation();
                   selectOnly(edge.id, 'edge');
-                }
-              }}
-              ondblclick={(e) => {
-                e.stopPropagation();
-                selectOnly(edge.id, 'edge');
-                startEdit(edge);
-              }}></path>
-            <path
-              d="M{geom.x1},{geom.y1} L{geom.x2},{geom.y2}"
-              fill="none"
-              stroke={selectedEdgeId === edge.id ? 'var(--primary)' : 'var(--foreground)'}
-              stroke-width={selectedEdgeId === edge.id ? 2.5 : 1.5}
-              stroke-dasharray={DASHED_LINKS.has(edge.type) ? '6 4' : undefined}
-              marker-end={endMarker ? `url(#${endMarker})` : undefined}
-              marker-start={startMarker ? `url(#${startMarker})` : undefined}
-              style="pointer-events: none;"></path>
-            {#if edge.cardL || edge.cardR}
-              {#if edge.cardL}
-                <text
-                  x={geom.x1 + (geom.x2 - geom.x1) * 0.15}
-                  y={geom.y1 + (geom.y2 - geom.y1) * 0.15 - 4}
-                  fill="var(--foreground)"
-                  font-size="9"
-                  text-anchor="middle"
-                  style="pointer-events: none;">
-                  {edge.cardL}
-                </text>
-              {/if}
-              {#if edge.cardR}
-                <text
-                  x={geom.x1 + (geom.x2 - geom.x1) * 0.85}
-                  y={geom.y1 + (geom.y2 - geom.y1) * 0.85 - 4}
-                  fill="var(--foreground)"
-                  font-size="9"
-                  text-anchor="middle"
-                  style="pointer-events: none;">
-                  {edge.cardR}
-                </text>
-              {/if}
-            {/if}
-            {#if edge.label}
-              <text
-                x={(geom.x1 + geom.x2) / 2}
-                y={(geom.y1 + geom.y2) / 2 - 6}
-                fill="var(--foreground)"
-                font-size="11"
-                text-anchor="middle"
-                style="pointer-events: none; paint-order: stroke; stroke: var(--background); stroke-width: 4px;">
-                {displayLabel(edge.label)}
-              </text>
-            {/if}
-          {/if}
-        {/each}
-
-        {#if linkPreview}
-          <path
-            d="M{linkPreview.x1},{linkPreview.y1} L{linkPreview.x2},{linkPreview.y2}"
-            fill="none"
-            stroke="var(--primary)"
-            stroke-dasharray="5 4"
-            stroke-width="2"></path>
-        {/if}
-
-        {#each guides as guide (guide.axis + guide.at)}
-          {#if guide.axis === 'x'}
-            <path
-              d="M{guide.at},0 L{guide.at},{CANVAS_H}"
-              stroke="var(--primary)"
-              stroke-dasharray="4 4"
-              stroke-width="1"
-              style="pointer-events: none;"></path>
-          {:else}
-            <path
-              d="M0,{guide.at} L{CANVAS_W},{guide.at}"
-              stroke="var(--primary)"
-              stroke-dasharray="4 4"
-              stroke-width="1"
-              style="pointer-events: none;"></path>
-          {/if}
-        {/each}
-
-        {#if marqueeRect}
-          <rect
-            fill="var(--primary)"
-            fill-opacity="0.06"
-            height={marqueeRect.height}
-            stroke="var(--primary)"
-            stroke-dasharray="4 3"
-            width={marqueeRect.width}
-            x={marqueeRect.x}
-            y={marqueeRect.y}></rect>
-        {/if}
-
-        {#each graph.nodes as node (node.id)}
-          {@const isSelected = selectedNodeIds.has(node.id)}
-          {@const size = nodeSize(node)}
-          <g
-            role="button"
-            tabindex="-1"
-            data-node-id={node.id}
-            style="cursor: move;"
-            onpointerdown={(e) => onNodePointerDown(e, node)}
-            ondblclick={(e) => {
-              e.stopPropagation();
-              startEdit(node);
-            }}>
-            {#if node.special}
-              {#if node.special === 'start'}
-                <circle
-                  cx={node.x + size.w / 2}
-                  cy={node.y + size.h / 2}
-                  r={11}
-                  fill="var(--foreground)"></circle>
-              {:else}
-                <circle
-                  cx={node.x + size.w / 2}
-                  cy={node.y + size.h / 2}
-                  r={11}
-                  fill="var(--background)"
-                  stroke={isSelected ? 'var(--primary)' : 'var(--foreground)'}
-                  stroke-width={isSelected ? 2.5 : 1.5}></circle>
-                <circle
-                  cx={node.x + size.w / 2}
-                  cy={node.y + size.h / 2}
-                  r={5.5}
-                  fill="var(--foreground)"></circle>
-              {/if}
-              <text
-                x={node.x + size.w / 2}
-                y={node.y + size.h + 11}
-                fill="var(--muted-foreground)"
-                font-size="9"
-                text-anchor="middle"
-                style="pointer-events: none;">
-                {node.label}
-              </text>
-            {:else if node.shape === 'diamond'}
-              <polygon
-                points="{node.x + size.w / 2},{node.y} {node.x + size.w},{node.y +
-                  size.h / 2} {node.x + size.w / 2},{node.y + size.h} {node.x},{node.y +
-                  size.h / 2}"
-                fill="var(--background)"
-                stroke={isSelected ? 'var(--primary)' : 'var(--border)'}
-                stroke-width={isSelected ? 2.5 : 1.5}></polygon>
-            {:else}
-              <rect
-                height={size.h}
-                rx={node.shape === 'stadium' ? size.h / 2 : node.shape === 'round' ? 12 : 4}
-                width={size.w}
-                x={node.x}
-                y={node.y}
-                fill="var(--background)"
-                stroke={isSelected ? 'var(--primary)' : 'var(--border)'}
-                stroke-width={isSelected ? 2.5 : 1.5}></rect>
-            {/if}
-            {#if !node.special}
-              {#if node.role}
-                <text
-                  x={node.x + size.w / 2}
-                  y={node.y - 4}
-                  fill="var(--muted-foreground)"
-                  font-size="8"
-                  text-anchor="middle"
-                  style="pointer-events: none;">
-                  {node.roleData ?? node.role}
-                </text>
-              {/if}
-              <text
-                x={node.x + size.w / 2}
-                y={node.y + NODE_H / 2 + 4}
-                fill="var(--foreground)"
-                font-size="12"
-                text-anchor="middle"
-                style="pointer-events: none;">
-                {displayLabel(node.label || node.id)}
-              </text>
-              {#if node.detail}
-                {#each node.detail.split('\n').slice(0, 5) as line, i (i)}
+                }}
+                onkeydown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    selectOnly(edge.id, 'edge');
+                  }
+                }}
+                ondblclick={(e) => {
+                  e.stopPropagation();
+                  selectOnly(edge.id, 'edge');
+                  startEdit(edge);
+                }}></path>
+              <path
+                d="M{geom.x1},{geom.y1} L{geom.x2},{geom.y2}"
+                fill="none"
+                stroke={selectedEdgeId === edge.id ? 'var(--primary)' : 'var(--foreground)'}
+                stroke-width={selectedEdgeId === edge.id ? 2.5 : 1.5}
+                stroke-dasharray={DASHED_LINKS.has(edge.type) ? '6 4' : undefined}
+                marker-end={endMarker ? `url(#${endMarker})` : undefined}
+                marker-start={startMarker ? `url(#${startMarker})` : undefined}
+                style="pointer-events: none;"></path>
+              {#if edge.cardL || edge.cardR}
+                {#if edge.cardL}
                   <text
-                    x={node.x + size.w / 2}
-                    y={node.y + NODE_H + 11 + i * 13}
-                    fill="var(--muted-foreground)"
+                    x={geom.x1 + (geom.x2 - geom.x1) * 0.15}
+                    y={geom.y1 + (geom.y2 - geom.y1) * 0.15 - 4}
+                    fill="var(--foreground)"
                     font-size="9"
                     text-anchor="middle"
                     style="pointer-events: none;">
-                    {displayLabel(line)}
+                    {edge.cardL}
                   </text>
-                {/each}
+                {/if}
+                {#if edge.cardR}
+                  <text
+                    x={geom.x1 + (geom.x2 - geom.x1) * 0.85}
+                    y={geom.y1 + (geom.y2 - geom.y1) * 0.85 - 4}
+                    fill="var(--foreground)"
+                    font-size="9"
+                    text-anchor="middle"
+                    style="pointer-events: none;">
+                    {edge.cardR}
+                  </text>
+                {/if}
+              {/if}
+              {#if edge.label}
+                <text
+                  x={(geom.x1 + geom.x2) / 2}
+                  y={(geom.y1 + geom.y2) / 2 - 6}
+                  fill="var(--foreground)"
+                  font-size="11"
+                  text-anchor="middle"
+                  style="pointer-events: none; paint-order: stroke; stroke: var(--background); stroke-width: 4px;">
+                  {displayLabel(edge.label)}
+                </text>
               {/if}
             {/if}
-          </g>
-          {#if isSelected && canLink && selectedNodeIds.size === 1}
-            {#each handles(node) as handle (handle.key)}
-              <circle
-                role="button"
-                tabindex="-1"
-                cx={handle.x}
-                cy={handle.y}
-                r="5"
-                fill="var(--primary)"
-                style="cursor: crosshair;"
-                onpointerdown={(e) => onHandlePointerDown(e, node)}></circle>
-            {/each}
-          {/if}
-        {/each}
-
-        {#if graph.nodes.length === 0}
-          <text
-            x={CANVAS_W / 2}
-            y={80}
-            fill="var(--muted-foreground)"
-            font-size="14"
-            text-anchor="middle">
-            双击画布添加{kindSpec.newNode}；拖动节点边缘圆点创建连线；双击节点/连线修改文字
-          </text>
-        {/if}
-      </svg>
-
-      {#if editing}
-        <input
-          type="text"
-          class="absolute z-10 w-44 rounded border bg-background px-1 py-0.5 text-xs text-foreground"
-          style="left: {editing.x - 88}px; top: {editing.y - 12}px;"
-          bind:value={editing.label}
-          use:focusEditor
-          onkeydown={(e) => {
-            e.stopPropagation();
-            if (e.key === 'Enter') commitEdit();
-            if (e.key === 'Escape') editing = undefined;
-          }}
-          onblur={commitEdit} />
-      {/if}
-
-      {#if editingMeta}
-        <div class="absolute top-2 left-2 z-10 w-64 rounded border bg-background p-2 shadow">
-          <div class="mb-1 text-xs text-muted-foreground">图表属性</div>
-          {#if kindSpec.hasTitle}
-            <label class="mb-1 block text-xs" for="ve-meta-title">标题</label>
-            <input
-              id="ve-meta-title"
-              class="mb-2 w-full rounded border border-input bg-background p-1 text-xs text-foreground"
-              bind:value={metaTitleDraft} />
-          {/if}
-          {#each kindSpec.metaKeys ?? [] as metaKey (metaKey.key)}
-            <label class="mb-1 block text-xs" for="ve-meta-{metaKey.key}">{metaKey.label}</label>
-            <input
-              id="ve-meta-{metaKey.key}"
-              class="mb-2 w-full rounded border border-input bg-background p-1 text-xs text-foreground"
-              bind:value={metaDrafts[metaKey.key]} />
           {/each}
-          <div class="mt-1 flex justify-end gap-1">
-            <Button size="sm" variant="ghost" onclick={() => (editingMeta = false)}>取消</Button>
-            <Button size="sm" onclick={commitMeta}>保存</Button>
-          </div>
-        </div>
-      {/if}
 
-      {#if editingDetail && selectedNode}
-        <div class="absolute top-2 left-2 z-10 w-64 rounded border bg-background p-2 shadow">
-          <div class="mb-1 text-xs text-muted-foreground">
-            编辑「{displayLabel(selectedNode.label || selectedNode.id)}」的内容（每行一条）
-          </div>
-          <textarea
-            data-testid={TID.visualDetailEditor}
-            bind:value={detailDraft}
-            class="h-24 w-full rounded border border-input bg-background p-1 font-mono text-xs text-foreground"
+          {#if linkPreview}
+            <path
+              d="M{linkPreview.x1},{linkPreview.y1} L{linkPreview.x2},{linkPreview.y2}"
+              fill="none"
+              stroke="var(--primary)"
+              stroke-dasharray="5 4"
+              stroke-width="2"></path>
+          {/if}
+
+          {#each guides as guide (guide.axis + guide.at)}
+            {#if guide.axis === 'x'}
+              <path
+                d="M{guide.at},0 L{guide.at},{CANVAS_H}"
+                stroke="var(--primary)"
+                stroke-dasharray="4 4"
+                stroke-width="1"
+                style="pointer-events: none;"></path>
+            {:else}
+              <path
+                d="M0,{guide.at} L{CANVAS_W},{guide.at}"
+                stroke="var(--primary)"
+                stroke-dasharray="4 4"
+                stroke-width="1"
+                style="pointer-events: none;"></path>
+            {/if}
+          {/each}
+
+          {#if marqueeRect}
+            <rect
+              fill="var(--primary)"
+              fill-opacity="0.06"
+              height={marqueeRect.height}
+              stroke="var(--primary)"
+              stroke-dasharray="4 3"
+              width={marqueeRect.width}
+              x={marqueeRect.x}
+              y={marqueeRect.y}></rect>
+          {/if}
+
+          {#each graph.nodes as node (node.id)}
+            {@const isSelected = selectedNodeIds.has(node.id)}
+            {@const size = nodeSize(node)}
+            <g
+              role="button"
+              tabindex="-1"
+              data-node-id={node.id}
+              style="cursor: move;"
+              onpointerdown={(e) => onNodePointerDown(e, node)}
+              ondblclick={(e) => {
+                e.stopPropagation();
+                startEdit(node);
+              }}>
+              {#if node.special}
+                {#if node.special === 'start'}
+                  <circle
+                    cx={node.x + size.w / 2}
+                    cy={node.y + size.h / 2}
+                    r={11}
+                    fill="var(--foreground)"></circle>
+                {:else}
+                  <circle
+                    cx={node.x + size.w / 2}
+                    cy={node.y + size.h / 2}
+                    r={11}
+                    fill="var(--background)"
+                    stroke={isSelected ? 'var(--primary)' : 'var(--foreground)'}
+                    stroke-width={isSelected ? 2.5 : 1.5}></circle>
+                  <circle
+                    cx={node.x + size.w / 2}
+                    cy={node.y + size.h / 2}
+                    r={5.5}
+                    fill="var(--foreground)"></circle>
+                {/if}
+                <text
+                  x={node.x + size.w / 2}
+                  y={node.y + size.h + 11}
+                  fill="var(--muted-foreground)"
+                  font-size="9"
+                  text-anchor="middle"
+                  style="pointer-events: none;">
+                  {node.label}
+                </text>
+              {:else if node.shape === 'diamond'}
+                <polygon
+                  points="{node.x + size.w / 2},{node.y} {node.x + size.w},{node.y +
+                    size.h / 2} {node.x + size.w / 2},{node.y + size.h} {node.x},{node.y +
+                    size.h / 2}"
+                  fill="var(--background)"
+                  stroke={isSelected ? 'var(--primary)' : 'var(--border)'}
+                  stroke-width={isSelected ? 2.5 : 1.5}></polygon>
+              {:else}
+                <rect
+                  height={size.h}
+                  rx={node.shape === 'stadium' ? size.h / 2 : node.shape === 'round' ? 12 : 4}
+                  width={size.w}
+                  x={node.x}
+                  y={node.y}
+                  fill="var(--background)"
+                  stroke={isSelected ? 'var(--primary)' : 'var(--border)'}
+                  stroke-width={isSelected ? 2.5 : 1.5}></rect>
+              {/if}
+              {#if !node.special}
+                {#if node.role}
+                  <text
+                    x={node.x + size.w / 2}
+                    y={node.y - 4}
+                    fill="var(--muted-foreground)"
+                    font-size="8"
+                    text-anchor="middle"
+                    style="pointer-events: none;">
+                    {node.roleData ?? node.role}
+                  </text>
+                {/if}
+                <text
+                  x={node.x + size.w / 2}
+                  y={node.y + NODE_H / 2 + 4}
+                  fill="var(--foreground)"
+                  font-size="12"
+                  text-anchor="middle"
+                  style="pointer-events: none;">
+                  {displayLabel(node.label || node.id)}
+                </text>
+                {#if node.detail}
+                  {#each node.detail.split('\n').slice(0, 5) as line, i (i)}
+                    <text
+                      x={node.x + size.w / 2}
+                      y={node.y + NODE_H + 11 + i * 13}
+                      fill="var(--muted-foreground)"
+                      font-size="9"
+                      text-anchor="middle"
+                      style="pointer-events: none;">
+                      {displayLabel(line)}
+                    </text>
+                  {/each}
+                {/if}
+              {/if}
+            </g>
+            {#if isSelected && canLink && selectedNodeIds.size === 1}
+              {#each handles(node) as handle (handle.key)}
+                <circle
+                  role="button"
+                  tabindex="-1"
+                  cx={handle.x}
+                  cy={handle.y}
+                  r="5"
+                  fill="var(--primary)"
+                  style="cursor: crosshair;"
+                  onpointerdown={(e) => onHandlePointerDown(e, node)}></circle>
+              {/each}
+            {/if}
+            {#if isSelected && !node.special && canLink && selectedNodeIds.size === 1}
+              {@const size2 = nodeSize(node)}
+              {#each [{ dir: 'right', x: node.x + size2.w + 26, y: node.y + size2.h / 2 }, { dir: 'left', x: node.x - 26, y: node.y + size2.h / 2 }, { dir: 'down', x: node.x + size2.w / 2, y: node.y + size2.h + 26 }, { dir: 'up', x: node.x + size2.w / 2, y: node.y - 26 }] as arrow (arrow.dir)}
+                <path
+                  role="button"
+                  tabindex="-1"
+                  data-testid="visual-autoconnect-{arrow.dir}"
+                  d="M{arrow.x - 5},{arrow.y - 6} L{arrow.x + 7},{arrow.y} L{arrow.x - 5},{arrow.y +
+                    6} Z"
+                  fill="var(--primary)"
+                  style="cursor: pointer;"
+                  onpointerdown={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                  }}
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    autoConnectAction(node, arrow.dir as Direction);
+                  }}
+                  onkeydown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      autoConnectAction(node, arrow.dir as Direction);
+                    }
+                  }}></path>
+              {/each}
+            {/if}
+          {/each}
+
+          {#if graph.nodes.length === 0}
+            <text
+              x={CANVAS_W / 2}
+              y={80}
+              fill="var(--muted-foreground)"
+              font-size="14"
+              text-anchor="middle">
+              双击画布添加{kindSpec.newNode}；拖动节点边缘圆点创建连线；双击节点/连线修改文字
+            </text>
+          {/if}
+        </svg>
+
+        {#if editing}
+          <input
+            type="text"
+            class="absolute z-10 w-44 rounded border bg-background px-1 py-0.5 text-xs text-foreground"
+            style="left: {editing.x - 88}px; top: {editing.y - 12}px;"
+            bind:value={editing.label}
+            use:focusEditor
             onkeydown={(e) => {
               e.stopPropagation();
-              if (e.key === 'Escape') editingDetail = false;
-            }}></textarea>
-          <div class="mt-1 flex justify-end gap-1">
-            <Button size="sm" variant="ghost" onclick={() => (editingDetail = false)}>取消</Button>
-            <Button size="sm" onclick={commitDetail}>保存</Button>
+              if (e.key === 'Enter') commitEdit();
+              if (e.key === 'Escape') editing = undefined;
+            }}
+            onblur={commitEdit} />
+        {/if}
+
+        {#if editingMeta}
+          <div class="absolute top-2 left-2 z-10 w-64 rounded border bg-background p-2 shadow">
+            <div class="mb-1 text-xs text-muted-foreground">图表属性</div>
+            {#if kindSpec.hasTitle}
+              <label class="mb-1 block text-xs" for="ve-meta-title">标题</label>
+              <input
+                id="ve-meta-title"
+                class="mb-2 w-full rounded border border-input bg-background p-1 text-xs text-foreground"
+                bind:value={metaTitleDraft} />
+            {/if}
+            {#each kindSpec.metaKeys ?? [] as metaKey (metaKey.key)}
+              <label class="mb-1 block text-xs" for="ve-meta-{metaKey.key}">{metaKey.label}</label>
+              <input
+                id="ve-meta-{metaKey.key}"
+                class="mb-2 w-full rounded border border-input bg-background p-1 text-xs text-foreground"
+                bind:value={metaDrafts[metaKey.key]} />
+            {/each}
+            <div class="mt-1 flex justify-end gap-1">
+              <Button size="sm" variant="ghost" onclick={() => (editingMeta = false)}>取消</Button>
+              <Button size="sm" onclick={commitMeta}>保存</Button>
+            </div>
           </div>
-        </div>
-      {/if}
+        {/if}
+
+        {#if editingDetail && selectedNode}
+          <div class="absolute top-2 left-2 z-10 w-64 rounded border bg-background p-2 shadow">
+            <div class="mb-1 text-xs text-muted-foreground">
+              编辑「{displayLabel(selectedNode.label || selectedNode.id)}」的内容（每行一条）
+            </div>
+            <textarea
+              data-testid={TID.visualDetailEditor}
+              bind:value={detailDraft}
+              class="h-24 w-full rounded border border-input bg-background p-1 font-mono text-xs text-foreground"
+              onkeydown={(e) => {
+                e.stopPropagation();
+                if (e.key === 'Escape') editingDetail = false;
+              }}></textarea>
+            <div class="mt-1 flex justify-end gap-1">
+              <Button size="sm" variant="ghost" onclick={() => (editingDetail = false)}
+                >取消</Button>
+              <Button size="sm" onclick={commitDetail}>保存</Button>
+            </div>
+          </div>
+        {/if}
+      </div>
     </div>
   </div>
 
@@ -1621,6 +1886,74 @@
       <pre
         data-testid={TID.visualCodeOut}
         class="max-h-32 overflow-auto bg-muted/50 p-2 font-mono text-xs whitespace-pre-wrap">{generated}</pre>
+    </div>
+  {/if}
+
+  {#if insertOpen}
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      class="fixed z-50 min-w-36 rounded-md border bg-popover p-1 text-xs text-popover-foreground shadow-md"
+      data-testid={TID.visualInsertMenu}
+      style="left: {insertOpen.x}px; top: {insertOpen.y}px;"
+      onpointerdown={(e) => e.stopPropagation()}>
+      {#each kindSpec.shapes ?? [] as shape (shape)}
+        <button
+          class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
+          onclick={() => insertNode({ shape })}>
+          形状：{SHAPE_NAMES[shape]}
+        </button>
+      {/each}
+      {#each kindSpec.nodeTypes ?? [] as nodeType (nodeType.name)}
+        <button
+          class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
+          onclick={() => insertNode({ role: nodeType.role, roleData: nodeType.data })}>
+          类型：{nodeType.name}
+        </button>
+      {/each}
+    </div>
+  {/if}
+
+  {#if layoutMenuOpen}
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      class="fixed z-50 min-w-36 rounded-md border bg-popover p-1 text-xs text-popover-foreground shadow-md"
+      data-testid={TID.visualLayoutMenuList}
+      style="right: 16px; bottom: 120px;"
+      onpointerdown={(e) => e.stopPropagation()}>
+      <button
+        class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
+        onclick={() => {
+          layoutMenuOpen = false;
+          autoLayout();
+        }}>
+        自动分层
+      </button>
+      {#if GROUP_ROLE_BY_KIND[graph.kind ?? 'flowchart']}
+        <button
+          class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
+          onclick={() => {
+            layoutMenuOpen = false;
+            groupedLayout();
+          }}>
+          分组排布
+        </button>
+      {/if}
+      <button
+        class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
+        onclick={() => {
+          layoutMenuOpen = false;
+          alignToGrid();
+        }}>
+        对齐网格
+      </button>
+      <button
+        class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
+        onclick={() => {
+          layoutMenuOpen = false;
+          resetView();
+        }}>
+        复位视图 <span class="ml-auto text-muted-foreground">Ctrl+H</span>
+      </button>
     </div>
   {/if}
 

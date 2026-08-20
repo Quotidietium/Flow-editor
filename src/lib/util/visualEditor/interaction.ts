@@ -5,7 +5,7 @@
  */
 
 import type { VEdge, VGraph, VNode } from './model';
-import { nodeSize } from './model';
+import { NODE_H, NODE_W, nodeSize } from './model';
 
 /** Edge of a node's outer box in the given axis. */
 export type AlignMode = 'bottom' | 'centerX' | 'centerY' | 'left' | 'right' | 'top';
@@ -120,19 +120,18 @@ export const alignSelection = (
             ? Math.max(...boxes.map((b) => b.bottom))
             : mode === 'centerX'
               ? (Math.min(...boxes.map((b) => b.left)) + Math.max(...boxes.map((b) => b.right))) / 2
-              : (Math.min(...boxes.map((b) => b.top)) + Math.max(...boxes.map((b) => b.bottom))) / 2;
+              : (Math.min(...boxes.map((b) => b.top)) + Math.max(...boxes.map((b) => b.bottom))) /
+                2;
   const out: Record<string, { x?: number; y?: number }> = {};
   nodes.forEach((node, i) => {
     const box = boxes[i] as Box;
     if (mode === 'left' || mode === 'right' || mode === 'centerX') {
       const width = box.right - box.left;
-      const x =
-        mode === 'left' ? target : mode === 'right' ? target - width : target - width / 2;
+      const x = mode === 'left' ? target : mode === 'right' ? target - width : target - width / 2;
       out[node.id] = { x: Math.round(x) };
     } else {
       const height = box.bottom - box.top;
-      const y =
-        mode === 'top' ? target : mode === 'bottom' ? target - height : target - height / 2;
+      const y = mode === 'top' ? target : mode === 'bottom' ? target - height : target - height / 2;
       out[node.id] = { y: Math.round(y) };
     }
   });
@@ -234,9 +233,112 @@ export const nodesInRect = (
     if (!intersect) {
       return inside && insideY;
     }
-    return box.left <= rect.x + rect.width && box.right >= rect.x && box.top <= rect.y + rect.height && box.bottom >= rect.y;
+    return (
+      box.left <= rect.x + rect.width &&
+      box.right >= rect.x &&
+      box.top <= rect.y + rect.height &&
+      box.bottom >= rect.y
+    );
   });
 
 /** Deep plain copy of the graph for the undo stack ($state.snapshot result). */
-export const snapshotGraph = (graph: VGraph): VGraph =>
-  JSON.parse(JSON.stringify(graph)) as VGraph;
+export const snapshotGraph = (graph: VGraph): VGraph => JSON.parse(JSON.stringify(graph)) as VGraph;
+
+export type Direction = 'down' | 'left' | 'right' | 'up';
+
+/**
+ * Visio AutoConnect: the direction arrow connects to the nearest not-yet-
+ * connected node in that direction, or reports where a fresh node should be
+ * spawned (draw.io drop-on-arrow semantics).
+ */
+export const autoConnect = (
+  nodes: VNode[],
+  edges: VEdge[],
+  source: VNode,
+  direction: Direction,
+  scan = 220
+): { existingId?: string; spawn: { x: number; y: number } } => {
+  const size = nodeSize(source);
+  const center = { x: source.x + size.w / 2, y: source.y + size.h / 2 };
+  const spawnOffset = 220;
+  const spawn =
+    direction === 'left'
+      ? { x: source.x - spawnOffset, y: center.y - NODE_H / 2 }
+      : direction === 'right'
+        ? { x: source.x + size.w + spawnOffset - NODE_W, y: center.y - NODE_H / 2 }
+        : direction === 'up'
+          ? { x: center.x - NODE_W / 2, y: source.y - spawnOffset }
+          : { x: center.x - NODE_W / 2, y: source.y + size.h + spawnOffset - NODE_H };
+  const connected = new Set(
+    edges
+      .filter((e) => e.source === source.id || e.target === source.id)
+      .map((e) => (e.source === source.id ? e.target : e.source))
+  );
+  let best: { dist: number; id: string } | undefined;
+  for (const node of nodes) {
+    if (node.id === source.id || connected.has(node.id)) {
+      continue;
+    }
+    const other = nodeSize(node);
+    const dx = node.x + other.w / 2 - center.x;
+    const dy = node.y + other.h / 2 - center.y;
+    const inDirection =
+      direction === 'left'
+        ? dx < -20 && Math.abs(dy) < scan
+        : direction === 'right'
+          ? dx > 20 && Math.abs(dy) < scan
+          : direction === 'up'
+            ? dy < -20 && Math.abs(dx) < scan
+            : dy > 20 && Math.abs(dx) < scan;
+    if (!inDirection) {
+      continue;
+    }
+    const dist = Math.abs(dx) + Math.abs(dy);
+    if (!best || dist < best.dist) {
+      best = { dist, id: node.id };
+    }
+  }
+  return { existingId: best?.id, spawn };
+};
+
+/**
+ * Grouped-grid layout for grouped-list kinds: every group node becomes a
+ * column header; its items stack below it (kanban-style), columns laid out
+ * left to right in group order; orphans form a trailing column.
+ */
+export const layoutGroupedGrid = (
+  graph: VGraph,
+  groupRole: string
+): Record<string, { x: number; y: number }> => {
+  const groups = graph.nodes.filter((n) => n.role === groupRole);
+  const groupIds = new Set(groups.map((n) => n.id));
+  const itemsOf = new Map<string, string[]>(groups.map((n) => [n.id, [] as string[]]));
+  const grouped = new Set<string>();
+  for (const edge of graph.edges) {
+    if (groupIds.has(edge.source) && !groupIds.has(edge.target) && !grouped.has(edge.target)) {
+      itemsOf.get(edge.source)?.push(edge.target);
+      grouped.add(edge.target);
+    }
+  }
+  const orphans = graph.nodes.filter((n) => !groupIds.has(n.id) && !grouped.has(n.id));
+  const moves: Record<string, { x: number; y: number }> = {};
+  const colWidth = NODE_W + 80;
+  const rowHeight = NODE_H + 40;
+  const columns = groups.length > 0 ? [...groups.map((n) => [n.id] as string[])] : [];
+  if (orphans.length > 0) {
+    columns.push(orphans.map((n) => n.id));
+  }
+  columns.forEach((column, colIdx) => {
+    let y = 60;
+    for (const id of column) {
+      moves[id] = { x: 60 + colIdx * colWidth, y };
+      y += rowHeight;
+    }
+    const items = itemsOf.get(column[0] as string) ?? [];
+    for (const id of items) {
+      moves[id] = { x: 60 + colIdx * colWidth, y };
+      y += rowHeight;
+    }
+  });
+  return moves;
+};
