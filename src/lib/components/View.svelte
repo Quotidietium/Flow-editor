@@ -96,6 +96,10 @@
 
   onMount(() => {
     setupPanZoomObserver();
+    // Release the pan-zoom wrapper (svg-pan-zoom window listeners and the
+    // ResizeObserver) when the View unmounts — e.g. every Visual↔preview
+    // toggle. Pan/zoom values survive inside the wrapper for the next mount.
+    return () => panZoomState.destroy();
   });
 
   // Queue state changes to avoid race condition

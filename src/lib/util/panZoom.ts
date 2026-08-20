@@ -103,8 +103,19 @@ export class PanZoomState {
     this.resizeObserver.disconnect();
     this.resizeObserver.observe(diagramView);
 
+    // Restored pan/zoom may come from an untrusted serialized state in the
+    // URL hash — finiteness alone still admits magnitudes far outside the
+    // [0.2, 12] instance limits.
+    const clamp = (value: number, min: number, max: number): number =>
+      Math.max(min, Math.min(max, value));
     if (pan && zoom && Number.isFinite(zoom) && Number.isFinite(pan.x) && Number.isFinite(pan.y)) {
-      this.restorePanZoom(pan, zoom);
+      this.restorePanZoom(
+        {
+          x: clamp(pan.x, -1e6, 1e6),
+          y: clamp(pan.y, -1e6, 1e6)
+        },
+        clamp(zoom, 0.2, 12)
+      );
     } else {
       this.reset();
     }
@@ -153,5 +164,19 @@ export class PanZoomState {
     // Zoom out a bit to avoid overlap with the toolbar
     this.pzoom?.zoom(0.875);
     this.isDirty = false;
+  }
+
+  /**
+   * Release everything this wrapper holds: the svg-pan-zoom instance (which
+   * owns window-level resize listeners) and the ResizeObserver. The remembered
+   * pan/zoom survive so a later updateElement can restore the viewport.
+   * Without this, every mount/unmount of the View (each Visual↔preview
+   * toggle) leaked the previous instance's listeners.
+   */
+  public destroy() {
+    this.pzoom?.destroy();
+    this.pzoom = undefined;
+    this.resizeObserver.disconnect();
+    this.onPanZoomChange = undefined;
   }
 }
