@@ -1,0 +1,9 @@
+PASS  typing burst persists the final state — codeStore ends with the last edit (25613 chars)
+PASS  typing burst renders the final diagram
+PASS  60 mode switches keep rendering — 3247ms total (~54ms per switch), svg present afterwards
+PASS  export double-clicks restore panZoom
+PASS  state survives a reload after the storm
+PASS  no uncaught page errors
+PASS  no unexpected console errors
+
+7/7 checks passed

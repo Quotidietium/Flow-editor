@@ -95,7 +95,9 @@ const parseAndCache = async (code: string): Promise<ParseOutcome> => {
   } catch (error) {
     outcome.error = error as Error;
     errorDebug();
-    console.error(error);
+    // No console.error here: a parse failure is the normal "code is being
+    // typed" state, the UI already surfaces it, and one error line per
+    // keystroke is a log storm under sustained typing.
     if (error && typeof error === 'object' && 'hash' in error) {
       try {
         let errorString = outcome.error.toString();
@@ -150,10 +152,10 @@ const processState = async (state: State) => {
   try {
     JSON.parse(state.mermaid);
   } catch (error) {
-    // Invalid config JSON surfaces the same way a parse error does (no markers).
+    // Invalid config JSON surfaces the same way a parse error does (no
+    // markers) — also a normal mid-typing state, so no console.error here.
     processed.error = error as Error;
     errorDebug();
-    console.error(error);
   }
   return processed;
 };

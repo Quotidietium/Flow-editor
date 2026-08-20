@@ -6,6 +6,7 @@
   import { Separator } from '$/components/ui/separator';
   import * as ToggleGroup from '$/components/ui/toggle-group';
   import { waitForRender } from '$/util/autoSync';
+  import { notify } from '$/util/notify';
   import { inputState, updateCodeStore, validatedState } from '$lib/util/state.svelte';
   import dayjs from 'dayjs';
   import { toBase64 } from 'js-base64';
@@ -227,15 +228,26 @@ ${svgString}`);
     };
   };
 
+  // Export failures (no rendered SVG — broken diagram, mid-render window)
+  // must surface as a toast, never as an uncaught error from the click
+  // handler: under rapid double-clicks that meant repeated page errors.
   const onCopyClipboard = async (event?: Event) => {
     if (!event) {
       return;
     }
-    await exportImage(event, clipboardCopy);
+    try {
+      await exportImage(event, clipboardCopy);
+    } catch {
+      notify('复制图像失败：当前没有可导出的图形');
+    }
   };
 
   const onDownloadPNG = async (event: Event) => {
-    await exportImage(event, downloadImage);
+    try {
+      await exportImage(event, downloadImage);
+    } catch {
+      notify('导出 PNG 失败：当前没有可导出的图形');
+    }
   };
 
   const onDownloadSVG = () => {
