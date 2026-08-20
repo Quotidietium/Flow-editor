@@ -1,0 +1,138 @@
+import { expect, test, type Page } from '@playwright/test';
+
+// Same constraints as visualEditor.spec.ts: wider viewport for the canvas.
+test.use({ viewport: { height: 1080, width: 1920 } });
+
+const openEditor = async (page: Page): Promise<void> => {
+  await page.goto('/edit');
+  await page.locator('#view').waitFor({ state: 'visible' });
+  await page.waitForTimeout(1200);
+  await page.goto('/edit');
+  await page.locator('#view').waitFor({ state: 'visible' });
+};
+
+// Clipboard paste (typing special characters races Monaco's state sync).
+const typeCode = async (page: Page, code: string): Promise<void> => {
+  const editor = page.locator('.monaco-editor');
+  await editor.click();
+  await page.evaluate((c) => navigator.clipboard.writeText(c), code);
+  await page.keyboard.press('Control+KeyA');
+  await page.keyboard.press('Control+V');
+  await expect(editor).toContainText(code.split('\n')[0]?.trim() ?? '');
+};
+
+const enterVisual = async (page: Page): Promise<ReturnType<Page['getByTestId']>> => {
+  await page.getByTestId('visual-tab').click();
+  const codeOut = page.getByTestId('visual-code-out');
+  await expect(codeOut).toBeVisible();
+  return codeOut;
+};
+
+test('visual editor imports journey diagrams and attaches tasks to the selected section', async ({
+  page
+}) => {
+  await openEditor(page);
+  await typeCode(
+    page,
+    'journey\n  title My day\n  section Go to work\n    Make tea: 5: Me\n    Do work: 1: Me'
+  );
+  const codeOut = await enterVisual(page);
+
+  await expect(codeOut).toContainText('journey');
+  await expect(codeOut).toContainText('Make tea: 5: Me');
+
+  // Selecting a section node and adding a task attaches it to that section.
+  await page.locator('[data-node-id="G1"]').click();
+  await page.getByTestId('visual-add-node').click();
+  await page.keyboard.type('Walk dog');
+  await page.keyboard.press('Enter');
+
+  const text = await codeOut.textContent();
+  const sectionIdx = text?.indexOf('section Go to work') ?? -1;
+  const taskIdx = text?.indexOf('Walk dog: 5') ?? -1;
+  expect(taskIdx).toBeGreaterThan(sectionIdx);
+  expect(sectionIdx).toBeGreaterThan(-1);
+
+  // The journey renders after leaving visual mode (the task label appears in
+  // both an HTML label and an SVG tspan — one match is enough).
+  await page.getByTestId('visual-tab').click();
+  await expect(
+    page.locator('#container svg').getByText('Make tea', { exact: true }).first()
+  ).toBeVisible();
+});
+
+test('visual editor replays git graphs and appends commits', async ({ page }) => {
+  await openEditor(page);
+  await typeCode(
+    page,
+    'gitGraph\n  commit id: "a1"\n  branch dev\n  commit id: "b1"\n  checkout main\n  merge dev id: "m1"'
+  );
+  const codeOut = await enterVisual(page);
+
+  await expect(codeOut).toContainText('branch dev');
+  await expect(codeOut).toContainText('checkout main');
+  await expect(codeOut).toContainText('merge dev id: "m1"');
+
+  // The replay order keeps the branch before the merge.
+  const text = await codeOut.textContent();
+  expect((text ?? '').indexOf('branch dev')).toBeLessThan((text ?? '').indexOf('merge dev'));
+
+  // A new commit lands on the active branch (main).
+  await page.getByTestId('visual-add-node').click();
+  await page.keyboard.type('c9');
+  await page.keyboard.press('Enter');
+  await expect(codeOut).toContainText('commit id: "c9"');
+});
+
+test('visual editor edits pie slices with values', async ({ page }) => {
+  await openEditor(page);
+  await typeCode(page, 'pie title Pets\n  "Dogs" : 386\n  "Cats" : 85');
+  const codeOut = await enterVisual(page);
+
+  await expect(codeOut).toContainText('pie title Pets');
+  await expect(codeOut).toContainText('"Dogs": 386');
+
+  // New slices default their value to 1.
+  await page.getByTestId('visual-add-node').click();
+  await page.keyboard.type('Birds');
+  await page.keyboard.press('Enter');
+  await expect(codeOut).toContainText('"Birds": 1');
+
+  // Values are edited through the detail editor (one line).
+  await page.locator('[data-node-id="S1"]').click();
+  await page.getByRole('button', { name: '编辑内容' }).click();
+  await page.getByTestId('visual-detail-editor').fill('400');
+  await page.getByRole('button', { name: '保存', exact: true }).click();
+  await expect(codeOut).toContainText('"Dogs": 400');
+
+  // The pie renders after leaving visual mode.
+  await page.getByTestId('visual-tab').click();
+  await expect(page.locator('#container').getByText('Dogs', { exact: true })).toBeVisible();
+});
+
+test('visual editor drags quadrant points into new coordinates', async ({ page }) => {
+  await openEditor(page);
+  await typeCode(
+    page,
+    'quadrantChart\n  x-axis Low --> High\n  y-axis Low --> High\n  Point B: [0.45, 0.23]'
+  );
+  const codeOut = await enterVisual(page);
+
+  await expect(codeOut).toContainText('Point B: [0.45, 0.23]');
+
+  // Coordinate kinds are position-driven: dragging a node rewrites its [x, y]
+  // in the generated code (snap grid 10px; 0.45*1840+80 = 908, +150 → 0.53).
+  const nodeB = page.locator('[data-node-id="P1"]');
+  const box = await nodeB.boundingBox();
+  if (!box) {
+    throw new Error('quadrant point not found');
+  }
+  const cx = box.x + box.width / 2;
+  const cy = box.y + box.height / 2;
+  await page.mouse.move(cx, cy);
+  await page.mouse.down();
+  await page.mouse.move(cx + 150, cy, { steps: 6 });
+  await page.mouse.up();
+
+  await expect(codeOut).toContainText('Point B: [0.53, 0.23]');
+});

@@ -78,7 +78,7 @@ src/lib/util/visualEditor/model.test.ts   单元测试（15 个用例，全绿�
 
 ## 4. 局限与后续方向
 
-- ~~仅支持 flowchart~~ → 2.0.75 起支持六类图（见下节「多图类型支持」）；gantt/pie 等非节点-边语义的图类型仍不可视化编辑（明确 toast 提示）
+- ~~仅支持 flowchart~~ → 2.0.75 起支持六类图；~~gantt/pie 等非节点-边语义的图类型仍不可视化编辑~~ → **2.0.85 起全部图类型支持**（见 §7；仅 `info` 调试图无内容可编辑）
 - 无画布内撤销/重做（依赖 History 时间线与「从代码重载」兜底）
 - 连线为直线（无正交路由）；自动布局为简单分层（非 mermaid 级布局质量）
 - subgraph 导入忽略；导出时节点全部平铺
@@ -137,4 +137,78 @@ src/lib/util/visualEditor/model.test.ts   单元测试（15 个用例，全绿�
 - 两张不同图若节点 id 恰好重叠（如都有 N1），新图会沿用旧位置——罕见且无害，
   点「整理布局」即可重排
 
-> 版本变更汇总见 [release/2.0.68.md](release/2.0.68.md)、[release/2.0.75.md](release/2.0.75.md)、[release/2.0.76.md](release/2.0.76.md)
+## 7. 全部图类型支持（2.0.85）
+
+**目标**：mermaid 注册表中的每一个用户可编辑图类型都能进入可视化编辑。
+以 `@mermaid-js/examples` 全部 31 个类目 + 应用注册的 zenuml 外部图为基准
+逐一验证 `mermaid.parse` 通过后，新增 **24 个 kind**（`kinds.extra.ts`，
+约 1600 行），连同原有 6 类共 **31 个 kind / 33 种头关键字**。
+唯一排除：`info` 调试图（仅渲染 mermaid 版本号，无任何用户内容可编辑）。
+
+### 7.1 新增类型与建模方式
+
+| 建模族           | 类型（kind）                                                                                          | 模型要点                                                                                                                                                                                                                                                                                                         |
+| ---------------- | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 分组列表         | journey / timeline / kanban / gantt / cynefin / pie / packet / radar / xychart / venn / eventmodeling | 分组节点（section/period/column/domain）+ 结构边表达成员关系；`groupedEmit` 纯函数视图（分组序 + 边序 + 孤儿挂到最后一组/虚拟组）；无分组者按节点序输出                                                                                                                                                          |
+| 缩进树           | treeview / treemap / ishikawa / swimlane                                                              | 复用思维导图的「原始缩进弹栈建树 + 按边重建缩进」机制；treemap 叶子值存 detail；ishikawa 首行即根（鱼骨主刺）                                                                                                                                                                                                    |
+| 真节点-边        | sankey / requirement / block / c4 / architecture / git / zenuml                                       | sankey=CSV 边（值=边标签）；requirement=块字段+7 种关系；block=4 形状+columns 元数据（单行多声明按括号深度分片）；c4=25 种节点关键字+Rel 族（Boundary 展平跳过计数）；architecture=service/group/junction+`in` 成员边（端口双侧强制 `A:L --> R:B`）；git=提交重放（见下）；zenuml=参与者+消息（loop 块内容展平） |
+| 坐标驱动 WYSIWYG | quadrant / wardley                                                                                    | 节点位置 ↔ `[x, y]` 双向映射（`COORD_MARGIN/AREA` 常数，2 位小数舍入）；**代码即位置记忆**——这两类跳过 localStorage 位置叠加，拖拽直接改写生成代码的坐标                                                                                                                                                         |
+| 语法规则         | railroad（ebnf/abnf/peg/IR 四种头共用）                                                               | 规则名=节点、表达式原文=detail（`=` 与 `<-` 运算符存 roleData）；逐字节保留原文，往返不丢                                                                                                                                                                                                                        |
+
+### 7.2 新增机制（组件侧）
+
+- **节点类型按钮**：`KIND_SPECS[kind].nodeTypes` 调色板循环 `VNode.role`（+可选
+  `roleData` 载荷，如 cynefin 的 5 个固定域名）；节点上方显示角色角标
+- **属性对话框**：编辑图表级 `title` 与 `meta` 键（gantt dateFormat、quadrant
+  轴/象限标签、radar min/max、block columns、wardley size）
+- **canLink=false**：无连线语法的类型（pie/packet/radar/xychart/quadrant/venn/
+  eventmodeling/git/railroad）隐藏锚点圆点并拦截连线手势——画了也不生效的边一律不给画
+- **分组自动挂接**：选中分组节点（section/column/period/domain）再点添加，
+  新节点自动挂到该组（结构边）；否则生成时落入最后一组
+- **frontmatter 保留**：`--- … ---` 块逐字节保留并前置回显（kanban/radar/packet/
+  treemap 官方样例均带 frontmatter）
+- **不可信输入加固**：全部新解析器继承 >10k 字符单行跳过计数；坐标类把
+  越界 `[x, y]` 夹取到 [0,1]；git 重放对悬空 merge 边降级为普通 commit
+
+### 7.3 关键设计决策与踩坑记录
+
+- **git 提交重放**：节点即提交（`roleData`=所在分支、merge 边 `roleData`=来源分支），
+  生成按节点序重放 `branch/checkout/commit/merge`——`declared` 集合保证
+  checkout 只指向已声明分支；删 merge 边自动降级，不产非法序列
+- **radar 双命名空间**：官方样例中 axis `a["Art"]` 与 curve `a["Alice"]` 复用
+  同一 token——内部 id 加 `AX_`/`CV_` 前缀隔离，生成时用 `roleData` 还原 token
+- **kanban 缩进语义**：列表必须顶格、卡片缩进——生成与解析必须一致（曾因生成
+  带缩进导致自我往返塌缩）；`@{ … }` 属性尾缀原样保留（单引号形式）
+- **architecture 端口强制**：`A --> B` 无端口在 mermaid 中不合法，实测必须
+  `A:L --> R:B`；新边默认 `L-->R`
+- **eventmodeling/zenuml 标识符约束**：标签不允许空格——生成时非标识符字符
+  归一为 `-`（文档化取舍）
+- **block 单行多声明**：`ui["Web UI"] api["API"]` 按括号深度分片解析；
+  `columns/space/边` 指令行先整行匹配再分片（否则 `columns 3` 会被拆碎）
+- **分组↔分组边不是成员关系**：cynefin 域转换边（complex→complicated）曾被
+  `groupedEmit` 误当成员输出——已排除「目标也是分组」的边
+- **quadrant 象限标签键**：xLow/xHigh… 是轴元数据，象限标签只有 q1–q4 可
+  生成 `quadrant-N` 行（曾把轴键也当象限输出非法语法）
+
+### 7.4 测试与验证记录（2026-08-20，本机 Windows 11）
+
+| 验证项                                                                                                                                                                                                                                               | 结果                                                                     |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `model.allkinds.test.ts`：24 类型逐一「解析 → 往返不动点 → 真实 mermaid.parse」                                                                                                                                                                      | 47 用例全绿（zenuml 的 mermaid 校验在本机缺 localStorage 时跳过，CI 有） |
+| 结构抽查：journey 分组边 / kanban id 与属性尾缀 / git 分支合并次序 / quadrant 坐标↔位置 / wardley evolve+note / radar 双命名空间 / block 多声明 / eventmodeling `->>` / timeline 续行合并 / railroad `<-` / frontmatter 逐字节 / zenuml 参与者归一化 | 全绿                                                                     |
+| 加固：20 个新解析器超长单行跳过；越界坐标夹取                                                                                                                                                                                                        | 全绿                                                                     |
+| 全量单测                                                                                                                                                                                                                                             | 222 通过（15 个本机预存 localStorage 失败与基线一致）                    |
+| 新 e2e `visualEditorAllKinds.spec.ts`：journey 选中分组添加任务自动挂接 / git 重放+追加提交 / pie 值编辑 / quadrant 拖拽改坐标                                                                                                                       | 4/4 通过                                                                 |
+| svelte-check / eslint / prettier                                                                                                                                                                                                                     | 0 错误 0 警告 / 通过 / 通过                                              |
+| 语法探针脚本（jsdom + mermaid.parse 逐类型最小样例）                                                                                                                                                                                                 | 全部通过（arch 端口、PEG `<-`、kanban 无 `:T-x` 尾缀等结论均有实测依据） |
+
+已知取舍：
+
+- C4 的 Boundary/Enterprise_Boundary 包装在导入时展平（跳过计数）——画布无
+  容器概念，内容节点保留；wardley 的 `pipeline`/`label [dx,dy]` 偏移同样跳过
+- zenuml 的 loop/alt 控制块导入时展平（块内消息保留，块关键字计数）
+- 甘特图 `after` 依赖不建边——任务时序尾缀（done/dates/duration）作为原文
+  detail 逐字节保留，保证往返稳定
+- ishikawa 多根（多个无父节点）时按节点序全部输出，mermaid 渲染以首个为鱼头
+
+> 版本变更汇总见 [release/2.0.68.md](release/2.0.68.md)、[release/2.0.75.md](release/2.0.75.md)、[release/2.0.76.md](release/2.0.76.md)、[release/2.0.85.md](release/2.0.85.md)
