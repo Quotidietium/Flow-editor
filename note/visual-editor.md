@@ -113,4 +113,28 @@ src/lib/util/visualEditor/model.test.ts   单元测试（15 个用例，全绿�
 - 状态图 `-->` 仅一种线型（mermaid stateDiagram 无虚线转换），线型按钮隐藏
 - e2e 用剪贴板粘贴输入代码：逐字符键入 `(` `)` 与 Monaco 状态同步存在竞态会丢键
 
-> 版本变更汇总见 [release/2.0.68.md](release/2.0.68.md)、[release/2.0.75.md](release/2.0.75.md)
+## 6. 位置记忆——真正的所见即所得（2.0.76）
+
+**问题**：Mermaid 源码不携带坐标，2.0.75 及之前每次切入 Visual 标签都会
+`parse + layoutGraph` 全量自动布局——用户刚拖好的节点在每次切换后都跳回布局槽位，
+产生明显的「重新渲染」感。
+
+**方案**：按节点 id 记忆画布位置，叠加在自动布局之上：
+
+- `model.applyPositions(graph, positions)`：纯函数，id 命中的节点用记忆位置，
+  未命中（新增节点）保留自动布局槽位
+- `VisualEditor` 维护位置表（模块内存 + localStorage 键 `visualEditorLayout`），
+  在每次 `syncCode`（任何图形操作落盘时）与 `loadFromCode`（导入后）刷新
+- 效果：**切换 Visual↔预览、刷新页面、在 Code 标签做小幅编辑**后位置全部稳定；
+  全新的图（id 不重叠）自动布局一次属必要冷启动
+- 「整理布局」重排后新位置立即成为记忆（用户显式要求的重排持久生效）；
+  「清空」/删除节点会同步收缩记忆表
+
+**取舍记录**：
+
+- 位置不写入 Mermaid 代码（不产生 `%% pos` 之类机器注释污染分享链接），因此
+  换一台浏览器/设备首次打开仍会自动布局一次——代码干净优先于跨设备位置漫游
+- 两张不同图若节点 id 恰好重叠（如都有 N1），新图会沿用旧位置——罕见且无害，
+  点「整理布局」即可重排
+
+> 版本变更汇总见 [release/2.0.68.md](release/2.0.68.md)、[release/2.0.75.md](release/2.0.75.md)、[release/2.0.76.md](release/2.0.76.md)
