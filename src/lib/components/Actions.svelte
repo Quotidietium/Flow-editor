@@ -121,7 +121,24 @@ ${svgString}`);
     }
   };
 
-  const exportImage = async (event: Event, exporter: Exporter) => {
+  // Export flows toggle panZoom off and wait for the clean re-render; a
+  // second concurrent click would race the first (double downloads, panZoom
+  // restored mid-flight). Buttons are disabled while one is in progress.
+  let exporting = $state(false);
+
+  const exportImage = async (event: Event, exporter: Exporter): Promise<void> => {
+    if (exporting) {
+      return;
+    }
+    exporting = true;
+    try {
+      await runExport(event, exporter);
+    } finally {
+      exporting = false;
+    }
+  };
+
+  const runExport = async (event: Event, exporter: Exporter): Promise<void> => {
     updateCodeStore({ panZoom: false });
     const svg = await waitForCleanSvg();
     const canvas = document.createElement('canvas');
@@ -257,18 +274,26 @@ ${svgString}`);
         bind:value={imageSize} />
     </div>
     <div class="flex gap-2">
-      <Button class="flex-grow" onclick={onDownloadPNG} data-testid="download-PNG">
+      <Button
+        class="flex-grow"
+        disabled={exporting}
+        onclick={onDownloadPNG}
+        data-testid="download-PNG">
         <DownloadIcon />
         PNG
       </Button>
-      <Button class="flex-grow" onclick={onDownloadSVG} data-testid="download-SVG">
+      <Button
+        class="flex-grow"
+        disabled={exporting}
+        onclick={onDownloadSVG}
+        data-testid="download-SVG">
         <DownloadIcon />
         SVG
       </Button>
     </div>
     <Separator />
     {#if isClipboardAvailable()}
-      <CopyButton onclick={onCopyClipboard} label="复制图像" />
+      <CopyButton onclick={onCopyClipboard} disabled={exporting} label="复制图像" />
     {/if}
   </div>
 </Card>

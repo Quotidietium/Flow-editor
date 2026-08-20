@@ -6,14 +6,20 @@
   import CopyIcon from '~icons/material-symbols/content-copy-outline-rounded';
 
   let {
+    disabled = false,
     onclick,
     label = '复制'
-  }: { onclick: (event?: Event) => Promise<unknown>; label?: string } = $props();
+  }: {
+    disabled?: boolean;
+    onclick: (event?: Event) => Promise<unknown>;
+    label?: string;
+  } = $props();
 
   let showCheckIcon = $state(false);
 </script>
 
 <Button
+  {disabled}
   onclick={async (event) => {
     try {
       showCheckIcon = true;

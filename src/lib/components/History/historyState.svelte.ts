@@ -5,6 +5,11 @@ import { generateSlug } from 'random-word-slugs';
 import { v4 as uuidV4 } from 'uuid';
 
 const MAX_AUTO_HISTORY_LENGTH = 30;
+// Manual saves are explicit but must not grow without bound either: each
+// entry carries the full state, and an unbounded store eventually exhausts
+// the localStorage quota (and with it silent persistence of the editor
+// itself). Oldest entries are dropped first, same policy as the timeline.
+const MAX_MANUAL_HISTORY_LENGTH = 200;
 const AUTO_SAVE_INTERVAL = 60_000;
 
 const auto = persisted<HistoryEntry[]>('autoHistoryStore', []);
@@ -78,10 +83,15 @@ const addEntry = (
   return true;
 };
 
-export const addManualEntry = (state: State): boolean => addEntry(manual, state, 'manual');
+export const addManualEntry = (state: State): boolean =>
+  addEntry(manual, state, 'manual', MAX_MANUAL_HISTORY_LENGTH);
 
 export const addAutoEntry = (state: State): boolean =>
   addEntry(auto, state, 'auto', MAX_AUTO_HISTORY_LENGTH);
+
+// Read-only accessors for tests and future UI (e.g. quota-aware indicators).
+export const manualEntryCount = (): number => manual.value.length;
+export const MAX_MANUAL_HISTORY = MAX_MANUAL_HISTORY_LENGTH;
 
 // Replaces the in-memory revisions (e.g. when a gist is loaded), assigning ids.
 export const setLoaderEntries = (entries: Optional<HistoryEntry, 'id'>[]): void => {

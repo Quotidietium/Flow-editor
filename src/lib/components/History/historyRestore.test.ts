@@ -32,3 +32,19 @@ describe('restoreEntries hardening', () => {
     expect(invalid).toBe(3);
   });
 });
+
+describe('manual history growth cap', () => {
+  it('drops oldest manual entries beyond the cap instead of growing unbounded', async () => {
+    const { addManualEntry, manualEntryCount, MAX_MANUAL_HISTORY } =
+      await import('./historyState.svelte');
+    for (let i = 0; i < MAX_MANUAL_HISTORY + 30; i++) {
+      addManualEntry({
+        code: `graph TD\n  N${i}-->B`,
+        mermaid: '{}',
+        rough: false,
+        updateDiagram: true
+      });
+    }
+    expect(manualEntryCount()).toBe(MAX_MANUAL_HISTORY);
+  });
+});

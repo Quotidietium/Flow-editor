@@ -60,3 +60,15 @@ describe('silentlySanitizeConfig', () => {
     expect(silentlySanitizeConfig(undefined)).toEqual({});
   });
 });
+
+describe('deeply nested untrusted config', () => {
+  it('does not overflow the recursion while scanning for unsafe paths', () => {
+    // 5000 nesting levels: JSON.parse accepts this, the scanner recursion
+    // (pre-guard) did not.
+    let deep: unknown = { x: 1 };
+    for (let i = 0; i < 5000; i++) {
+      deep = { a: deep };
+    }
+    expect(() => findUnsafeConfigPaths(deep as MermaidConfig)).not.toThrow();
+  });
+});

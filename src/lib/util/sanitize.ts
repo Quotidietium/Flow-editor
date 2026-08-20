@@ -12,6 +12,14 @@ import { defaultMermaidConfig } from './mermaid';
  */
 function getUnsafePaths(object: object, unsafeKeys: string[], path: string[] = []) {
   const unsafePaths = new Array<string[]>();
+  // Depth guard: JSON.parse accepts nesting deeper than the JS call stack
+  // tolerates in this recursion, and a hand-crafted config could overflow
+  // it before any caller's try/catch ran. Real configs are shallow; past
+  // this depth the whole subtree is treated as unsafe and stripped.
+  if (path.length > 100) {
+    unsafePaths.push(path);
+    return unsafePaths;
+  }
   for (const key of unsafeKeys) {
     // Copied from mermaid's sanitize function in case there's non-enumerable keys
     if (Object.hasOwn(object, key)) {
