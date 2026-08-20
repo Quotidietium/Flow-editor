@@ -27,8 +27,16 @@ export const readJSON = <T>(key: string, fallback: T): T => {
 };
 
 export const writeJSON = (key: string, value: unknown): void => {
-  if (hasStorage()) {
+  if (!hasStorage()) {
+    return;
+  }
+  try {
     window.localStorage.setItem(key, JSON.stringify(value));
+  } catch (error) {
+    // Quota exceeded (or storage disabled): persistence is best-effort —
+    // throwing here would unwind the state gateway's update() and drop the
+    // in-flight publish, breaking the editor long before storage recovers.
+    console.warn(`Failed to persist ${key}:`, error);
   }
 };
 

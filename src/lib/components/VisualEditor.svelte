@@ -14,7 +14,8 @@
     NODE_H,
     nodeSize,
     NODE_W,
-    parseCode
+    parseCode,
+    sanitizePositions
   } from '$/util/visualEditor/model';
   import type { VEdge, VGraph, VLinkType, VNode, VShape } from '$/util/visualEditor/model';
   import { readJSON, writeJSON } from '$/util/persist.svelte';
@@ -120,7 +121,7 @@
   // ids fall back to their auto-layout slot. Module-level + localStorage:
   // the editor remounts on every tab switch but there is only one instance.
   const POSITIONS_KEY = 'visualEditorLayout';
-  let rememberedPositions: Record<string, { x: number; y: number }> = readJSON(POSITIONS_KEY, {});
+  let rememberedPositions = sanitizePositions(readJSON(POSITIONS_KEY, null));
 
   const rememberPositions = (): void => {
     rememberedPositions = Object.fromEntries(

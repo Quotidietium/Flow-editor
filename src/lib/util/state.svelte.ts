@@ -174,10 +174,21 @@ const scheduleViewHref = debounce(() => {
 // publishing the result to `validatedState` (and the URL hash, once
 // initURLSubscription has run). Only called from update(), which suppresses
 // dependency tracking.
+//
+// Publishes carry a sequence number: mermaid.parse latency varies with
+// diagram size, so under fast typing an older snapshot's promise can resolve
+// after a newer one's — without the guard the stale result would land last
+// and the editor would show (and write to the URL) an outdated diagram.
+// Superseded publishes are dropped; their state was overwritten anyway.
+let processSeq = 0;
 const persistAndProcess = (): void => {
   const snapshot = $state.snapshot(input) as State;
+  const seq = ++processSeq;
   writeJSON(CODE_STORE_KEY, snapshot);
   void processState(snapshot).then((processed) => {
+    if (seq !== processSeq) {
+      return;
+    }
     validatedCurrent = processed;
     updateHash?.();
     scheduleViewHref();

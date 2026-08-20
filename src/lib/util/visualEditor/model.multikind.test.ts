@@ -10,6 +10,7 @@ import {
   nodeSize,
   NODE_H,
   parseCode,
+  sanitizePositions,
   type VGraph
 } from './model';
 
@@ -423,5 +424,50 @@ describe('KIND_SPECS completeness', () => {
       ]
     };
     expect(generateCode(graph)).toContain('sequenceDiagram');
+  });
+});
+
+describe('untrusted-input hardening', () => {
+  it('sanitizePositions keeps only finite-number entries', () => {
+    expect(sanitizePositions(null)).toEqual({});
+    expect(sanitizePositions('junk')).toEqual({});
+    expect(sanitizePositions(42)).toEqual({});
+    expect(
+      sanitizePositions({
+        A: { x: 1, y: 2 },
+        BAD_INF: { x: 1, y: Number.POSITIVE_INFINITY },
+        BAD_NAN: { x: Number.NaN, y: 2 },
+        BAD_NULL: null,
+        BAD_SHAPE: [1, 2],
+        BAD_STR: { x: '1', y: 2 }
+      })
+    ).toEqual({ A: { x: 1, y: 2 } });
+  });
+
+  it('skips pathological single lines instead of stalling the parsers', () => {
+    const longLine = '-'.repeat(50_000);
+    for (const header of ['sequenceDiagram', 'classDiagram', 'stateDiagram-v2', 'erDiagram']) {
+      const parsed = parseCode(`${header}\n    ${longLine}\n`);
+      expect(parsed.ok, header).toBe(true);
+      if (parsed.ok) {
+        expect(parsed.result.skipped).toBeGreaterThan(0);
+        expect(parsed.result.graph.edges).toHaveLength(0);
+      }
+    }
+  });
+
+  it('generates a pathologically deep mindmap without recursion overflow', () => {
+    // 6000 nesting levels: the recursive emitter would blow the stack.
+    const lines = ['mindmap'];
+    for (let i = 0; i < 6000; i++) {
+      lines.push(`${' '.repeat(i + 1)}(N${i})`);
+    }
+    const parsed = parseCode(lines.join('\n'));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) {
+      return;
+    }
+    expect(() => generateCode(parsed.result.graph)).not.toThrow();
+    expect(parsed.result.graph.nodes).toHaveLength(6000);
   });
 });

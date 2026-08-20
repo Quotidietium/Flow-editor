@@ -374,7 +374,9 @@ const mindmapShape = (shape: VShape, label: string): string => {
 const generateMindmap = (graph: VGraph): string => {
   // Rebuild the tree from parent->child edges; children keep edge order so
   // the output is stable across regenerations. Unreached nodes append at
-  // the root level.
+  // the root level. Emission is an explicit-stack DFS: a hand-crafted file
+  // with one indent level per line makes the tree as deep as the input, and
+  // recursion would overflow the stack long before that becomes slow.
   const children = new Map<string, string[]>();
   const parentOf = new Map<string, string>();
   for (const edge of graph.edges) {
@@ -383,29 +385,37 @@ const generateMindmap = (graph: VGraph): string => {
       parentOf.set(edge.target, edge.source);
     }
   }
+  const nodeById = new Map(graph.nodes.map((node) => [node.id, node] as const));
   const visited = new Set<string>();
   const lines = ['mindmap'];
-  const emit = (id: string, depth: number): void => {
-    if (visited.has(id)) {
-      return;
-    }
-    visited.add(id);
-    const node = graph.nodes.find((n) => n.id === id);
-    if (node) {
-      lines.push(
-        `${'    '.repeat(depth)}${mindmapShape(node.shape, sanitizeLabel(node.label || node.id))}`
-      );
-    }
-    for (const child of children.get(id) ?? []) {
-      emit(child, depth + 1);
+  const emitFrom = (startId: string): void => {
+    const stack: { depth: number; id: string }[] = [{ depth: 0, id: startId }];
+    while (stack.length > 0) {
+      const { depth, id } = stack.pop() as { depth: number; id: string };
+      if (visited.has(id)) {
+        continue;
+      }
+      visited.add(id);
+      const node = nodeById.get(id);
+      if (node) {
+        lines.push(
+          `${'    '.repeat(depth)}${mindmapShape(node.shape, sanitizeLabel(node.label || node.id))}`
+        );
+      }
+      const kids = children.get(id) ?? [];
+      for (let i = kids.length - 1; i >= 0; i--) {
+        if (!visited.has(kids[i] as string)) {
+          stack.push({ depth: depth + 1, id: kids[i] as string });
+        }
+      }
     }
   };
   const roots = graph.nodes.filter((node) => !parentOf.has(node.id)).map((node) => node.id);
   for (const root of roots) {
-    emit(root, 0);
+    emitFrom(root);
   }
   for (const node of graph.nodes) {
-    emit(node.id, 0);
+    emitFrom(node.id);
   }
   return `${lines.join('\n')}\n`;
 };
@@ -832,6 +842,35 @@ export const applyPositions = (
   })
 });
 
+/**
+ * Validate an untrusted persisted position map (localStorage can hold
+ * anything — hand-edited, corrupted or written by an older format) down to
+ * finite-number entries only. A bad entry would leak NaN into node
+ * coordinates and from there into every geometry calculation and SVG
+ * attribute on the canvas.
+ */
+export const sanitizePositions = (raw: unknown): Record<string, { x: number; y: number }> => {
+  if (typeof raw !== 'object' || raw === null) {
+    return {};
+  }
+  const clean: Record<string, { x: number; y: number }> = {};
+  for (const [id, value] of Object.entries(raw)) {
+    if (typeof value !== 'object' || value === null) {
+      continue;
+    }
+    const { x, y } = value as { x?: unknown; y?: unknown };
+    if (
+      typeof x === 'number' &&
+      typeof y === 'number' &&
+      Number.isFinite(x) &&
+      Number.isFinite(y)
+    ) {
+      clean[id] = { x, y };
+    }
+  }
+  return clean;
+};
+
 export const nodeCenter = (node: VNode): { x: number; y: number } => {
   const size = nodeSize(node);
   return { x: node.x + size.w / 2, y: node.y + size.h / 2 };
@@ -938,6 +977,11 @@ interface GraphBuilder {
   skipped: number;
 }
 
+// Line guard: the per-kind regexes are tuned for real diagram statements;
+// a hand-crafted megabyte single line makes their lazy quantifiers degrade
+// quadratically and freezes the tab. No legitimate line comes close.
+const MAX_LINE_LENGTH = 10_000;
+
 const newBuilder = (kind: DiagramKind, direction: 'TD' | 'LR' = 'TD'): GraphBuilder => {
   const graph: VGraph = { direction, kind, edges: [], nodes: [] };
   const nodesById = new Map<string, VNode>();
@@ -996,6 +1040,10 @@ const parseSequence = (code: string): ParsedFlowchart => {
   for (const rawLine of code.slice(header.index + header[0].length).split('\n')) {
     const line = rawLine.trim();
     if (!line || line.startsWith('%%')) {
+      continue;
+    }
+    if (line.length > MAX_LINE_LENGTH) {
+      b.skipped++;
       continue;
     }
     const decl = /^(participant|actor)\s+(\S+)(?:\s+as\s+(.*))?$/i.exec(line);
@@ -1057,6 +1105,10 @@ const parseClass = (code: string): ParsedFlowchart => {
   for (const rawLine of code.slice(header.index + header[0].length).split('\n')) {
     const line = rawLine.trim();
     if (!line || line.startsWith('%%')) {
+      continue;
+    }
+    if (line.length > MAX_LINE_LENGTH) {
+      b.skipped++;
       continue;
     }
     if (inBlockOf) {
@@ -1149,6 +1201,10 @@ const parseState = (code: string): ParsedFlowchart => {
   for (const rawLine of code.slice(header.index + header[0].length).split('\n')) {
     const line = rawLine.trim();
     if (!line || line.startsWith('%%')) {
+      continue;
+    }
+    if (line.length > MAX_LINE_LENGTH) {
+      b.skipped++;
       continue;
     }
     if (inNote) {
@@ -1267,6 +1323,10 @@ const parseEr = (code: string): ParsedFlowchart => {
     if (!line || line.startsWith('%%')) {
       continue;
     }
+    if (line.length > MAX_LINE_LENGTH) {
+      b.skipped++;
+      continue;
+    }
     if (inBlockOf) {
       if (line === '}') {
         inBlockOf = undefined;
@@ -1328,6 +1388,10 @@ const parseMindmap = (code: string): ParsedFlowchart => {
   for (const rawLine of code.slice(header.index + header[0].length).split('\n')) {
     const line = rawLine.replace(/\t/g, ' ').trimEnd();
     if (!line.trim() || line.trim().startsWith('%%')) {
+      continue;
+    }
+    if (line.length > MAX_LINE_LENGTH) {
+      b.skipped++;
       continue;
     }
     const indent = line.length - line.trimStart().length;

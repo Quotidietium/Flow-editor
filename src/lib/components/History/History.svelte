@@ -90,8 +90,25 @@
       if (!file) {
         return;
       }
-      const data: HistoryEntry[] = JSON.parse(await file.text());
-      const { restored, invalid, duplicates } = restoreEntries(data);
+      // Uploaded files are untrusted input: cap the size (a giant blob would
+      // block the main thread in JSON.parse) and surface parse failures —
+      // an unhandled rejection here would silently do nothing.
+      if (file.size > 5 * 1024 * 1024) {
+        notify('文件过大（上限 5MB）');
+        return;
+      }
+      let data: unknown;
+      try {
+        data = JSON.parse(await file.text());
+      } catch {
+        notify('无法解析该文件（需为历史记录导出的 JSON）');
+        return;
+      }
+      if (!Array.isArray(data)) {
+        notify('文件格式不正确（需为历史记录导出的 JSON 数组）');
+        return;
+      }
+      const { restored, invalid, duplicates } = restoreEntries(data as HistoryEntry[]);
       notify(`已恢复 ${restored} 条，重复 ${duplicates} 条，无效 ${invalid} 条。`);
     });
     input.click();

@@ -116,7 +116,16 @@ export const clearActive = (): void => {
 };
 
 const validateEntry = (entry: HistoryEntry): boolean =>
-  Boolean(entry && entry.type && entry.state) && typeof entry.time === 'number';
+  Boolean(entry && entry.type && entry.state) &&
+  typeof entry.time === 'number' &&
+  typeof entry.state === 'object' &&
+  typeof entry.state.code === 'string';
+
+// Restore cap: an uploaded file is untrusted input. Without a limit a
+// hand-crafted array could stuff the unbounded manual store until the
+// localStorage quota is exhausted (breaking codeStore persistence) and
+// freeze the tab sorting/serializing it.
+export const MAX_RESTORE_ENTRIES = 200;
 
 export interface RestoreResult {
   restored: number;
@@ -125,9 +134,10 @@ export interface RestoreResult {
 }
 
 // Routes each uploaded entry to the store matching its own type, skipping ids
-// that already exist.
+// that already exist. Entries beyond MAX_RESTORE_ENTRIES count as invalid.
 export const restoreEntries = (data: HistoryEntry[]): RestoreResult => {
-  const valid = data.filter((entry) => validateEntry(entry));
+  const capped = data.slice(0, MAX_RESTORE_ENTRIES);
+  const valid = capped.filter((entry) => validateEntry(entry));
   const invalid = data.length - valid.length;
   let restored = 0;
 
