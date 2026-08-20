@@ -156,3 +156,20 @@ describe('extractErrorLineText', () => {
     expect(extractErrorLineText('nope')).toBe('');
   });
 });
+
+describe('untrusted error-line length guard', () => {
+  it('bounds the automaton on hand-crafted megabyte error lines', () => {
+    // A pathological single-line diagram: the mermaid error text embeds the
+    // line, and the automaton used to allocate ~2 maps per character.
+    const huge = 'x'.repeat(500_000) + 'needle' + 'y'.repeat(500_000);
+    const code = `flowchart TD\n    A[${huge.slice(0, 30)}]\n    B[${'z'.repeat(40)}]\n`;
+    // Correctness through the cap: matching still works via the shared prefix.
+    const result = findMostRelevantLineNumber(huge, code);
+    expect(result).toBe(2);
+    // And the cap itself: a needle longer than the cap cannot crash or hang
+    // (this is the regression guard); it still matches via shared characters.
+    const start = Date.now();
+    expect(findMostRelevantLineNumber('q'.repeat(200_000), 'flowchart TD\n  A[q]\n')).toBe(2);
+    expect(Date.now() - start).toBeLessThan(2_000);
+  });
+});

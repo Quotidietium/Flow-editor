@@ -13,8 +13,14 @@ export function findMostRelevantLineNumber(errorLineText: string, code: string):
   if (errorLineText.length === 0) {
     return -1;
   }
-  const { len, link, transitions } = buildSuffixAutomaton(errorLineText);
-  const target = errorLineText.length;
+  // Cap the automaton input: the error-line text embeds a slice of user code,
+  // so a hand-crafted single-line diagram can make it arbitrarily long. The
+  // automaton allocates ~2 maps per character — a 100KB line meant a ~20MB
+  // burst per keystroke while the code stays broken. Matching on a prefix
+  // keeps the semantics (longest common substring) at bounded cost.
+  const needle = errorLineText.slice(0, 10_000);
+  const { len, link, transitions } = buildSuffixAutomaton(needle);
+  const target = needle.length;
 
   let mostRelevantLineNumber = -1;
   let maxCommonLength = 0;
