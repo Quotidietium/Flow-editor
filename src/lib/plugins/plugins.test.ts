@@ -67,8 +67,8 @@ describe('plugin hook dispatch', () => {
         id: 'importer',
         import: {
           extensions: ['puml'],
-          name: 'plantuml',
-          import: (file) => ({ code: `flowchart TD\n  ${file.text} --> Converted` })
+          import: (file) => ({ code: `flowchart TD\n  ${file.text} --> Converted` }),
+          name: 'plantuml'
         }
       })
     );
@@ -81,7 +81,6 @@ describe('plugin hook dispatch', () => {
   it('registers and runs custom export formats', () => {
     registerPluginInstance(
       basePlugin({
-        id: 'exporter',
         export: {
           id: 'mcfunction',
           label: 'MC 函数',
@@ -90,13 +89,18 @@ describe('plugin hook dispatch', () => {
             mime: 'text/plain',
             text: `# ${code.split('\n').length} lines`
           })
-        }
+        },
+        id: 'exporter'
       })
     );
     const formats = pluginExportFormats();
     expect(formats).toHaveLength(1);
-    expect(formats[0]?.label).toBe('MC 函数');
-    const payload = runPluginExport(formats[0]!);
+    const format = formats[0];
+    if (!format) {
+      throw new Error('format missing');
+    }
+    expect(format.label).toBe('MC 函数');
+    const payload = runPluginExport(format);
     expect(payload?.filename).toBe('out.mcfunction');
     expect(payload?.text).toContain('lines');
   });
@@ -134,6 +138,20 @@ describe('plugin hook dispatch', () => {
     }
   );
 
+  it('disable then enable keeps the plugin hooks working', async () => {
+    const { disablePlugin, enablePlugin } = await import('./registry.svelte');
+    registerPluginInstance(
+      basePlugin({ id: 'cycle', inputTransform: { name: 'x', transform: (c) => `${c}+` } })
+    );
+    expect(runInputTransforms('X', 'file')).toBe('X+');
+    disablePlugin('cycle');
+    expect(runInputTransforms('X', 'file')).toBe('X');
+    await enablePlugin('cycle');
+    // The re-enabled plugin must contribute again (regression: enable used to
+    // skip reloading and left the plugin silently dead until a page reload).
+    expect(runInputTransforms('X', 'file')).toBe('X+');
+  });
+
   it('disabled plugins contribute nothing', () => {
     registerPluginInstance(
       basePlugin({ id: 'off', inputTransform: { name: 'x', transform: () => 'NOPE' } }),
@@ -149,20 +167,20 @@ describe('MCP bridge protocol', () => {
   beforeEach(() => {
     (window as unknown as { __FLOW_EDITOR_API__: unknown }).__FLOW_EDITOR_API__ = {
       exportPngDataUrl: () => 'data:image/png;base64,xxx',
-      getSvg: () => '<svg></svg>',
       getState: () => state,
+      getSvg: () => '<svg></svg>',
       setCode: vi.fn(),
       setState: vi.fn()
     };
   });
 
-  it('initialize advertises tools capability', () => {
-    const res = handleBridgeRequest({ id: 1, jsonrpc: '2.0', method: 'initialize' });
+  it('initialize advertises tools capability', async () => {
+    const res = await handleBridgeRequest({ id: 1, jsonrpc: '2.0', method: 'initialize' });
     expect(res).toMatchObject({ id: 1, result: { capabilities: { tools: {} } } });
   });
 
-  it('tools/list exposes the editor toolset', () => {
-    const res = handleBridgeRequest({ id: 2, method: 'tools/list' }) as {
+  it('tools/list exposes the editor toolset', async () => {
+    const res = (await handleBridgeRequest({ id: 2, method: 'tools/list' })) as unknown as {
       result: { tools: { name: string }[] };
     };
     const names = res.result.tools.map((t) => t.name);
@@ -171,19 +189,19 @@ describe('MCP bridge protocol', () => {
     expect(names).toContain('export');
   });
 
-  it('tools/call round-trips code', () => {
-    const got = handleBridgeRequest({
+  it('tools/call round-trips code', async () => {
+    const got = (await handleBridgeRequest({
       id: 3,
       method: 'tools/call',
-      params: { name: 'get_code', arguments: {} }
-    }) as { result: { content: { text: string }[] } };
+      params: { arguments: {}, name: 'get_code' }
+    })) as unknown as { result: { content: { text: string }[] } };
     expect(got.result.content[0]?.text).toBe(state.code);
 
-    const set = handleBridgeRequest({
+    const set = (await handleBridgeRequest({
       id: 4,
       method: 'tools/call',
-      params: { name: 'set_code', arguments: { code: 'pie' } }
-    }) as { result: { content: { text: string }[] } };
+      params: { arguments: { code: 'pie' }, name: 'set_code' }
+    })) as unknown as { result: { content: { text: string }[] } };
     expect(set.result.content[0]?.text).toBe('ok');
     expect(
       (window as unknown as { __FLOW_EDITOR_API__: { setCode: ReturnType<typeof vi.fn> } })
@@ -191,12 +209,12 @@ describe('MCP bridge protocol', () => {
     ).toHaveBeenCalledWith('pie');
   });
 
-  it('unknown methods and tools return JSON-RPC errors', () => {
-    expect(handleBridgeRequest({ id: 5, method: 'nope' })).toMatchObject({
+  it('unknown methods and tools return JSON-RPC errors', async () => {
+    expect(await handleBridgeRequest({ id: 5, method: 'nope' })).toMatchObject({
       error: { code: -32601 }
     });
     expect(
-      handleBridgeRequest({ id: 6, method: 'tools/call', params: { name: 'nope' } })
+      await handleBridgeRequest({ id: 6, method: 'tools/call', params: { name: 'nope' } })
     ).toMatchObject({ error: { code: -32601 } });
   });
 

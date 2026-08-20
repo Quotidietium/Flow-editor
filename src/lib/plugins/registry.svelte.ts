@@ -5,6 +5,7 @@
  */
 
 import { notify } from '$/util/notify';
+import { SvelteMap } from 'svelte/reactivity';
 import { readJSON, writeJSON } from '$/util/persist.svelte';
 import type {
   ExportFormat,
@@ -12,8 +13,7 @@ import type {
   ImportHandler,
   InputTransformHook,
   InstalledPlugin,
-  PluginContext,
-  ThemeHook
+  PluginContext
 } from './types';
 
 const REGISTRY_KEY = 'flowPlugins';
@@ -26,7 +26,7 @@ interface RuntimePlugin {
 }
 
 let installed = $state<InstalledPlugin[]>([]);
-const runtimes = new Map<string, RuntimePlugin>();
+const runtimes = new SvelteMap<string, RuntimePlugin>();
 
 const activePlugins = (): FlowPlugin[] =>
   installed
@@ -41,9 +41,10 @@ const makeContext = (id: string): PluginContext => {
       const state = window.__FLOW_EDITOR_STATE__?.();
       return state ?? { code: '', mermaid: '{}', rough: false };
     },
+    getSvg: () => document.querySelector<SVGSVGElement>('#container svg')?.outerHTML,
+    notify: (message) => notify(message),
     setCode: (code) => window.__FLOW_EDITOR_API__?.setCode(code),
     setState: (state) => window.__FLOW_EDITOR_API__?.setState(state),
-    notify: (message) => notify(message),
     storage: {
       get<T>(key: string, fallback: T): T {
         return readJSON<T>(`${NS}:${key}`, fallback);
@@ -51,8 +52,7 @@ const makeContext = (id: string): PluginContext => {
       set(key: string, value: unknown): void {
         writeJSON(`${NS}:${key}`, value);
       }
-    },
-    getSvg: () => document.querySelector<SVGSVGElement>('#container svg')?.outerHTML
+    }
   };
 };
 
@@ -121,14 +121,14 @@ const persist = (): void => {
 export const installPlugin = async (source: string): Promise<{ ok: boolean; error?: string }> => {
   const instance = await loadModule(source);
   if (!instance || !instance.id || !instance.name) {
-    return { ok: false, error: '插件必须 default export 一个包含 id 与 name 的对象' };
+    return { error: '插件必须 default export 一个包含 id 与 name 的对象', ok: false };
   }
   if (installed.some((p) => p.manifest.id === instance.id)) {
-    return { ok: false, error: `插件 ${instance.id} 已安装` };
+    return { error: `插件 ${instance.id} 已安装`, ok: false };
   }
   const record: InstalledPlugin = {
     enabled: true,
-    installedAt: new Date().toISOString(),
+    installedAt: String(Date.now()),
     manifest: {
       description: instance.description,
       id: instance.id,
@@ -176,9 +176,9 @@ export const disablePlugin = (id: string, reason?: string): void => {
       /* ignore */
     }
     removePluginTheme(rt.instance);
-  }
-  if (rt) {
-    rt.instance = undefined;
+    // Keep the loaded module: hooks dispatch through activePlugins() which
+    // already filters on `enabled`, and source-less runtime registrations
+    // (tests/embedding) could never reload anyway.
   }
   installed = installed.map((p) => (p.manifest.id === id ? { ...p, enabled: false } : p));
   persist();
@@ -194,7 +194,9 @@ export const enablePlugin = async (id: string): Promise<void> => {
     return;
   }
   const rt = runtimes.get(id);
-  const instance = rt ? rt.instance : await loadModule(record.source);
+  // Reload only when there is no live instance (first enable after a page
+  // load restores from the persisted source).
+  const instance = rt?.instance ?? (record.source ? await loadModule(record.source) : undefined);
   if (rt) {
     rt.errors = 0;
     rt.instance = instance;
@@ -333,7 +335,7 @@ export const listInstalled = (): InstalledPlugin[] => installed;
 export const registerPluginInstance = (instance: FlowPlugin, enabled = true): void => {
   const record: InstalledPlugin = {
     enabled,
-    installedAt: new Date().toISOString(),
+    installedAt: String(Date.now()),
     manifest: {
       description: instance.description,
       id: instance.id,

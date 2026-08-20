@@ -80,10 +80,12 @@ export const bridgeTools = [
   }
 ] as const;
 
-const callTool = (
+const callTool = async (
   name: string,
   params: Record<string, unknown> | undefined
-): { content: { text: string; type: string }[] } | { error: { code: number; message: string } } => {
+): Promise<
+  { content: { text: string; type: string }[] } | { error: { code: number; message: string } }
+> => {
   const a = api();
   if (!a) {
     return { error: { code: -32002, message: 'editor api not ready' } };
@@ -123,7 +125,16 @@ const callTool = (
         return { content: [{ text: a.getSvg() ?? '', type: 'text' }] };
       }
       if (format === 'png-dataurl') {
-        return { content: [{ text: a.exportPngDataUrl() ?? '', type: 'text' }] };
+        const png = await a.exportPngDataUrl();
+        if (!png) {
+          return {
+            error: {
+              code: 32001,
+              message: 'png export unavailable (nothing rendered or canvas unsupported)'
+            }
+          };
+        }
+        return { content: [{ text: png, type: 'text' }] };
       }
       return { content: [{ text: a.getState().code, type: 'text' }] };
     }
@@ -133,7 +144,9 @@ const callTool = (
   }
 };
 
-export const handleBridgeRequest = (request: JsonRpcRequest) => {
+export const handleBridgeRequest = async (
+  request: JsonRpcRequest
+): Promise<ReturnType<typeof ok> | ReturnType<typeof err>> => {
   const { id, method } = request;
   switch (method) {
     case 'initialize': {
@@ -148,7 +161,7 @@ export const handleBridgeRequest = (request: JsonRpcRequest) => {
     }
     case 'tools/call': {
       const name = String(request.params?.name ?? '');
-      const result = callTool(name, request.params?.arguments as Record<string, unknown>);
+      const result = await callTool(name, request.params?.arguments as Record<string, unknown>);
       if ('error' in result) {
         return err(id, result.error.code, result.error.message);
       }
@@ -177,11 +190,12 @@ export const startBridge = (): void => {
       return;
     }
     const request = data as unknown as JsonRpcRequest;
-    const response = handleBridgeRequest(request);
-    // data:/blob: plugin frontends have opaque origins serialized as "null" —
-    // not a valid targetOrigin, fall back to "*".
-    const targetOrigin = !event.origin || event.origin === 'null' ? '*' : event.origin;
-    (event.source as Window | null)?.postMessage(response, { targetOrigin });
+    void handleBridgeRequest(request).then((response) => {
+      // data:/blob: plugin frontends have opaque origins serialized as "null" —
+      // not a valid targetOrigin, fall back to "*".
+      const targetOrigin = !event.origin || event.origin === 'null' ? '*' : event.origin;
+      (event.source as Window | null)?.postMessage(response, { targetOrigin });
+    });
   });
 };
 

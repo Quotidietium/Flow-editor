@@ -32,7 +32,6 @@ export interface PluginContext {
     code: string;
     mermaid: string;
     rough: boolean;
-    title?: string;
   };
   /** Replace the diagram source (goes through the state gateway). */
   setCode(code: string): void;

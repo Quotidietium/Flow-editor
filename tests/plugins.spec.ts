@@ -102,14 +102,21 @@ test('MCP bridge drives the editor over postMessage', async ({ page }) => {
         break;
       }
     }
+    const png = (await call('tools/call', {
+      name: 'export',
+      arguments: { format: 'png-dataurl' }
+    })) as { result?: { content?: { text: string }[] } };
     return {
       code,
       initName: init.result?.serverInfo?.name,
-      toolNames: tools.result?.tools?.map((t) => t.name),
-      setOk: set.result?.content?.[0]?.text
+      pngText: png.result?.content?.[0]?.text ?? '',
+      setOk: set.result?.content?.[0]?.text,
+      toolNames: tools.result?.tools?.map((t) => t.name)
     };
   });
   expect(result.initName).toBe('flow-editor');
+  // Regression: export(png-dataurl) used to return the SVG data URL.
+  expect(result.pngText).toMatch(/^data:image\/png;base64,/);
   expect(result.toolNames).toContain('set_code');
   expect(result.setOk).toBe('ok');
   expect(result.code).toContain('Dogs');
@@ -117,8 +124,11 @@ test('MCP bridge drives the editor over postMessage', async ({ page }) => {
 });
 
 test('plugin frontend replaces the UI and drives the editor via the bridge', async ({
+  editPage,
   page
 }) => {
+  // The fixture also gives this test its /edit navigation.
+  await editPage.view.waitFor({ state: 'visible' });
   await page.getByTestId('plugin-manager-open').click();
   const chooserPromise = page.waitForEvent('filechooser');
   await page.getByTestId('plugin-install').click();

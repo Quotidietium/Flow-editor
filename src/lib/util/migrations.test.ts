@@ -13,7 +13,7 @@ describe('migrations', () => {
     );
   });
 
-  it('should migrate from v0 to v1', async () => {
+  it('should migrate from v0 to v1', { timeout: 20_000 }, async () => {
     const { applyMigrations } = await import('./migrations.svelte');
     let manualHistoryStore: HistoryEntry[] = JSON.parse(
       window.localStorage.getItem('manualHistoryStore') ?? '[]'

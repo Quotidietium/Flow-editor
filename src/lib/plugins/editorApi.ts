@@ -8,20 +8,22 @@ import { runInputTransforms } from './registry.svelte';
 import { updateCode, updateCodeStore, validatedState } from '$/util/state.svelte';
 
 export interface EditorApi {
-  getState(): { code: string; mermaid: string; rough: boolean; title?: string };
+  getState(): { code: string; mermaid: string; rough: boolean };
   setCode(code: string): void;
   setState(state: { code: string; mermaid?: string }): void;
   getSvg(): string | undefined;
-  exportPngDataUrl(): string | undefined;
+  exportPngDataUrl(): Promise<string | undefined>;
 }
 
 declare global {
   interface Window {
     __FLOW_EDITOR_API__?: EditorApi;
-    __FLOW_EDITOR_STATE__?: () => EditorApi['getState'] extends () => infer S ? S : never;
+    __FLOW_EDITOR_STATE__?: EditorApi['getState'];
   }
 }
 
+// Bridge writes (setCode/setState) pass through the plugin input pipeline
+// (source 'bridge') before entering the state gateway.
 export const installEditorApi = (): void => {
   const getSvg = (): string | undefined =>
     document.querySelector<SVGSVGElement>('#container svg')?.outerHTML;
@@ -29,26 +31,54 @@ export const installEditorApi = (): void => {
   window.__FLOW_EDITOR_STATE__ = () => ({
     code: validatedState.current.code,
     mermaid: validatedState.current.mermaid,
-    rough: validatedState.current.rough ?? false,
-    title: validatedState.current.serialized === undefined ? undefined : undefined
+    rough: validatedState.current.rough ?? false
   });
 
   window.__FLOW_EDITOR_API__ = {
-    exportPngDataUrl: () => {
+    // Real rasterization: svg → <img> → canvas → PNG data URL. Returns
+    // undefined when nothing is rendered or canvas is unavailable (the old
+    // implementation returned the SVG data URL under a png name — a lie the
+    // MCP 'png-dataurl' tool surfaced to AI callers).
+    exportPngDataUrl: async () => {
       const svg = getSvg();
       if (!svg) {
         return undefined;
       }
-      return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`;
+      try {
+        const image = new Image();
+        const loaded = new Promise<boolean>((resolve) => {
+          image.addEventListener('load', () => resolve(true));
+          image.addEventListener('error', () => resolve(false));
+        });
+        image.src = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`;
+        if (!(await loaded)) {
+          return undefined;
+        }
+        const width = Math.max(1, Math.round(image.width || 800));
+        const height = Math.max(1, Math.round(image.height || 600));
+        const canvas = document.createElement('canvas');
+        canvas.width = width * 2;
+        canvas.height = height * 2;
+        const context = canvas.getContext('2d');
+        if (!context) {
+          return undefined;
+        }
+        context.fillStyle =
+          window.getComputedStyle(document.body).getPropertyValue('--background') || '#ffffff';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        return canvas.toDataURL('image/png');
+      } catch {
+        return undefined;
+      }
     },
-    getSvg,
     getState: () => window.__FLOW_EDITOR_STATE__?.() ?? { code: '', mermaid: '{}', rough: false },
-    // Bridge writes pass through the plugin input pipeline (source 'bridge').
+    getSvg,
     setCode: (code) => updateCode(runInputTransforms(code, 'bridge'), { updateDiagram: true }),
     setState: (state) =>
       updateCodeStore({
-        code: runInputTransforms(state.code, 'bridge'),
         ...(state.mermaid !== undefined ? { mermaid: state.mermaid } : {}),
+        code: runInputTransforms(state.code, 'bridge'),
         updateDiagram: true
       })
   };
