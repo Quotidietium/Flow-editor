@@ -17,12 +17,16 @@ export const TID = {
   visualCanvas: 'visual-canvas',
   visualClear: 'visual-clear',
   visualCodeOut: 'visual-code-out',
+  visualContextMenu: 'visual-context-menu',
   visualDetailEditor: 'visual-detail-editor',
+  visualMenuDelete: 'visual-menu-delete',
   visualMeta: 'visual-meta',
   visualNodeType: 'visual-node-type',
   visualPreview: 'visual-preview',
   visualPreviewToggle: 'visual-preview-toggle',
-  visualTab: 'visual-tab'
+  visualRedo: 'visual-redo',
+  visualTab: 'visual-tab',
+  visualUndo: 'visual-undo'
 } as const;
 
 export const MERMAID_THEMES = [

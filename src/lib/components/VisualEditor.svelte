@@ -4,6 +4,20 @@
   import { TID } from '$/constants';
   import { notify } from '$/util/notify';
   import {
+    alignSelection,
+    alignmentGuides,
+    distributeSelection,
+    nodesInRect,
+    remintIds,
+    snapshotGraph
+  } from '$/util/visualEditor/interaction';
+  import type {
+    AlignMode,
+    ClipboardPayload,
+    DistributeAxis,
+    GuideLine
+  } from '$/util/visualEditor/interaction';
+  import {
     applyPositions,
     COORD_KINDS,
     edgeAnchor,
@@ -30,17 +44,30 @@
   import StartIcon from '~icons/material-symbols/keyboard-double-arrow-right-rounded';
   import EndIcon from '~icons/material-symbols/keyboard-double-arrow-left-rounded';
   import DetailIcon from '~icons/material-symbols/notes-rounded';
+  import UndoIcon from '~icons/material-symbols/undo-rounded';
+  import RedoIcon from '~icons/material-symbols/redo-rounded';
   import { onMount } from 'svelte';
+  import { SvelteMap } from 'svelte/reactivity';
 
   const CANVAS_W = 3000;
   const CANVAS_H = 2000;
   const SNAP = 10;
+  const UNDO_LIMIT = 50;
 
   const SHAPE_NAMES: Record<VShape, string> = {
     diamond: '菱形',
     rect: '矩形',
     round: '圆角',
     stadium: '胶囊'
+  };
+
+  const ALIGN_LABELS: Record<AlignMode, string> = {
+    bottom: '底端对齐',
+    centerX: '垂直居中',
+    centerY: '水平居中',
+    left: '左对齐',
+    right: '右对齐',
+    top: '顶端对齐'
   };
 
   // Link types drawn with a dashed stroke, regardless of their arrowhead.
@@ -95,12 +122,66 @@
   // Grouped-list kinds: adding an item while a group node is selected attaches
   // it to that group via a structural edge (journey 分组, kanban 列表, …).
   const AUTO_ATTACH_ROLES = new Set(['column', 'domain', 'period', 'section']);
-  let selected = $state<{ id: string; kind: 'edge' | 'node' } | undefined>();
+
+  const nodeById = $derived(new Map(graph.nodes.map((node) => [node.id, node] as const)));
+  const edgeById = $derived(new Map(graph.edges.map((edge) => [edge.id, edge] as const)));
+  const generated = $derived(generateCode(graph));
+
+  // Multi-selection (draw.io style): the last picked entry is the "primary"
+  // target the single-item toolbar buttons operate on.
+  interface Selection {
+    id: string;
+    kind: 'edge' | 'node';
+  }
+  let selected = $state<Selection[]>([]);
+  const selectedNodeIds = $derived(
+    new Set(selected.filter((s) => s.kind === 'node').map((s) => s.id))
+  );
+  const selectedEdgeIds = $derived(
+    new Set(selected.filter((s) => s.kind === 'edge').map((s) => s.id))
+  );
+  const selectedNodes = $derived(graph.nodes.filter((n) => selectedNodeIds.has(n.id)));
+  const primaryNodeKey = $derived(
+    [...selected].reverse().find((s) => s.kind === 'node' && nodeById.has(s.id))
+  );
+  const primaryEdgeKey = $derived(
+    [...selected].reverse().find((s) => s.kind === 'edge' && edgeById.has(s.id))
+  );
+  const selectedNode = $derived(primaryNodeKey ? nodeById.get(primaryNodeKey.id) : undefined);
+  const selectedEdge = $derived(primaryEdgeKey ? edgeById.get(primaryEdgeKey.id) : undefined);
+
   let editing = $state<
     undefined | { id: string; kind: 'edge' | 'node'; label: string; x: number; y: number }
   >();
   let linking = $state<undefined | { cursor: { x: number; y: number }; source: string }>();
-  let drag = $state<undefined | { id: string; offX: number; offY: number; moved: boolean }>();
+  let drag = $state<
+    | undefined
+    | {
+        batch: SvelteMap<string, { offX: number; offY: number }>;
+        id: string;
+        lastX: number;
+        lastY: number;
+        moved: boolean;
+        offX: number;
+        offY: number;
+        preState: VGraph;
+      }
+  >();
+  let marquee = $state<
+    undefined | { additive: boolean; x0: number; x1: number; y0: number; y1: number }
+  >();
+  let guides = $state<GuideLine[]>([]);
+  let menu = $state<
+    | undefined
+    | {
+        clientX: number;
+        clientY: number;
+        submenu: undefined | string;
+        target: { id?: string; kind: 'canvas' | 'edge' | 'node' };
+      }
+  >();
+  // Internal clipboard (draw.io scope: shapes + connectors between them).
+  let clipboard = $state<ClipboardPayload | undefined>(undefined);
   let showCode = $state(true);
   let editingDetail = $state(false);
   let detailDraft = $state('');
@@ -109,6 +190,46 @@
   let metaDrafts = $state<Record<string, string>>({});
   let svgEl: SVGSVGElement | undefined = $state();
   let canvasEl: HTMLDivElement | undefined = $state();
+
+  // Undo/redo: whole-graph snapshots at committed-gesture boundaries. Text
+  // diffs would also revert mermaid's legitimate round-trip normalizations.
+  let undoStack = $state<VGraph[]>([]);
+  let redoStack = $state<VGraph[]>([]);
+
+  const pushUndo = (): void => {
+    undoStack = [...undoStack.slice(-(UNDO_LIMIT - 1)), snapshotGraph(graph)];
+    redoStack = [];
+  };
+
+  const restore = (state: VGraph): void => {
+    graph = state;
+    const ids = new Set(graph.nodes.map((n) => n.id));
+    const edgeIds = new Set(graph.edges.map((e) => e.id));
+    selected = selected.filter(
+      (s) => (s.kind === 'node' && ids.has(s.id)) || (s.kind === 'edge' && edgeIds.has(s.id))
+    );
+    syncCode();
+  };
+
+  const undo = (): void => {
+    const prev = undoStack.at(-1);
+    if (!prev) {
+      return;
+    }
+    undoStack = undoStack.slice(0, -1);
+    redoStack = [...redoStack, snapshotGraph(graph)];
+    restore(prev);
+  };
+
+  const redo = (): void => {
+    const next = redoStack.at(-1);
+    if (!next) {
+      return;
+    }
+    redoStack = redoStack.slice(0, -1);
+    undoStack = [...undoStack, snapshotGraph(graph)];
+    restore(next);
+  };
 
   // Cached svg rect for pointer-coordinate math: reading getBoundingClientRect
   // on every pointermove interleaves layout reads with the drag's attribute
@@ -119,12 +240,6 @@
   // Last code this editor produced or parsed; used to detect external edits
   // (in the Code tab) so switching back to Visual reloads them.
   let lastSyncedCode = '';
-
-  const nodeById = $derived(new Map(graph.nodes.map((node) => [node.id, node] as const)));
-  const edgeById = $derived(new Map(graph.edges.map((edge) => [edge.id, edge] as const)));
-  const selectedNode = $derived(selected?.kind === 'node' ? nodeById.get(selected.id) : undefined);
-  const selectedEdge = $derived(selected?.kind === 'edge' ? edgeById.get(selected.id) : undefined);
-  const generated = $derived(generateCode(graph));
 
   const svgPoint = (event: PointerEvent | MouseEvent): { x: number; y: number } => {
     if (!svgRect) {
@@ -194,9 +309,12 @@
       }
     }
     lastSyncedCode = validatedState.current.code;
-    selected = undefined;
+    selected = [];
     editing = undefined;
     editingDetail = false;
+    // External state replaces the model — history cannot cross the boundary.
+    undoStack = [];
+    redoStack = [];
   };
 
   const kindLabel = (kind: VGraph['kind']): string => {
@@ -208,6 +326,27 @@
     // Mid-gesture canvas scrolling shifts the svg origin: drop the cached
     // rect so the next pointer event re-measures it.
     canvasEl?.addEventListener('scroll', () => (svgRect = undefined));
+    // Native contextmenu dispatch (right-click / Shift+F10 fallback): resolve
+    // node/edge/canvas from the hit target instead of per-element handlers —
+    // one listener, no Svelte event delegation involved.
+    canvasEl?.addEventListener('contextmenu', (event) => {
+      const target = event.target as Element | null;
+      const nodeEl = target?.closest('[data-node-id]');
+      const edgeEl = target?.closest('[data-edge-id]');
+      if (nodeEl) {
+        openContextMenu(event, {
+          id: nodeEl.getAttribute('data-node-id') ?? undefined,
+          kind: 'node'
+        });
+      } else if (edgeEl) {
+        openContextMenu(event, {
+          id: edgeEl.getAttribute('data-edge-id') ?? undefined,
+          kind: 'edge'
+        });
+      } else if (target?.closest('svg')) {
+        openContextMenu(event, { kind: 'canvas' });
+      }
+    });
     loadFromCode(false);
   });
 
@@ -219,9 +358,10 @@
   });
 
   const addNodeAt = (x: number, y: number): void => {
+    pushUndo();
     // Items added while a group node is selected attach to that group
     // (journey section, kanban column, timeline period, cynefin domain).
-    const host = selected?.kind === 'node' ? nodeById.get(selected.id) : undefined;
+    const host = selectedNode;
     const defaultType = kindSpec.nodeTypes?.[0];
     const node: VNode = {
       id: nextNodeId(graph.nodes),
@@ -241,7 +381,8 @@
         type: 'line'
       });
     }
-    selected = { id: node.id, kind: 'node' };
+    selected = [{ id: node.id, kind: 'node' }];
+    syncCode();
     startEdit(node);
   };
 
@@ -257,6 +398,7 @@
       notify(kind === 'start' ? '起点已存在' : '终点已存在');
       return;
     }
+    pushUndo();
     const y = kind === 'start' ? 60 : 60 + (NODE_H + 40) * 2;
     const node: VNode = {
       id,
@@ -267,7 +409,7 @@
       y
     };
     graph.nodes.push(node);
-    selected = { id: node.id, kind: 'node' };
+    selected = [{ id: node.id, kind: 'node' }];
     syncCode();
   };
 
@@ -300,6 +442,7 @@
   const commitEdit = (): void => {
     if (!editing) return;
     const label = editing.label.trim();
+    pushUndo();
     if (editing.kind === 'node') {
       const node = nodeById.get(editing.id);
       if (node) {
@@ -316,31 +459,165 @@
   };
 
   const deleteSelected = (): void => {
-    const sel = selected;
-    if (!sel) return;
-    if (sel.kind === 'node') {
-      graph.nodes = graph.nodes.filter((node) => node.id !== sel.id);
-      graph.edges = graph.edges.filter((edge) => edge.source !== sel.id && edge.target !== sel.id);
-    } else {
-      graph.edges = graph.edges.filter((edge) => edge.id !== sel.id);
+    if (selected.length === 0) return;
+    pushUndo();
+    if (selectedNodeIds.size > 0) {
+      graph.nodes = graph.nodes.filter((node) => !selectedNodeIds.has(node.id));
+      graph.edges = graph.edges.filter(
+        (edge) => !selectedNodeIds.has(edge.source) && !selectedNodeIds.has(edge.target)
+      );
     }
-    selected = undefined;
+    if (selectedEdgeIds.size > 0) {
+      graph.edges = graph.edges.filter((edge) => !selectedEdgeIds.has(edge.id));
+    }
+    selected = [];
+    syncCode();
+  };
+
+  // --- clipboard (internal; ids re-minted on paste) ---
+
+  const selectionPayload = (): ClipboardPayload | undefined => {
+    if (selectedNodeIds.size === 0 && selectedEdgeIds.size === 0) {
+      return undefined;
+    }
+    return {
+      edges: graph.edges.filter(
+        (e) => selectedNodeIds.has(e.source) && selectedNodeIds.has(e.target)
+      ),
+      nodes: graph.nodes.filter((n) => selectedNodeIds.has(n.id))
+    };
+  };
+
+  const copySelection = (): void => {
+    const payload = selectionPayload();
+    if (payload && (payload.nodes.length > 0 || payload.edges.length > 0)) {
+      clipboard = payload;
+    }
+  };
+
+  const cutSelection = (): void => {
+    if (selected.length === 0) return;
+    copySelection();
+    deleteSelected();
+  };
+
+  const pasteClipboard = (): void => {
+    if (!clipboard || clipboard.nodes.length === 0) {
+      return;
+    }
+    pushUndo();
+    const { edges, nodes } = remintIds(clipboard, graph.nodes, graph.edges);
+    for (const node of nodes) {
+      node.x = snap(node.x + 24);
+      node.y = snap(node.y + 24);
+      graph.nodes.push(node);
+    }
+    for (const edge of edges) {
+      graph.edges.push(edge);
+    }
+    selected = nodes.map((node) => ({ id: node.id, kind: 'node' as const }));
+    syncCode();
+  };
+
+  const duplicateSelection = (): void => {
+    if (selected.length === 0) return;
+    copySelection();
+    pasteClipboard();
+  };
+
+  // --- arrangement ---
+
+  const applyMoves = (moves: Record<string, { x?: number; y?: number }>): void => {
+    for (const node of graph.nodes) {
+      const move = moves[node.id];
+      if (move?.x !== undefined) {
+        node.x = move.x;
+      }
+      if (move?.y !== undefined) {
+        node.y = move.y;
+      }
+    }
+  };
+
+  const applyAlign = (mode: AlignMode): void => {
+    if (selectedNodes.length < 2) return;
+    pushUndo();
+    applyMoves(alignSelection(selectedNodes, mode));
+    syncCode();
+  };
+
+  const applyDistribute = (axis: DistributeAxis): void => {
+    if (selectedNodes.length < 3) return;
+    pushUndo();
+    applyMoves(distributeSelection(selectedNodes, axis));
+    syncCode();
+  };
+
+  const alignToGrid = (): void => {
+    if (graph.nodes.length === 0) return;
+    pushUndo();
+    for (const node of graph.nodes) {
+      node.x = Math.round(node.x / 20) * 20;
+      node.y = Math.round(node.y / 20) * 20;
+    }
+    syncCode();
+  };
+
+  const reverseSelectedEdge = (): void => {
+    if (!selectedEdge) return;
+    pushUndo();
+    const source = selectedEdge.source;
+    selectedEdge.source = selectedEdge.target;
+    selectedEdge.target = source;
+    const cardL = selectedEdge.cardL;
+    selectedEdge.cardL = selectedEdge.cardR;
+    selectedEdge.cardR = cardL;
+    syncCode();
+  };
+
+  const nudgeSelection = (dx: number, dy: number): void => {
+    if (selectedNodeIds.size === 0) return;
+    pushUndo();
+    for (const node of graph.nodes) {
+      if (selectedNodeIds.has(node.id)) {
+        node.x += dx;
+        node.y += dy;
+      }
+    }
     syncCode();
   };
 
   const cycleShape = (): void => {
     if (!selectedNode) return;
     const shapes = kindSpec.shapes;
+    if (shapes.length < 2) return;
+    pushUndo();
     const i = shapes.indexOf(selectedNode.shape);
     selectedNode.shape = shapes[(i + 1) % shapes.length] ?? shapes[0] ?? 'rect';
+    syncCode();
+  };
+
+  const setShape = (shape: VShape): void => {
+    if (!selectedNode) return;
+    pushUndo();
+    selectedNode.shape = shape;
     syncCode();
   };
 
   const cycleLink = (): void => {
     if (!selectedEdge) return;
     const links = kindSpec.links;
+    if (links.length < 2) return;
+    pushUndo();
     const i = links.findIndex((link) => link.type === selectedEdge.type);
     selectedEdge.type = links[(i + 1) % links.length]?.type ?? links[0]?.type ?? 'arrow';
+    syncCode();
+  };
+
+  const setLinkType = (type: VLinkType): void => {
+    if (!selectedEdge) return;
+    pushUndo();
+    selectedEdge.type = type;
     syncCode();
   };
 
@@ -352,10 +629,11 @@
     );
     const preset = ER_CARDINALITIES[(i + 1) % ER_CARDINALITIES.length];
     if (preset) {
+      pushUndo();
       selectedEdge.cardL = preset.cardL;
       selectedEdge.cardR = preset.cardR;
+      syncCode();
     }
-    syncCode();
   };
 
   // Per-kind node type palette (C4 Person/System, journey task/section, …).
@@ -363,15 +641,22 @@
     kindSpec.nodeTypes?.find(
       (t) => t.role === node.role && (t.data ?? undefined) === (node.roleData ?? undefined)
     );
+
+  const setNodeType = (role: string, data?: string): void => {
+    if (!selectedNode) return;
+    pushUndo();
+    selectedNode.role = role;
+    selectedNode.roleData = data;
+    syncCode();
+  };
+
   const cycleNodeType = (): void => {
     if (!selectedNode || !kindSpec.nodeTypes) return;
     const types = kindSpec.nodeTypes;
     const i = types.indexOf(nodeTypeOf(selectedNode) as (typeof types)[number]);
     const next = types[(i + 1) % types.length];
     if (next) {
-      selectedNode.role = next.role;
-      selectedNode.roleData = next.data;
-      syncCode();
+      setNodeType(next.role, next.data);
     }
   };
 
@@ -382,6 +667,7 @@
   };
 
   const commitMeta = (): void => {
+    pushUndo();
     graph.title = metaTitleDraft.trim() || undefined;
     const meta: Record<string, string> = {};
     for (const { key } of kindSpec.metaKeys ?? []) {
@@ -403,6 +689,7 @@
 
   const commitDetail = (): void => {
     if (selectedNode) {
+      pushUndo();
       selectedNode.detail = detailDraft.trim() || undefined;
       syncCode();
     }
@@ -410,28 +697,89 @@
   };
 
   const toggleDirection = (): void => {
+    pushUndo();
     graph.direction = graph.direction === 'TD' ? 'LR' : 'TD';
     syncCode();
   };
 
   const autoLayout = (): void => {
+    pushUndo();
     graph = layoutGraph(graph);
     syncCode();
   };
 
   const clearAll = (): void => {
+    pushUndo();
     graph = { direction: graph.direction, kind: graph.kind, nodes: [], edges: [] };
-    selected = undefined;
+    selected = [];
     syncCode();
+  };
+
+  // --- selection helpers ---
+
+  const selectOnly = (id: string, kind: 'edge' | 'node'): void => {
+    selected = [{ id, kind }];
+  };
+
+  const toggleInSelection = (id: string, kind: 'edge' | 'node'): void => {
+    const exists = selected.some((s) => s.id === id && s.kind === kind);
+    selected = exists
+      ? selected.filter((s) => !(s.id === id && s.kind === kind))
+      : [...selected, { id, kind }];
+  };
+
+  const selectAll = (): void => {
+    selected = [
+      ...graph.nodes.map((n) => ({ id: n.id, kind: 'node' as const })),
+      ...graph.edges.map((e) => ({ id: e.id, kind: 'edge' as const }))
+    ];
   };
 
   // --- pointer interactions (window-level so drags survive leaving a node) ---
 
   const onNodePointerDown = (event: PointerEvent, node: VNode): void => {
     event.stopPropagation();
-    selected = { id: node.id, kind: 'node' };
+    if (event.shiftKey || event.ctrlKey || event.metaKey) {
+      toggleInSelection(node.id, 'node');
+      return;
+    }
+    const multi = selectedNodeIds.has(node.id) && selectedNodeIds.size > 1;
+    if (!multi) {
+      selectOnly(node.id, 'node');
+    }
     const p = svgPoint(event);
-    drag = { id: node.id, moved: false, offX: p.x - node.x, offY: p.y - node.y };
+    const batch = new SvelteMap<string, { offX: number; offY: number }>();
+    if (multi) {
+      for (const other of graph.nodes) {
+        if (selectedNodeIds.has(other.id)) {
+          batch.set(other.id, { offX: p.x - other.x, offY: p.y - other.y });
+        }
+      }
+    }
+    drag = {
+      batch,
+      id: node.id,
+      lastX: node.x,
+      lastY: node.y,
+      moved: false,
+      offX: p.x - node.x,
+      offY: p.y - node.y,
+      preState: snapshotGraph(graph)
+    };
+  };
+
+  const onCanvasPointerDown = (event: PointerEvent): void => {
+    if (event.button !== 0) {
+      return;
+    }
+    const p = svgPoint(event);
+    marquee = {
+      additive: event.shiftKey || event.ctrlKey || event.metaKey,
+      x0: p.x,
+      x1: p.x,
+      y0: p.y,
+      y1: p.y
+    };
   };
 
   const onHandlePointerDown = (event: PointerEvent, node: VNode): void => {
@@ -482,17 +830,39 @@
     if (drag) {
       const node = nodeById.get(drag.id);
       if (node) {
-        const x = snap(p.x - drag.offX);
-        const y = snap(p.y - drag.offY);
+        // Grid snap first; dynamic alignment guides refine against the
+        // non-selected nodes (draw.io alignment guides / Visio dynamic grid).
+        let x = snap(p.x - drag.offX);
+        let y = snap(p.y - drag.offY);
+        const others = graph.nodes.filter((n) => !drag?.batch.has(n.id));
+        if (others.length > 0) {
+          const result = alignmentGuides(node, others, { x, y });
+          x = result.snapped.x;
+          y = result.snapped.y;
+          guides = result.guides;
+        }
         // Skip no-op snapped positions: an assignment bumps the property
         // version and re-renders the node (and its edges) even when the
-        // 10px-snapped coordinates did not change.
-        if (x !== node.x || y !== node.y) {
+        // coordinates did not change.
+        if (x !== drag.lastX || y !== drag.lastY) {
+          const dx = x - drag.lastX;
+          const dy = y - drag.lastY;
           node.x = x;
           node.y = y;
+          drag.lastX = x;
+          drag.lastY = y;
           drag.moved = true;
+          for (const [id] of drag.batch) {
+            const other = nodeById.get(id);
+            if (other && other !== node) {
+              other.x += dx;
+              other.y += dy;
+            }
+          }
         }
       }
+    } else if (marquee && (event.buttons & 1) === 1) {
+      marquee = { ...marquee, x1: p.x, y1: p.y };
     } else if (linking) {
       linking.cursor = p;
     }
@@ -500,10 +870,32 @@
 
   const onWindowPointerUp = (event: PointerEvent): void => {
     if (drag?.moved) {
+      // Snapshot taken at gesture start (drag.preState) — see onNodePointerDown.
+      undoStack = [...undoStack.slice(-(UNDO_LIMIT - 1)), drag.preState];
+      redoStack = [];
       syncCode();
     }
     drag = undefined;
+    guides = [];
     svgRect = undefined; // next gesture re-measures (layout may have changed)
+    if (marquee) {
+      const rect = {
+        height: Math.abs(marquee.y1 - marquee.y0),
+        width: Math.abs(marquee.x1 - marquee.x0),
+        x: Math.min(marquee.x0, marquee.x1),
+        y: Math.min(marquee.y0, marquee.y1)
+      };
+      if (rect.width >= 4 || rect.height >= 4) {
+        const hits = nodesInRect(graph.nodes, rect, event.altKey).map((n) => ({
+          id: n.id,
+          kind: 'node' as const
+        }));
+        selected = marquee.additive ? [...selected, ...hits] : hits;
+      } else if (!marquee.additive) {
+        selected = [];
+      }
+      marquee = undefined;
+    }
     if (linking) {
       const target = nodeAt(svgPoint(event));
       if (
@@ -512,25 +904,164 @@
         target.id !== linking.source &&
         !isBlockedStateLink(linking.source, target)
       ) {
+        pushUndo();
         const edge = newEdge(linking.source, target.id);
         graph.edges.push(edge);
-        selected = { id: edge.id, kind: 'edge' };
+        selected = [{ id: edge.id, kind: 'edge' }];
         syncCode();
       }
       linking = undefined;
     }
   };
 
+  const isTypingTarget = (event: KeyboardEvent): boolean => {
+    const el = event.target as HTMLElement | null;
+    if (!el) {
+      return false;
+    }
+    return (
+      editing !== undefined ||
+      editingDetail ||
+      editingMeta ||
+      el.tagName === 'INPUT' ||
+      el.tagName === 'TEXTAREA' ||
+      el.isContentEditable
+    );
+  };
+
+  const openContextMenu = (
+    event: MouseEvent,
+    target: { id?: string; kind: 'canvas' | 'edge' | 'node' }
+  ): void => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (target.kind === 'node' && target.id && !selectedNodeIds.has(target.id)) {
+      selectOnly(target.id, 'node');
+    } else if (target.kind === 'edge' && target.id && !selectedEdgeIds.has(target.id)) {
+      selectOnly(target.id, 'edge');
+    }
+    menu = { clientX: event.clientX, clientY: event.clientY, submenu: undefined, target };
+  };
+
+  const closeMenu = (): void => {
+    menu = undefined;
+  };
+
+  const menuAction = (run: () => void): void => {
+    closeMenu();
+    run();
+  };
+
+  const openMenuAtSelection = (): void => {
+    if (selectedNode) {
+      const box = svgEl?.getBoundingClientRect();
+      menu = {
+        clientX: (box?.left ?? 0) + selectedNode.x + 160,
+        clientY: (box?.top ?? 0) + selectedNode.y + 20,
+        submenu: undefined,
+        target: { id: selectedNode.id, kind: 'node' }
+      };
+    } else if (selectedEdge) {
+      const s = nodeById.get(selectedEdge.source);
+      const t = nodeById.get(selectedEdge.target);
+      if (s && t) {
+        menu = {
+          clientX: (s.x + t.x) / 2 + 160,
+          clientY: (s.y + t.y) / 2 + 60,
+          submenu: undefined,
+          target: { id: selectedEdge.id, kind: 'edge' }
+        };
+      }
+    }
+  };
+
   const onWindowKeydown = (event: KeyboardEvent): void => {
-    if (editing || !active) return;
+    if (!active) return;
     if (event.key === 'Escape') {
+      if (menu) {
+        closeMenu();
+        return;
+      }
       linking = undefined;
-      selected = undefined;
+      marquee = undefined;
+      selected = [];
       return;
     }
-    if ((event.key === 'Delete' || event.key === 'Backspace') && selected) {
+    if (isTypingTarget(event)) return;
+    const ctrl = event.ctrlKey || event.metaKey;
+    if (ctrl && event.key.toLowerCase() === 'z') {
+      event.preventDefault();
+      if (event.shiftKey) {
+        redo();
+      } else {
+        undo();
+      }
+      return;
+    }
+    if (ctrl && event.key.toLowerCase() === 'y') {
+      event.preventDefault();
+      redo();
+      return;
+    }
+    if (ctrl && event.key.toLowerCase() === 'a') {
+      event.preventDefault();
+      selectAll();
+      return;
+    }
+    if (ctrl && event.key.toLowerCase() === 'c') {
+      copySelection();
+      return;
+    }
+    if (ctrl && event.key.toLowerCase() === 'x') {
+      event.preventDefault();
+      cutSelection();
+      return;
+    }
+    if (ctrl && event.key.toLowerCase() === 'v') {
+      event.preventDefault();
+      pasteClipboard();
+      return;
+    }
+    if (ctrl && event.key.toLowerCase() === 'd') {
+      event.preventDefault();
+      duplicateSelection();
+      return;
+    }
+    if (event.key === 'F2') {
+      if (selectedNode) {
+        event.preventDefault();
+        startEdit(selectedNode);
+      } else if (selectedEdge) {
+        event.preventDefault();
+        startEdit(selectedEdge);
+      }
+      return;
+    }
+    if (
+      (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) &&
+      selected.length > 0
+    ) {
+      event.preventDefault();
+      openMenuAtSelection();
+      return;
+    }
+    if (event.key.startsWith('Arrow') && selectedNodeIds.size > 0) {
+      event.preventDefault();
+      const step = event.shiftKey ? 10 : 1;
+      const dx = event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0;
+      const dy = event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0;
+      nudgeSelection(dx, dy);
+      return;
+    }
+    if ((event.key === 'Delete' || event.key === 'Backspace') && selected.length > 0) {
       event.preventDefault();
       deleteSelected();
+    }
+  };
+
+  const onWindowPointerDown = (): void => {
+    if (menu) {
+      closeMenu();
     }
   };
 
@@ -549,6 +1080,16 @@
       x2: linking.cursor.x,
       y1: s.y + NODE_H / 2,
       y2: linking.cursor.y
+    };
+  });
+
+  const marqueeRect = $derived.by(() => {
+    if (!marquee) return undefined;
+    return {
+      height: Math.abs(marquee.y1 - marquee.y0),
+      width: Math.abs(marquee.x1 - marquee.x0),
+      x: Math.min(marquee.x0, marquee.x1),
+      y: Math.min(marquee.y0, marquee.y1)
     };
   });
 
@@ -575,6 +1116,7 @@
 
 <svelte:window
   onkeydown={onWindowKeydown}
+  onpointerdown={onWindowPointerDown}
   onpointermove={onWindowPointerMove}
   onpointerup={onWindowPointerUp} />
 
@@ -643,7 +1185,25 @@
     <Button
       size="sm"
       variant="outline"
-      disabled={!selected}
+      data-testid={TID.visualUndo}
+      disabled={undoStack.length === 0}
+      onclick={undo}
+      title="撤销（Ctrl+Z）">
+      <UndoIcon />
+    </Button>
+    <Button
+      size="sm"
+      variant="outline"
+      data-testid={TID.visualRedo}
+      disabled={redoStack.length === 0}
+      onclick={redo}
+      title="重做（Ctrl+Shift+Z / Ctrl+Y）">
+      <RedoIcon />
+    </Button>
+    <Button
+      size="sm"
+      variant="outline"
+      disabled={selected.length === 0}
       onclick={deleteSelected}
       title="Delete 键亦可删除">
       <DeleteIcon /> 删除
@@ -692,6 +1252,7 @@
           const p = svgPoint(e);
           addNodeAt(p.x, p.y);
         }}
+        onpointerdown={onCanvasPointerDown}
         role="application"
         aria-label="可视化画布">
         <defs>
@@ -749,7 +1310,7 @@
         {#each graph.edges as edge (edge.id)}
           {@const geom = edgeGeom(edge)}
           {#if geom}
-            {@const selectedEdgeId = selected?.kind === 'edge' ? selected.id : undefined}
+            {@const selectedEdgeId = selectedEdgeIds.has(edge.id) ? edge.id : undefined}
             {@const endMarker = END_MARKERS[edge.type]}
             {@const startMarker = START_MARKERS[edge.type]}
             <path
@@ -761,19 +1322,20 @@
               stroke="transparent"
               stroke-width="14"
               style="pointer-events: stroke; cursor: pointer;"
+              onpointerdown={(e) => e.stopPropagation()}
               onclick={(e) => {
                 e.stopPropagation();
-                selected = { id: edge.id, kind: 'edge' };
+                selectOnly(edge.id, 'edge');
               }}
               onkeydown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
-                  selected = { id: edge.id, kind: 'edge' };
+                  selectOnly(edge.id, 'edge');
                 }
               }}
               ondblclick={(e) => {
                 e.stopPropagation();
-                selected = { id: edge.id, kind: 'edge' };
+                selectOnly(edge.id, 'edge');
                 startEdit(edge);
               }}></path>
             <path
@@ -832,8 +1394,38 @@
             stroke-width="2"></path>
         {/if}
 
+        {#each guides as guide (guide.axis + guide.at)}
+          {#if guide.axis === 'x'}
+            <path
+              d="M{guide.at},0 L{guide.at},{CANVAS_H}"
+              stroke="var(--primary)"
+              stroke-dasharray="4 4"
+              stroke-width="1"
+              style="pointer-events: none;"></path>
+          {:else}
+            <path
+              d="M0,{guide.at} L{CANVAS_W},{guide.at}"
+              stroke="var(--primary)"
+              stroke-dasharray="4 4"
+              stroke-width="1"
+              style="pointer-events: none;"></path>
+          {/if}
+        {/each}
+
+        {#if marqueeRect}
+          <rect
+            fill="var(--primary)"
+            fill-opacity="0.06"
+            height={marqueeRect.height}
+            stroke="var(--primary)"
+            stroke-dasharray="4 3"
+            width={marqueeRect.width}
+            x={marqueeRect.x}
+            y={marqueeRect.y}></rect>
+        {/if}
+
         {#each graph.nodes as node (node.id)}
-          {@const isSelected = selected?.kind === 'node' && selected.id === node.id}
+          {@const isSelected = selectedNodeIds.has(node.id)}
           {@const size = nodeSize(node)}
           <g
             role="button"
@@ -930,7 +1522,7 @@
               {/if}
             {/if}
           </g>
-          {#if isSelected && canLink}
+          {#if isSelected && canLink && selectedNodeIds.size === 1}
             {#each handles(node) as handle (handle.key)}
               <circle
                 role="button"
@@ -1029,6 +1621,214 @@
       <pre
         data-testid={TID.visualCodeOut}
         class="max-h-32 overflow-auto bg-muted/50 p-2 font-mono text-xs whitespace-pre-wrap">{generated}</pre>
+    </div>
+  {/if}
+
+  {#if menu}
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      class="fixed z-50 min-w-44 rounded-md border bg-popover p-1 text-xs text-popover-foreground shadow-md"
+      data-testid={TID.visualContextMenu}
+      style="left: {Math.min(menu.clientX, window.innerWidth - 250)}px; top: {Math.min(
+        menu.clientY,
+        window.innerHeight - 380
+      )}px;"
+      onpointerdown={(e) => e.stopPropagation()}
+      oncontextmenu={(e) => e.preventDefault()}>
+      {#if menu.target.kind === 'node'}
+        <button
+          class="flex w-full items-center justify-between rounded px-2 py-1 text-left hover:bg-accent"
+          onclick={() => menuAction(() => selectedNode && startEdit(selectedNode))}>
+          编辑标签 <span class="ml-4 text-muted-foreground">F2</span>
+        </button>
+        {#if kindSpec.detail && selectedNode}
+          <button
+            class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
+            onclick={() => menuAction(openDetailEditor)}>
+            编辑内容
+          </button>
+        {/if}
+        <button
+          class="flex w-full items-center justify-between rounded px-2 py-1 text-left hover:bg-accent"
+          onclick={() => menuAction(copySelection)}>
+          复制 <span class="ml-4 text-muted-foreground">Ctrl+C</span>
+        </button>
+        <button
+          class="flex w-full items-center justify-between rounded px-2 py-1 text-left hover:bg-accent"
+          onclick={() => menuAction(cutSelection)}>
+          剪切 <span class="ml-4 text-muted-foreground">Ctrl+X</span>
+        </button>
+        <button
+          class="flex w-full items-center justify-between rounded px-2 py-1 text-left hover:bg-accent"
+          onclick={() => menuAction(duplicateSelection)}>
+          复制副本 <span class="ml-4 text-muted-foreground">Ctrl+D</span>
+        </button>
+        <div class="my-1 border-t"></div>
+        {#if kindSpec.shapes.length > 1 && selectedNode}
+          <div
+            class="relative"
+            onmouseenter={() => (menu = menu && { ...menu, submenu: 'shape' })}
+            onmouseleave={() => (menu = menu && { ...menu, submenu: undefined })}>
+            <button
+              class="flex w-full items-center justify-between rounded px-2 py-1 text-left hover:bg-accent">
+              形状 ▸
+            </button>
+            {#if menu.submenu === 'shape'}
+              <div
+                class="absolute top-0 left-full z-10 ml-1 min-w-28 rounded-md border bg-popover p-1 shadow-md">
+                {#each kindSpec.shapes as shape (shape)}
+                  <button
+                    class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
+                    onclick={() => menuAction(() => setShape(shape))}>
+                    {SHAPE_NAMES[shape]}
+                  </button>
+                {/each}
+              </div>
+            {/if}
+          </div>
+        {/if}
+        {#if kindSpec.nodeTypes && kindSpec.nodeTypes.length > 0 && selectedNode}
+          <div
+            class="relative"
+            onmouseenter={() => (menu = menu && { ...menu, submenu: 'type' })}
+            onmouseleave={() => (menu = menu && { ...menu, submenu: undefined })}>
+            <button
+              class="flex w-full items-center justify-between rounded px-2 py-1 text-left hover:bg-accent">
+              类型 ▸
+            </button>
+            {#if menu.submenu === 'type'}
+              <div
+                class="absolute top-0 left-full z-10 ml-1 min-w-28 rounded-md border bg-popover p-1 shadow-md">
+                {#each kindSpec.nodeTypes as nodeType (nodeType.name)}
+                  <button
+                    class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
+                    onclick={() => menuAction(() => setNodeType(nodeType.role, nodeType.data))}>
+                    {nodeType.name}
+                  </button>
+                {/each}
+              </div>
+            {/if}
+          </div>
+        {/if}
+        {#if selectedNodes.length >= 2}
+          <div
+            class="relative"
+            onmouseenter={() => (menu = menu && { ...menu, submenu: 'align' })}
+            onmouseleave={() => (menu = menu && { ...menu, submenu: undefined })}>
+            <button
+              class="flex w-full items-center justify-between rounded px-2 py-1 text-left hover:bg-accent">
+              对齐 ▸
+            </button>
+            {#if menu.submenu === 'align'}
+              <div
+                class="absolute top-0 left-full z-10 ml-1 min-w-28 rounded-md border bg-popover p-1 shadow-md">
+                {#each Object.keys(ALIGN_LABELS) as mode (mode)}
+                  <button
+                    class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
+                    onclick={() => menuAction(() => applyAlign(mode as AlignMode))}>
+                    {ALIGN_LABELS[mode as AlignMode]}
+                  </button>
+                {/each}
+                {#if selectedNodes.length >= 3}
+                  <div class="my-1 border-t"></div>
+                  <button
+                    class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
+                    onclick={() => menuAction(() => applyDistribute('x'))}>
+                    水平等距
+                  </button>
+                  <button
+                    class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
+                    onclick={() => menuAction(() => applyDistribute('y'))}>
+                    垂直等距
+                  </button>
+                {/if}
+              </div>
+            {/if}
+          </div>
+        {/if}
+        <div class="my-1 border-t"></div>
+        <button
+          class="flex w-full items-center justify-between rounded px-2 py-1 text-left text-destructive hover:bg-accent"
+          data-testid={TID.visualMenuDelete}
+          onclick={() => menuAction(deleteSelected)}>
+          删除 <span class="ml-4 text-muted-foreground">Del</span>
+        </button>
+      {:else if menu.target.kind === 'edge'}
+        <button
+          class="flex w-full items-center justify-between rounded px-2 py-1 text-left hover:bg-accent"
+          onclick={() => menuAction(() => selectedEdge && startEdit(selectedEdge))}>
+          编辑标签 <span class="ml-4 text-muted-foreground">F2</span>
+        </button>
+        {#if kindSpec.links.length > 1 && selectedEdge}
+          <div
+            class="relative"
+            onmouseenter={() => (menu = menu && { ...menu, submenu: 'link' })}
+            onmouseleave={() => (menu = menu && { ...menu, submenu: undefined })}>
+            <button
+              class="flex w-full items-center justify-between rounded px-2 py-1 text-left hover:bg-accent">
+              线型 ▸
+            </button>
+            {#if menu.submenu === 'link'}
+              <div
+                class="absolute top-0 left-full z-10 ml-1 min-w-28 rounded-md border bg-popover p-1 shadow-md">
+                {#each kindSpec.links as link (link.name)}
+                  <button
+                    class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
+                    onclick={() => menuAction(() => setLinkType(link.type))}>
+                    {link.name}
+                  </button>
+                {/each}
+              </div>
+            {/if}
+          </div>
+        {/if}
+        <button
+          class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
+          onclick={() => menuAction(reverseSelectedEdge)}>
+          反转方向
+        </button>
+        <div class="my-1 border-t"></div>
+        <button
+          class="flex w-full items-center rounded px-2 py-1 text-left text-destructive hover:bg-accent"
+          data-testid={TID.visualMenuDelete}
+          onclick={() => menuAction(deleteSelected)}>
+          删除
+        </button>
+      {:else}
+        <button
+          class="flex w-full items-center justify-between rounded px-2 py-1 text-left hover:bg-accent disabled:opacity-50"
+          disabled={!clipboard}
+          onclick={() => menuAction(pasteClipboard)}>
+          粘贴 <span class="ml-4 text-muted-foreground">Ctrl+V</span>
+        </button>
+        <button
+          class="flex w-full items-center justify-between rounded px-2 py-1 text-left hover:bg-accent"
+          onclick={() => menuAction(selectAll)}>
+          全选 <span class="ml-4 text-muted-foreground">Ctrl+A</span>
+        </button>
+        <div class="my-1 border-t"></div>
+        <button
+          class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
+          onclick={() => menuAction(alignToGrid)}>
+          对齐网格
+        </button>
+        <button
+          class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
+          onclick={() => menuAction(autoLayout)}>
+          整理布局
+        </button>
+        <div class="my-1 border-t"></div>
+        <button
+          class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
+          onclick={() => menuAction(() => loadFromCode(true))}>
+          从代码重载
+        </button>
+        <button
+          class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
+          onclick={() => menuAction(clearAll)}>
+          清空画布
+        </button>
+      {/if}
     </div>
   {/if}
 </div>
