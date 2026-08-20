@@ -2,16 +2,61 @@
  * Visual editor model: pure data structures and transforms shared by the
  * VisualEditor component and its tests. No DOM access here.
  *
- * The visual editor models node-edge Mermaid diagrams as positioned nodes
- * plus edges. `generateCode` emits Mermaid source from the model (synced into
- * the app via the `updateCode` gateway) and the per-kind `parse*` functions
- * import existing code back into the model (positions are re-laid-out, since
- * Mermaid source does not carry them). Supported kinds are declared in
- * {@link KIND_SPECS}; other diagram families (gantt, pie, …) are not
- * node-edge shaped and are rejected by {@link parseCode}.
+ * The visual editor models Mermaid diagrams as positioned nodes plus edges.
+ * `generateCode` emits Mermaid source from the model (synced into the app via
+ * the `updateCode` gateway) and the per-kind `parse*` functions import
+ * existing code back into the model (positions are re-laid-out, since Mermaid
+ * source does not carry them). Supported kinds are declared in
+ * {@link KIND_SPECS}: the six classic families are implemented here, every
+ * remaining Mermaid diagram family (24 kinds — journey, gantt, pie, git, C4,
+ * architecture, radar, wardley, …) lives in kinds.extra.ts behind the same
+ * registry interface. Only the `info` debug diagram (it renders the Mermaid
+ * version string and nothing else) is rejected by {@link parseCode}.
  */
 
-export type DiagramKind = 'class' | 'er' | 'flowchart' | 'mindmap' | 'sequence' | 'state';
+import {
+  COORD_KINDS,
+  EXTRA_GENERATORS,
+  EXTRA_HEADERS,
+  EXTRA_PARSERS,
+  layoutCoordinateKind,
+  splitFrontmatter
+} from './kinds.extra';
+
+export { COORD_KINDS };
+
+export type DiagramKind =
+  | 'architecture'
+  | 'block'
+  | 'c4'
+  | 'class'
+  | 'cynefin'
+  | 'er'
+  | 'eventmodeling'
+  | 'flowchart'
+  | 'gantt'
+  | 'git'
+  | 'ishikawa'
+  | 'journey'
+  | 'kanban'
+  | 'mindmap'
+  | 'packet'
+  | 'pie'
+  | 'quadrant'
+  | 'radar'
+  | 'railroad'
+  | 'requirement'
+  | 'sankey'
+  | 'sequence'
+  | 'state'
+  | 'swimlane'
+  | 'timeline'
+  | 'treemap'
+  | 'treeview'
+  | 'venn'
+  | 'wardley'
+  | 'xychart'
+  | 'zenuml';
 
 export type VShape = 'rect' | 'round' | 'stadium' | 'diamond';
 
@@ -40,6 +85,10 @@ export interface VNode {
   y: number;
   /** Body lines below the title (class members, ER attributes, state descriptions). */
   detail?: string;
+  /** Per-kind node type keyword (`Person` for C4, `section` for journey, …). */
+  role?: string;
+  /** Per-kind string payload (git branch name, `[x, y]` coordinates, block span). */
+  roleData?: string;
   /** stateDiagram pseudo nodes: `[*]` start / end dots. */
   special?: 'end' | 'start';
 }
@@ -53,6 +102,10 @@ export interface VEdge {
   /** Cardinality annotations: quoted for class (`1`, `many`), crow's-foot tokens for ER (`||`, `o{`). */
   cardL?: string;
   cardR?: string;
+  /** Per-kind relation keyword (`satisfies` for requirement, `Rel_U` for C4). */
+  role?: string;
+  /** Per-kind string payload (architecture port spec `L-->R`, git merge source). */
+  roleData?: string;
 }
 
 export interface VGraph {
@@ -61,6 +114,12 @@ export interface VGraph {
   kind?: DiagramKind;
   nodes: VNode[];
   edges: VEdge[];
+  /** Diagram-level title (pie/journey/gantt/timeline/… `title` lines). */
+  title?: string;
+  /** Verbatim YAML frontmatter block preserved across round-trips. */
+  frontmatter?: string;
+  /** Per-kind scalar settings (gantt dateFormat, quadrant axes, radar min/max, …). */
+  meta?: Record<string, string>;
 }
 
 export interface LinkSpec {
@@ -68,17 +127,39 @@ export interface LinkSpec {
   type: VLinkType;
 }
 
+export interface NodeTypeSpec {
+  /** Chinese name shown in the palette button. */
+  name: string;
+  /** Value written to VNode.role. */
+  role: string;
+  /** Optional payload written to VNode.roleData (cynefin domain keyword). */
+  data?: string;
+}
+
+export interface MetaKeySpec {
+  key: string;
+  label: string;
+}
+
 export interface KindSpec {
+  /** Whether users may draw edges on the canvas (false for list/tree kinds). */
+  canLink?: boolean;
   /** Whether nodes support the detail (multi-line body) editor. */
   detail: boolean;
   /** Whether the TD/LR direction toggle applies. */
   direction: boolean;
+  /** Whether the diagram-level title is editable in the properties dialog. */
+  hasTitle?: boolean;
   /** Chinese display name of the diagram kind. */
   label: string;
-  /** Link palette cycled by the 线型 button; single/no entry hides it. */
-  links: LinkSpec[];
   /** Label of the add-node toolbar button. */
   newNode: string;
+  /** Node-type palette cycled by the 类型 button; drives new nodes' roles. */
+  nodeTypes?: NodeTypeSpec[];
+  /** Link palette cycled by the 线型 button; single/no entry hides it. */
+  links: LinkSpec[];
+  /** Extra meta keys editable in the properties dialog. */
+  metaKeys?: MetaKeySpec[];
   /** Shape palette cycled by the 形状 button; single/no entry hides it. */
   shapes: VShape[];
   /** Whether start/end pseudo nodes exist (stateDiagram `[*]`). */
@@ -87,6 +168,62 @@ export interface KindSpec {
 
 // Per-kind capability table; drives both the toolbar and the generators.
 export const KIND_SPECS: Record<DiagramKind, KindSpec> = {
+  architecture: {
+    canLink: true,
+    detail: false,
+    direction: false,
+    label: '架构图',
+    links: [
+      { name: '实线箭头', type: 'arrow' },
+      { name: '实线', type: 'line' }
+    ],
+    newNode: '服务',
+    nodeTypes: [
+      { name: '服务', role: 'service' },
+      { name: '组', role: 'group' },
+      { name: '连接点', role: 'junction' }
+    ],
+    shapes: [],
+    startEnd: false
+  },
+  block: {
+    canLink: true,
+    detail: false,
+    direction: false,
+    label: '块图',
+    links: [
+      { name: '箭头', type: 'arrow' },
+      { name: '直线', type: 'line' }
+    ],
+    metaKeys: [{ key: 'columns', label: '列数' }],
+    newNode: '块',
+    shapes: ['rect', 'round', 'stadium', 'diamond'],
+    startEnd: false
+  },
+  c4: {
+    canLink: true,
+    detail: true,
+    direction: false,
+    hasTitle: true,
+    label: 'C4 图',
+    links: [
+      { name: 'Rel', type: 'arrow' },
+      { name: 'BiRel', type: 'line' },
+      { name: 'Rel_Back', type: 'arrow' },
+      { name: 'Rel_U', type: 'dashedArrow' }
+    ],
+    newNode: '系统',
+    nodeTypes: [
+      { name: '人员', role: 'Person' },
+      { name: '系统', role: 'System' },
+      { name: '外部系统', role: 'System_Ext' },
+      { name: '数据库', role: 'SystemDb' },
+      { name: '容器', role: 'Container' },
+      { name: '组件', role: 'Component' }
+    ],
+    shapes: [],
+    startEnd: false
+  },
   class: {
     detail: true,
     direction: true,
@@ -105,6 +242,25 @@ export const KIND_SPECS: Record<DiagramKind, KindSpec> = {
     shapes: [],
     startEnd: false
   },
+  cynefin: {
+    canLink: true,
+    detail: false,
+    direction: false,
+    hasTitle: true,
+    label: 'Cynefin 框架',
+    links: [{ name: '转换', type: 'arrow' }],
+    newNode: '条目',
+    nodeTypes: [
+      { name: '条目', role: 'item' },
+      { name: '复杂域', role: 'domain', data: 'complex' },
+      { name: '繁杂域', role: 'domain', data: 'complicated' },
+      { name: '清晰域', role: 'domain', data: 'clear' },
+      { name: '混沌域', role: 'domain', data: 'chaotic' },
+      { name: '困惑域', role: 'domain', data: 'confusion' }
+    ],
+    shapes: [],
+    startEnd: false
+  },
   er: {
     detail: true,
     direction: false,
@@ -114,6 +270,22 @@ export const KIND_SPECS: Record<DiagramKind, KindSpec> = {
       { name: '虚线', type: 'dashedLine' }
     ],
     newNode: '实体',
+    shapes: [],
+    startEnd: false
+  },
+  eventmodeling: {
+    canLink: false,
+    detail: false,
+    direction: false,
+    label: '事件建模',
+    links: [],
+    newNode: '事件项',
+    nodeTypes: [
+      { name: '界面', role: 'ui' },
+      { name: '命令', role: 'cmd' },
+      { name: '事件', role: 'evt' },
+      { name: '读模型', role: 'rmo' }
+    ],
     shapes: [],
     startEnd: false
   },
@@ -130,6 +302,72 @@ export const KIND_SPECS: Record<DiagramKind, KindSpec> = {
     shapes: ['rect', 'round', 'stadium', 'diamond'],
     startEnd: false
   },
+  gantt: {
+    detail: true,
+    direction: false,
+    hasTitle: true,
+    label: '甘特图',
+    links: [],
+    metaKeys: [{ key: 'dateFormat', label: '日期格式' }],
+    newNode: '任务',
+    nodeTypes: [
+      { name: '任务', role: 'task' },
+      { name: '阶段', role: 'section' }
+    ],
+    shapes: [],
+    startEnd: false
+  },
+  git: {
+    canLink: false,
+    detail: true,
+    direction: false,
+    label: 'Git 图',
+    links: [],
+    newNode: '提交',
+    nodeTypes: [
+      { name: '提交', role: 'commit' },
+      { name: '分支起点', role: 'branch' },
+      { name: '合并', role: 'merge' }
+    ],
+    shapes: [],
+    startEnd: false
+  },
+  ishikawa: {
+    detail: false,
+    direction: false,
+    label: '鱼骨图',
+    links: [],
+    newNode: '节点',
+    shapes: [],
+    startEnd: false
+  },
+  journey: {
+    detail: true,
+    direction: false,
+    hasTitle: true,
+    label: '用户旅程',
+    links: [],
+    newNode: '任务',
+    nodeTypes: [
+      { name: '任务', role: 'task' },
+      { name: '分组', role: 'section' }
+    ],
+    shapes: [],
+    startEnd: false
+  },
+  kanban: {
+    detail: true,
+    direction: false,
+    label: '看板',
+    links: [],
+    newNode: '卡片',
+    nodeTypes: [
+      { name: '卡片', role: 'ticket' },
+      { name: '列表', role: 'column' }
+    ],
+    shapes: [],
+    startEnd: false
+  },
   mindmap: {
     detail: false,
     direction: false,
@@ -137,6 +375,112 @@ export const KIND_SPECS: Record<DiagramKind, KindSpec> = {
     links: [],
     newNode: '节点',
     shapes: ['rect', 'round', 'stadium', 'diamond'],
+    startEnd: false
+  },
+  packet: {
+    canLink: false,
+    detail: true,
+    direction: false,
+    label: '报文图',
+    links: [],
+    newNode: '字段',
+    shapes: [],
+    startEnd: false
+  },
+  pie: {
+    canLink: false,
+    detail: true,
+    direction: false,
+    hasTitle: true,
+    label: '饼图',
+    links: [],
+    newNode: '切片',
+    shapes: [],
+    startEnd: false
+  },
+  quadrant: {
+    canLink: false,
+    detail: false,
+    direction: false,
+    hasTitle: true,
+    label: '四象限图',
+    links: [],
+    metaKeys: [
+      { key: 'xLow', label: 'X 轴起点' },
+      { key: 'xHigh', label: 'X 轴终点' },
+      { key: 'yLow', label: 'Y 轴起点' },
+      { key: 'yHigh', label: 'Y 轴终点' },
+      { key: 'q1', label: '右上象限' },
+      { key: 'q2', label: '左上象限' },
+      { key: 'q3', label: '左下象限' },
+      { key: 'q4', label: '右下象限' }
+    ],
+    newNode: '点',
+    shapes: [],
+    startEnd: false
+  },
+  radar: {
+    canLink: false,
+    detail: true,
+    direction: false,
+    label: '雷达图',
+    links: [],
+    metaKeys: [
+      { key: 'min', label: '最小值' },
+      { key: 'max', label: '最大值' }
+    ],
+    newNode: '曲线',
+    nodeTypes: [
+      { name: '曲线', role: 'curve' },
+      { name: '轴', role: 'axis' }
+    ],
+    shapes: [],
+    startEnd: false
+  },
+  railroad: {
+    canLink: false,
+    detail: true,
+    direction: false,
+    hasTitle: true,
+    label: '铁路图',
+    links: [],
+    newNode: '规则',
+    shapes: [],
+    startEnd: false
+  },
+  requirement: {
+    canLink: true,
+    detail: true,
+    direction: false,
+    label: '需求图',
+    links: [
+      { name: '包含', type: 'line' },
+      { name: '满足', type: 'arrow' },
+      { name: '验证', type: 'arrow' },
+      { name: '派生', type: 'dashedLine' },
+      { name: '复制', type: 'dashedArrow' },
+      { name: '追踪', type: 'dashedLine' },
+      { name: '细化', type: 'dashedArrow' }
+    ],
+    newNode: '需求',
+    nodeTypes: [
+      { name: '需求', role: 'requirement' },
+      { name: '功能需求', role: 'functionalRequirement' },
+      { name: '性能需求', role: 'performanceRequirement' },
+      { name: '设计约束', role: 'designConstraint' },
+      { name: '元素', role: 'element' }
+    ],
+    shapes: [],
+    startEnd: false
+  },
+  sankey: {
+    canLink: true,
+    detail: false,
+    direction: false,
+    label: '桑基图',
+    links: [{ name: '流量', type: 'arrow' }],
+    newNode: '节点',
+    shapes: [],
     startEnd: false
   },
   sequence: {
@@ -161,6 +505,111 @@ export const KIND_SPECS: Record<DiagramKind, KindSpec> = {
     newNode: '状态',
     shapes: [],
     startEnd: true
+  },
+  swimlane: {
+    detail: false,
+    direction: false,
+    label: '泳道图',
+    links: [],
+    newNode: '节点',
+    shapes: [],
+    startEnd: false
+  },
+  timeline: {
+    detail: false,
+    direction: false,
+    hasTitle: true,
+    label: '时间线',
+    links: [],
+    newNode: '事件',
+    nodeTypes: [
+      { name: '事件', role: 'event' },
+      { name: '时期', role: 'period' }
+    ],
+    shapes: [],
+    startEnd: false
+  },
+  treemap: {
+    detail: true,
+    direction: false,
+    label: '矩形树图',
+    links: [],
+    newNode: '节点',
+    shapes: [],
+    startEnd: false
+  },
+  treeview: {
+    detail: false,
+    direction: false,
+    label: '树视图',
+    links: [],
+    newNode: '节点',
+    shapes: [],
+    startEnd: false
+  },
+  venn: {
+    canLink: false,
+    detail: false,
+    direction: false,
+    hasTitle: true,
+    label: '维恩图',
+    links: [],
+    newNode: '集合',
+    nodeTypes: [
+      { name: '集合', role: 'set' },
+      { name: '交集', role: 'union' }
+    ],
+    shapes: [],
+    startEnd: false
+  },
+  wardley: {
+    canLink: true,
+    detail: true,
+    direction: false,
+    hasTitle: true,
+    label: 'Wardley 地图',
+    links: [{ name: '依赖', type: 'arrow' }],
+    metaKeys: [{ key: 'size', label: '画布尺寸' }],
+    newNode: '组件',
+    nodeTypes: [
+      { name: '组件', role: 'component' },
+      { name: '锚点', role: 'anchor' },
+      { name: '市场', role: 'market' },
+      { name: '子组件', role: 'subcomponent' },
+      { name: '备注', role: 'note' }
+    ],
+    shapes: [],
+    startEnd: false
+  },
+  xychart: {
+    canLink: false,
+    detail: true,
+    direction: false,
+    hasTitle: true,
+    label: 'XY 图表',
+    links: [],
+    newNode: '系列',
+    nodeTypes: [
+      { name: '柱状', role: 'bar' },
+      { name: '折线', role: 'line' },
+      { name: 'X 轴', role: 'xaxis' },
+      { name: 'Y 轴', role: 'yaxis' }
+    ],
+    shapes: [],
+    startEnd: false
+  },
+  zenuml: {
+    canLink: true,
+    detail: false,
+    direction: false,
+    label: 'ZenUML',
+    links: [
+      { name: '实线', type: 'msgSolidFilled' },
+      { name: '虚线', type: 'msgDashedFilled' }
+    ],
+    newNode: '参与者',
+    shapes: ['rect', 'round'],
+    startEnd: false
   }
 };
 
@@ -255,24 +704,30 @@ const renderEdge = (edge: VEdge): string => {
 
 /** Emit Mermaid source for the graph, per its diagram kind. Deterministic order. */
 export const generateCode = (graph: VGraph): string => {
-  switch (graph.kind ?? 'flowchart') {
+  const kind = graph.kind ?? 'flowchart';
+  const frontmatter = graph.frontmatter ? `${graph.frontmatter}\n` : '';
+  const extra = EXTRA_GENERATORS[kind];
+  if (extra) {
+    return frontmatter + extra(graph);
+  }
+  switch (kind) {
     case 'class': {
-      return generateClass(graph);
+      return frontmatter + generateClass(graph);
     }
     case 'er': {
-      return generateEr(graph);
+      return frontmatter + generateEr(graph);
     }
     case 'mindmap': {
-      return generateMindmap(graph);
+      return frontmatter + generateMindmap(graph);
     }
     case 'sequence': {
-      return generateSequence(graph);
+      return frontmatter + generateSequence(graph);
     }
     case 'state': {
-      return generateState(graph);
+      return frontmatter + generateState(graph);
     }
     default: {
-      return generateFlowchart(graph);
+      return frontmatter + generateFlowchart(graph);
     }
   }
 };
@@ -742,8 +1197,15 @@ export const nodeSize = (node: VNode): { h: number; w: number } => {
 /** Layered layout (Kahn layering along the flow direction; cycles appended). */
 export const layoutGraph = (graph: VGraph): VGraph => {
   const positions = new Map<string, { x: number; y: number }>();
+  const kind = graph.kind ?? 'flowchart';
 
-  if ((graph.kind ?? 'flowchart') === 'sequence') {
+  // Coordinate kinds place nodes straight from their `[x, y]` payload — the
+  // code itself is the position memory (dragging regenerates new coordinates).
+  if (COORD_KINDS.has(kind)) {
+    return layoutCoordinateKind(graph);
+  }
+
+  if (kind === 'sequence') {
     // Participants form one row; messages are temporal, not spatial.
     graph.nodes.forEach((node, slot) => {
       positions.set(node.id, { x: MARGIN + slot * (NODE_W + GAP_X), y: MARGIN });
@@ -913,7 +1375,8 @@ export const edgeAnchor = (
 
 /** Detect the diagram kind from the first non-comment line; undefined when unsupported. */
 export const detectDiagramKind = (code: string): DiagramKind | undefined => {
-  for (const raw of code.split('\n')) {
+  const { body } = splitFrontmatter(code);
+  for (const raw of body.split('\n')) {
     const line = raw.trim();
     if (!line || line.startsWith('%%')) {
       continue;
@@ -936,6 +1399,11 @@ export const detectDiagramKind = (code: string): DiagramKind | undefined => {
     if (/^mindmap\b/i.test(line)) {
       return 'mindmap';
     }
+    for (const { kind, re } of EXTRA_HEADERS) {
+      if (re.test(line)) {
+        return kind;
+      }
+    }
     return undefined;
   }
   return undefined;
@@ -943,24 +1411,53 @@ export const detectDiagramKind = (code: string): DiagramKind | undefined => {
 
 /** Parse any supported diagram kind; `{ ok: false }` for unsupported families. */
 export const parseCode = (code: string): ParsedFlowchart => {
-  switch (detectDiagramKind(code)) {
+  const kind = detectDiagramKind(code);
+  const { body, frontmatter } = splitFrontmatter(code);
+  if (kind && EXTRA_PARSERS[kind]) {
+    return EXTRA_PARSERS[kind]?.(body, frontmatter) ?? { ok: false };
+  }
+  switch (kind) {
     case 'class': {
-      return parseClass(code);
+      const parsed = parseClass(body);
+      if (parsed.ok) {
+        parsed.result.graph.frontmatter = frontmatter;
+      }
+      return parsed;
     }
     case 'er': {
-      return parseEr(code);
+      const parsed = parseEr(body);
+      if (parsed.ok) {
+        parsed.result.graph.frontmatter = frontmatter;
+      }
+      return parsed;
     }
     case 'flowchart': {
-      return parseFlowchart(code);
+      const parsed = parseFlowchart(body);
+      if (parsed.ok) {
+        parsed.result.graph.frontmatter = frontmatter;
+      }
+      return parsed;
     }
     case 'mindmap': {
-      return parseMindmap(code);
+      const parsed = parseMindmap(body);
+      if (parsed.ok) {
+        parsed.result.graph.frontmatter = frontmatter;
+      }
+      return parsed;
     }
     case 'sequence': {
-      return parseSequence(code);
+      const parsed = parseSequence(body);
+      if (parsed.ok) {
+        parsed.result.graph.frontmatter = frontmatter;
+      }
+      return parsed;
     }
     case 'state': {
-      return parseState(code);
+      const parsed = parseState(body);
+      if (parsed.ok) {
+        parsed.result.graph.frontmatter = frontmatter;
+      }
+      return parsed;
     }
     default: {
       return { ok: false };

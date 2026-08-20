@@ -50,9 +50,9 @@ describe('detectDiagramKind', () => {
     expect(detectDiagramKind('stateDiagram\n  [*] --> S')).toBe('state');
     expect(detectDiagramKind('erDiagram\n  A ||--o{ B : r')).toBe('er');
     expect(detectDiagramKind('mindmap\n  root((r))')).toBe('mindmap');
-    expect(detectDiagramKind('gantt\n  title x')).toBeUndefined();
-    expect(detectDiagramKind('pie\n  "a": 1')).toBeUndefined();
-    expect(detectDiagramKind('%% comment only\ngantt')).toBeUndefined();
+    expect(detectDiagramKind('gantt\n  title x')).toBe('gantt');
+    expect(detectDiagramKind('pie\n  "a": 1')).toBe('pie');
+    expect(detectDiagramKind('%% comment only\ngantt')).toBe('gantt');
     expect(detectDiagramKind('')).toBeUndefined();
   });
 });
@@ -406,9 +406,11 @@ describe('KIND_SPECS completeness', () => {
     for (const [kind, spec] of Object.entries(KIND_SPECS)) {
       expect(spec.label, kind).toBeTruthy();
       expect(spec.newNode, kind).toBeTruthy();
-      // mindmap edges are structural (no link syntax to cycle through).
-      if (kind !== 'mindmap') {
-        expect(spec.links.length, kind).toBeGreaterThan(0);
+      // Kinds without edge syntax (pie, packet, radar, …) hide the palette;
+      // linkable kinds may still have only structural edges (journey
+      // 分组→任务) with a single implicit link type.
+      if (spec.canLink === false) {
+        expect(spec.links.length, kind).toBe(0);
       }
     }
   });

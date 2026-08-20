@@ -4,6 +4,7 @@
   import { notify } from '$/util/notify';
   import {
     applyPositions,
+    COORD_KINDS,
     edgeAnchor,
     ER_CARDINALITIES,
     generateCode,
@@ -74,6 +75,16 @@
 
   let graph = $state<VGraph>({ direction: 'TD', kind: 'flowchart', nodes: [], edges: [] });
   const kindSpec = $derived(KIND_SPECS[graph.kind ?? 'flowchart']);
+  // List/series kinds (pie, packet, radar, …) have no edge syntax: the anchor
+  // handles and link gestures are hidden so drawn edges cannot silently no-op.
+  const canLink = $derived(kindSpec.canLink !== false);
+  // Coordinate kinds (quadrant, wardley): node positions ARE the code — the
+  // remembered-position overlay would fight the parse→generate coordinate
+  // round-trip, so it is skipped entirely for them.
+  const isCoordKind = $derived(COORD_KINDS.has(graph.kind ?? 'flowchart'));
+  // Grouped-list kinds: adding an item while a group node is selected attaches
+  // it to that group via a structural edge (journey 分组, kanban 列表, …).
+  const AUTO_ATTACH_ROLES = new Set(['column', 'domain', 'period', 'section']);
   let selected = $state<{ id: string; kind: 'edge' | 'node' } | undefined>();
   let editing = $state<
     undefined | { id: string; kind: 'edge' | 'node'; label: string; x: number; y: number }
@@ -83,6 +94,9 @@
   let showCode = $state(true);
   let editingDetail = $state(false);
   let detailDraft = $state('');
+  let editingMeta = $state(false);
+  let metaTitleDraft = $state('');
+  let metaDrafts = $state<Record<string, string>>({});
   let svgEl: SVGSVGElement | undefined = $state();
   let canvasEl: HTMLDivElement | undefined = $state();
 
@@ -124,6 +138,9 @@
   let rememberedPositions = sanitizePositions(readJSON(POSITIONS_KEY, null));
 
   const rememberPositions = (): void => {
+    if (isCoordKind) {
+      return; // coordinates live in the generated code itself
+    }
     rememberedPositions = Object.fromEntries(
       graph.nodes.map((node) => [node.id, { x: node.x, y: node.y }] as const)
     );
@@ -147,7 +164,9 @@
   const loadFromCode = (announce: boolean): void => {
     const parsed = parseCode(validatedState.current.code);
     if (parsed.ok) {
-      graph = applyPositions(layoutGraph(parsed.result.graph), rememberedPositions);
+      const laid = layoutGraph(parsed.result.graph);
+      const parsedKind = parsed.result.graph.kind ?? 'flowchart';
+      graph = COORD_KINDS.has(parsedKind) ? laid : applyPositions(laid, rememberedPositions);
       rememberPositions();
       if (announce) {
         notify(
@@ -161,7 +180,7 @@
       rememberPositions();
       if (announce) {
         notify(
-          '当前图类型暂不支持可视化编辑（支持：流程图/时序图/类图/状态图/ER 图/思维导图），已载入空白画布；绘制新图形将生成流程图，可用「从代码重载」恢复原代码'
+          '当前图类型暂不支持可视化编辑（仅 info 调试图无内容可编辑），已载入空白画布；绘制新图形将生成流程图，可用「从代码重载」恢复原代码'
         );
       }
     }
@@ -191,14 +210,28 @@
   });
 
   const addNodeAt = (x: number, y: number): void => {
+    // Items added while a group node is selected attach to that group
+    // (journey section, kanban column, timeline period, cynefin domain).
+    const host = selected?.kind === 'node' ? nodeById.get(selected.id) : undefined;
+    const defaultType = kindSpec.nodeTypes?.[0];
     const node: VNode = {
       id: nextNodeId(graph.nodes),
       label: '',
+      role: defaultType?.role,
+      roleData: defaultType?.data,
       shape: kindSpec.shapes[0] ?? 'rect',
       x: snap(x - NODE_W / 2),
       y: snap(y - NODE_H / 2)
     };
     graph.nodes.push(node);
+    if (host && host.id !== node.id && host.role && AUTO_ATTACH_ROLES.has(host.role)) {
+      graph.edges.push({
+        id: nextEdgeId(graph.edges),
+        source: host.id,
+        target: node.id,
+        type: 'line'
+      });
+    }
     selected = { id: node.id, kind: 'node' };
     startEdit(node);
   };
@@ -316,6 +349,43 @@
     syncCode();
   };
 
+  // Per-kind node type palette (C4 Person/System, journey task/section, …).
+  const nodeTypeOf = (node: VNode) =>
+    kindSpec.nodeTypes?.find(
+      (t) => t.role === node.role && (t.data ?? undefined) === (node.roleData ?? undefined)
+    );
+  const cycleNodeType = (): void => {
+    if (!selectedNode || !kindSpec.nodeTypes) return;
+    const types = kindSpec.nodeTypes;
+    const i = types.indexOf(nodeTypeOf(selectedNode) as (typeof types)[number]);
+    const next = types[(i + 1) % types.length];
+    if (next) {
+      selectedNode.role = next.role;
+      selectedNode.roleData = next.data;
+      syncCode();
+    }
+  };
+
+  const openMetaEditor = (): void => {
+    metaTitleDraft = graph.title ?? '';
+    metaDrafts = { ...(graph.meta ?? {}) };
+    editingMeta = true;
+  };
+
+  const commitMeta = (): void => {
+    graph.title = metaTitleDraft.trim() || undefined;
+    const meta: Record<string, string> = {};
+    for (const { key } of kindSpec.metaKeys ?? []) {
+      const value = metaDrafts[key]?.trim();
+      if (value) {
+        meta[key] = value;
+      }
+    }
+    graph.meta = Object.keys(meta).length > 0 ? meta : undefined;
+    editingMeta = false;
+    syncCode();
+  };
+
   const openDetailEditor = (): void => {
     if (!selectedNode) return;
     detailDraft = selectedNode.detail ?? '';
@@ -356,6 +426,7 @@
   };
 
   const onHandlePointerDown = (event: PointerEvent, node: VNode): void => {
+    if (!canLink) return;
     event.stopPropagation();
     linking = { cursor: svgPoint(event), source: node.id };
   };
@@ -426,7 +497,12 @@
     svgRect = undefined; // next gesture re-measures (layout may have changed)
     if (linking) {
       const target = nodeAt(svgPoint(event));
-      if (target && target.id !== linking.source && !isBlockedStateLink(linking.source, target)) {
+      if (
+        canLink &&
+        target &&
+        target.id !== linking.source &&
+        !isBlockedStateLink(linking.source, target)
+      ) {
         const edge = newEdge(linking.source, target.id);
         graph.edges.push(edge);
         selected = { id: edge.id, kind: 'edge' };
@@ -519,6 +595,23 @@
     {#if kindSpec.shapes.length > 1}
       <Button size="sm" variant="outline" disabled={!selectedNode} onclick={cycleShape}>
         形状: {selectedNode && !selectedNode.special ? SHAPE_NAMES[selectedNode.shape] : '—'}
+      </Button>
+    {/if}
+    {#if kindSpec.nodeTypes && kindSpec.nodeTypes.length > 0}
+      <Button
+        size="sm"
+        variant="outline"
+        data-testid={TID.visualNodeType}
+        disabled={!selectedNode}
+        onclick={cycleNodeType}>
+        类型: {selectedNode
+          ? (nodeTypeOf(selectedNode)?.name ?? selectedNode.roleData ?? selectedNode.role ?? '—')
+          : '—'}
+      </Button>
+    {/if}
+    {#if kindSpec.hasTitle || (kindSpec.metaKeys ?? []).length > 0}
+      <Button size="sm" variant="outline" data-testid={TID.visualMeta} onclick={openMetaEditor}>
+        <DetailIcon /> 属性
       </Button>
     {/if}
     {#if kindSpec.links.length > 1}
@@ -781,6 +874,17 @@
                 stroke-width={isSelected ? 2.5 : 1.5}></rect>
             {/if}
             {#if !node.special}
+              {#if node.role}
+                <text
+                  x={node.x + size.w / 2}
+                  y={node.y - 4}
+                  fill="var(--muted-foreground)"
+                  font-size="8"
+                  text-anchor="middle"
+                  style="pointer-events: none;">
+                  {node.roleData ?? node.role}
+                </text>
+              {/if}
               <text
                 x={node.x + size.w / 2}
                 y={node.y + NODE_H / 2 + 4}
@@ -805,7 +909,7 @@
               {/if}
             {/if}
           </g>
-          {#if isSelected}
+          {#if isSelected && canLink}
             {#each handles(node) as handle (handle.key)}
               <circle
                 role="button"
@@ -845,6 +949,30 @@
             if (e.key === 'Escape') editing = undefined;
           }}
           onblur={commitEdit} />
+      {/if}
+
+      {#if editingMeta}
+        <div class="absolute top-2 left-2 z-10 w-64 rounded border bg-background p-2 shadow">
+          <div class="mb-1 text-xs text-muted-foreground">图表属性</div>
+          {#if kindSpec.hasTitle}
+            <label class="mb-1 block text-xs" for="ve-meta-title">标题</label>
+            <input
+              id="ve-meta-title"
+              class="mb-2 w-full rounded border border-input bg-background p-1 text-xs text-foreground"
+              bind:value={metaTitleDraft} />
+          {/if}
+          {#each kindSpec.metaKeys ?? [] as metaKey (metaKey.key)}
+            <label class="mb-1 block text-xs" for="ve-meta-{metaKey.key}">{metaKey.label}</label>
+            <input
+              id="ve-meta-{metaKey.key}"
+              class="mb-2 w-full rounded border border-input bg-background p-1 text-xs text-foreground"
+              bind:value={metaDrafts[metaKey.key]} />
+          {/each}
+          <div class="mt-1 flex justify-end gap-1">
+            <Button size="sm" variant="ghost" onclick={() => (editingMeta = false)}>取消</Button>
+            <Button size="sm" onclick={commitMeta}>保存</Button>
+          </div>
+        </div>
       {/if}
 
       {#if editingDetail && selectedNode}
