@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Button } from '$/components/ui/button';
+  import { Toggle } from '$/components/ui/toggle';
   import { TID } from '$/constants';
   import { notify } from '$/util/notify';
   import {
@@ -21,6 +22,7 @@
   import type { VEdge, VGraph, VLinkType, VNode, VShape } from '$/util/visualEditor/model';
   import { readJSON, writeJSON } from '$/util/persist.svelte';
   import { updateCode, validatedState } from '$/util/state.svelte';
+  import VisualPreview from '$/components/VisualPreview.svelte';
   import AddIcon from '~icons/material-symbols/add-2-rounded';
   import DeleteIcon from '~icons/material-symbols/delete-outline-rounded';
   import AutoFixIcon from '~icons/material-symbols/auto-fix-normal-outline-rounded';
@@ -136,6 +138,13 @@
   // the editor remounts on every tab switch but there is only one instance.
   const POSITIONS_KEY = 'visualEditorLayout';
   let rememberedPositions = sanitizePositions(readJSON(POSITIONS_KEY, null));
+  // Split-pane Mermaid preview (on by default): the editing interface shows
+  // the real Mermaid rendering next to the interactive canvas.
+  const PREVIEW_KEY = 'visualEditorPreview';
+  let showPreview = $state(readJSON<boolean>(PREVIEW_KEY, true));
+  $effect(() => {
+    writeJSON(PREVIEW_KEY, showPreview);
+  });
 
   const rememberPositions = (): void => {
     if (isCoordKind) {
@@ -649,6 +658,14 @@
       title="从当前代码重新载入">
       <ResetIcon /> 从代码重载
     </Button>
+    <Toggle
+      bind:pressed={showPreview}
+      size="sm"
+      data-testid={TID.visualPreviewToggle}
+      title="在编辑界面旁显示 Mermaid 实时渲染"
+      aria-label="Mermaid 实时渲染">
+      <DetailIcon /> 预览
+    </Toggle>
     <Button size="sm" variant="outline" onclick={clearAll} data-testid={TID.visualClear}>
       <ClearIcon /> 清空
     </Button>
@@ -657,344 +674,356 @@
     </span>
   </div>
 
-  <div
-    bind:this={canvasEl}
-    class="min-h-64 flex-1 overflow-auto"
-    data-testid={TID.visualCanvas}
-    style="background-image: radial-gradient(circle, var(--border) 1px, transparent 1px); background-size: 20px 20px;">
-    <div class="relative" style="width:{CANVAS_W}px; height:{CANVAS_H}px;">
-      <svg
-        bind:this={svgEl}
-        class="absolute inset-0 block h-full w-full"
-        style="touch-action: none;"
-        ondblclick={(e) => {
-          const p = svgPoint(e);
-          addNodeAt(p.x, p.y);
-        }}
-        role="application"
-        aria-label="可视化画布">
-        <defs>
-          <marker id="ve-arrow" markerHeight="8" markerWidth="8" orient="auto" refX="7" refY="4">
-            <path d="M0,0 L8,4 L0,8 Z" fill="var(--foreground)"></path>
-          </marker>
-          <marker
-            id="ve-arrow-open"
-            markerHeight="9"
-            markerWidth="9"
-            orient="auto"
-            refX="7"
-            refY="4.5">
-            <path d="M1,1 L7,4.5 L1,8" fill="none" stroke="var(--foreground)" stroke-width="1.3"
-            ></path>
-          </marker>
-          <marker
-            id="ve-triangle"
-            markerHeight="10"
-            markerWidth="10"
-            orient="auto"
-            refX="8"
-            refY="5">
-            <path
-              d="M1,1 L9,5 L1,9 Z"
-              fill="var(--background)"
-              stroke="var(--foreground)"
-              stroke-width="1.2"></path>
-          </marker>
-          <marker
-            id="ve-diamond"
-            markerHeight="9"
-            markerWidth="11"
-            orient="auto-start-reverse"
-            refX="1"
-            refY="4.5">
-            <path d="M1,4.5 L5.5,1 L10,4.5 L5.5,8 Z" fill="var(--foreground)"></path>
-          </marker>
-          <marker
-            id="ve-diamond-open"
-            markerHeight="9"
-            markerWidth="11"
-            orient="auto-start-reverse"
-            refX="1"
-            refY="4.5">
-            <path
-              d="M1,4.5 L5.5,1 L10,4.5 L5.5,8 Z"
-              fill="var(--background)"
-              stroke="var(--foreground)"
-              stroke-width="1.2"></path>
-          </marker>
-        </defs>
-        <rect width={CANVAS_W} height={CANVAS_H} fill="transparent"></rect>
+  <div class="flex min-h-0 flex-1">
+    <div
+      bind:this={canvasEl}
+      class="min-h-64 min-w-0 flex-1 overflow-auto"
+      data-testid={TID.visualCanvas}
+      style="background-image: radial-gradient(circle, var(--border) 1px, transparent 1px); background-size: 20px 20px;">
+      <div class="relative" style="width:{CANVAS_W}px; height:{CANVAS_H}px;">
+        <svg
+          bind:this={svgEl}
+          class="absolute inset-0 block h-full w-full"
+          style="touch-action: none;"
+          ondblclick={(e) => {
+            const p = svgPoint(e);
+            addNodeAt(p.x, p.y);
+          }}
+          role="application"
+          aria-label="可视化画布">
+          <defs>
+            <marker id="ve-arrow" markerHeight="8" markerWidth="8" orient="auto" refX="7" refY="4">
+              <path d="M0,0 L8,4 L0,8 Z" fill="var(--foreground)"></path>
+            </marker>
+            <marker
+              id="ve-arrow-open"
+              markerHeight="9"
+              markerWidth="9"
+              orient="auto"
+              refX="7"
+              refY="4.5">
+              <path d="M1,1 L7,4.5 L1,8" fill="none" stroke="var(--foreground)" stroke-width="1.3"
+              ></path>
+            </marker>
+            <marker
+              id="ve-triangle"
+              markerHeight="10"
+              markerWidth="10"
+              orient="auto"
+              refX="8"
+              refY="5">
+              <path
+                d="M1,1 L9,5 L1,9 Z"
+                fill="var(--background)"
+                stroke="var(--foreground)"
+                stroke-width="1.2"></path>
+            </marker>
+            <marker
+              id="ve-diamond"
+              markerHeight="9"
+              markerWidth="11"
+              orient="auto-start-reverse"
+              refX="1"
+              refY="4.5">
+              <path d="M1,4.5 L5.5,1 L10,4.5 L5.5,8 Z" fill="var(--foreground)"></path>
+            </marker>
+            <marker
+              id="ve-diamond-open"
+              markerHeight="9"
+              markerWidth="11"
+              orient="auto-start-reverse"
+              refX="1"
+              refY="4.5">
+              <path
+                d="M1,4.5 L5.5,1 L10,4.5 L5.5,8 Z"
+                fill="var(--background)"
+                stroke="var(--foreground)"
+                stroke-width="1.2"></path>
+            </marker>
+          </defs>
+          <rect width={CANVAS_W} height={CANVAS_H} fill="transparent"></rect>
 
-        {#each graph.edges as edge (edge.id)}
-          {@const geom = edgeGeom(edge)}
-          {#if geom}
-            {@const selectedEdgeId = selected?.kind === 'edge' ? selected.id : undefined}
-            {@const endMarker = END_MARKERS[edge.type]}
-            {@const startMarker = START_MARKERS[edge.type]}
-            <path
-              role="button"
-              tabindex="0"
-              data-edge-id={edge.id}
-              d="M{geom.x1},{geom.y1} L{geom.x2},{geom.y2}"
-              fill="none"
-              stroke="transparent"
-              stroke-width="14"
-              style="pointer-events: stroke; cursor: pointer;"
-              onclick={(e) => {
-                e.stopPropagation();
-                selected = { id: edge.id, kind: 'edge' };
-              }}
-              onkeydown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
+          {#each graph.edges as edge (edge.id)}
+            {@const geom = edgeGeom(edge)}
+            {#if geom}
+              {@const selectedEdgeId = selected?.kind === 'edge' ? selected.id : undefined}
+              {@const endMarker = END_MARKERS[edge.type]}
+              {@const startMarker = START_MARKERS[edge.type]}
+              <path
+                role="button"
+                tabindex="0"
+                data-edge-id={edge.id}
+                d="M{geom.x1},{geom.y1} L{geom.x2},{geom.y2}"
+                fill="none"
+                stroke="transparent"
+                stroke-width="14"
+                style="pointer-events: stroke; cursor: pointer;"
+                onclick={(e) => {
+                  e.stopPropagation();
                   selected = { id: edge.id, kind: 'edge' };
-                }
-              }}
-              ondblclick={(e) => {
-                e.stopPropagation();
-                selected = { id: edge.id, kind: 'edge' };
-                startEdit(edge);
-              }}></path>
-            <path
-              d="M{geom.x1},{geom.y1} L{geom.x2},{geom.y2}"
-              fill="none"
-              stroke={selectedEdgeId === edge.id ? 'var(--primary)' : 'var(--foreground)'}
-              stroke-width={selectedEdgeId === edge.id ? 2.5 : 1.5}
-              stroke-dasharray={DASHED_LINKS.has(edge.type) ? '6 4' : undefined}
-              marker-end={endMarker ? `url(#${endMarker})` : undefined}
-              marker-start={startMarker ? `url(#${startMarker})` : undefined}
-              style="pointer-events: none;"></path>
-            {#if edge.cardL || edge.cardR}
-              {#if edge.cardL}
-                <text
-                  x={geom.x1 + (geom.x2 - geom.x1) * 0.15}
-                  y={geom.y1 + (geom.y2 - geom.y1) * 0.15 - 4}
-                  fill="var(--foreground)"
-                  font-size="9"
-                  text-anchor="middle"
-                  style="pointer-events: none;">
-                  {edge.cardL}
-                </text>
-              {/if}
-              {#if edge.cardR}
-                <text
-                  x={geom.x1 + (geom.x2 - geom.x1) * 0.85}
-                  y={geom.y1 + (geom.y2 - geom.y1) * 0.85 - 4}
-                  fill="var(--foreground)"
-                  font-size="9"
-                  text-anchor="middle"
-                  style="pointer-events: none;">
-                  {edge.cardR}
-                </text>
-              {/if}
-            {/if}
-            {#if edge.label}
-              <text
-                x={(geom.x1 + geom.x2) / 2}
-                y={(geom.y1 + geom.y2) / 2 - 6}
-                fill="var(--foreground)"
-                font-size="11"
-                text-anchor="middle"
-                style="pointer-events: none; paint-order: stroke; stroke: var(--background); stroke-width: 4px;">
-                {displayLabel(edge.label)}
-              </text>
-            {/if}
-          {/if}
-        {/each}
-
-        {#if linkPreview}
-          <path
-            d="M{linkPreview.x1},{linkPreview.y1} L{linkPreview.x2},{linkPreview.y2}"
-            fill="none"
-            stroke="var(--primary)"
-            stroke-dasharray="5 4"
-            stroke-width="2"></path>
-        {/if}
-
-        {#each graph.nodes as node (node.id)}
-          {@const isSelected = selected?.kind === 'node' && selected.id === node.id}
-          {@const size = nodeSize(node)}
-          <g
-            role="button"
-            tabindex="-1"
-            data-node-id={node.id}
-            style="cursor: move;"
-            onpointerdown={(e) => onNodePointerDown(e, node)}
-            ondblclick={(e) => {
-              e.stopPropagation();
-              startEdit(node);
-            }}>
-            {#if node.special}
-              {#if node.special === 'start'}
-                <circle
-                  cx={node.x + size.w / 2}
-                  cy={node.y + size.h / 2}
-                  r={11}
-                  fill="var(--foreground)"></circle>
-              {:else}
-                <circle
-                  cx={node.x + size.w / 2}
-                  cy={node.y + size.h / 2}
-                  r={11}
-                  fill="var(--background)"
-                  stroke={isSelected ? 'var(--primary)' : 'var(--foreground)'}
-                  stroke-width={isSelected ? 2.5 : 1.5}></circle>
-                <circle
-                  cx={node.x + size.w / 2}
-                  cy={node.y + size.h / 2}
-                  r={5.5}
-                  fill="var(--foreground)"></circle>
-              {/if}
-              <text
-                x={node.x + size.w / 2}
-                y={node.y + size.h + 11}
-                fill="var(--muted-foreground)"
-                font-size="9"
-                text-anchor="middle"
-                style="pointer-events: none;">
-                {node.label}
-              </text>
-            {:else if node.shape === 'diamond'}
-              <polygon
-                points="{node.x + size.w / 2},{node.y} {node.x + size.w},{node.y +
-                  size.h / 2} {node.x + size.w / 2},{node.y + size.h} {node.x},{node.y +
-                  size.h / 2}"
-                fill="var(--background)"
-                stroke={isSelected ? 'var(--primary)' : 'var(--border)'}
-                stroke-width={isSelected ? 2.5 : 1.5}></polygon>
-            {:else}
-              <rect
-                height={size.h}
-                rx={node.shape === 'stadium' ? size.h / 2 : node.shape === 'round' ? 12 : 4}
-                width={size.w}
-                x={node.x}
-                y={node.y}
-                fill="var(--background)"
-                stroke={isSelected ? 'var(--primary)' : 'var(--border)'}
-                stroke-width={isSelected ? 2.5 : 1.5}></rect>
-            {/if}
-            {#if !node.special}
-              {#if node.role}
-                <text
-                  x={node.x + size.w / 2}
-                  y={node.y - 4}
-                  fill="var(--muted-foreground)"
-                  font-size="8"
-                  text-anchor="middle"
-                  style="pointer-events: none;">
-                  {node.roleData ?? node.role}
-                </text>
-              {/if}
-              <text
-                x={node.x + size.w / 2}
-                y={node.y + NODE_H / 2 + 4}
-                fill="var(--foreground)"
-                font-size="12"
-                text-anchor="middle"
-                style="pointer-events: none;">
-                {displayLabel(node.label || node.id)}
-              </text>
-              {#if node.detail}
-                {#each node.detail.split('\n').slice(0, 5) as line, i (i)}
+                }}
+                onkeydown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    selected = { id: edge.id, kind: 'edge' };
+                  }
+                }}
+                ondblclick={(e) => {
+                  e.stopPropagation();
+                  selected = { id: edge.id, kind: 'edge' };
+                  startEdit(edge);
+                }}></path>
+              <path
+                d="M{geom.x1},{geom.y1} L{geom.x2},{geom.y2}"
+                fill="none"
+                stroke={selectedEdgeId === edge.id ? 'var(--primary)' : 'var(--foreground)'}
+                stroke-width={selectedEdgeId === edge.id ? 2.5 : 1.5}
+                stroke-dasharray={DASHED_LINKS.has(edge.type) ? '6 4' : undefined}
+                marker-end={endMarker ? `url(#${endMarker})` : undefined}
+                marker-start={startMarker ? `url(#${startMarker})` : undefined}
+                style="pointer-events: none;"></path>
+              {#if edge.cardL || edge.cardR}
+                {#if edge.cardL}
                   <text
-                    x={node.x + size.w / 2}
-                    y={node.y + NODE_H + 11 + i * 13}
-                    fill="var(--muted-foreground)"
+                    x={geom.x1 + (geom.x2 - geom.x1) * 0.15}
+                    y={geom.y1 + (geom.y2 - geom.y1) * 0.15 - 4}
+                    fill="var(--foreground)"
                     font-size="9"
                     text-anchor="middle"
                     style="pointer-events: none;">
-                    {displayLabel(line)}
+                    {edge.cardL}
                   </text>
-                {/each}
+                {/if}
+                {#if edge.cardR}
+                  <text
+                    x={geom.x1 + (geom.x2 - geom.x1) * 0.85}
+                    y={geom.y1 + (geom.y2 - geom.y1) * 0.85 - 4}
+                    fill="var(--foreground)"
+                    font-size="9"
+                    text-anchor="middle"
+                    style="pointer-events: none;">
+                    {edge.cardR}
+                  </text>
+                {/if}
+              {/if}
+              {#if edge.label}
+                <text
+                  x={(geom.x1 + geom.x2) / 2}
+                  y={(geom.y1 + geom.y2) / 2 - 6}
+                  fill="var(--foreground)"
+                  font-size="11"
+                  text-anchor="middle"
+                  style="pointer-events: none; paint-order: stroke; stroke: var(--background); stroke-width: 4px;">
+                  {displayLabel(edge.label)}
+                </text>
               {/if}
             {/if}
-          </g>
-          {#if isSelected && canLink}
-            {#each handles(node) as handle (handle.key)}
-              <circle
-                role="button"
-                tabindex="-1"
-                cx={handle.x}
-                cy={handle.y}
-                r="5"
-                fill="var(--primary)"
-                style="cursor: crosshair;"
-                onpointerdown={(e) => onHandlePointerDown(e, node)}></circle>
-            {/each}
-          {/if}
-        {/each}
-
-        {#if graph.nodes.length === 0}
-          <text
-            x={CANVAS_W / 2}
-            y={80}
-            fill="var(--muted-foreground)"
-            font-size="14"
-            text-anchor="middle">
-            双击画布添加{kindSpec.newNode}；拖动节点边缘圆点创建连线；双击节点/连线修改文字
-          </text>
-        {/if}
-      </svg>
-
-      {#if editing}
-        <input
-          type="text"
-          class="absolute z-10 w-44 rounded border bg-background px-1 py-0.5 text-xs text-foreground"
-          style="left: {editing.x - 88}px; top: {editing.y - 12}px;"
-          bind:value={editing.label}
-          use:focusEditor
-          onkeydown={(e) => {
-            e.stopPropagation();
-            if (e.key === 'Enter') commitEdit();
-            if (e.key === 'Escape') editing = undefined;
-          }}
-          onblur={commitEdit} />
-      {/if}
-
-      {#if editingMeta}
-        <div class="absolute top-2 left-2 z-10 w-64 rounded border bg-background p-2 shadow">
-          <div class="mb-1 text-xs text-muted-foreground">图表属性</div>
-          {#if kindSpec.hasTitle}
-            <label class="mb-1 block text-xs" for="ve-meta-title">标题</label>
-            <input
-              id="ve-meta-title"
-              class="mb-2 w-full rounded border border-input bg-background p-1 text-xs text-foreground"
-              bind:value={metaTitleDraft} />
-          {/if}
-          {#each kindSpec.metaKeys ?? [] as metaKey (metaKey.key)}
-            <label class="mb-1 block text-xs" for="ve-meta-{metaKey.key}">{metaKey.label}</label>
-            <input
-              id="ve-meta-{metaKey.key}"
-              class="mb-2 w-full rounded border border-input bg-background p-1 text-xs text-foreground"
-              bind:value={metaDrafts[metaKey.key]} />
           {/each}
-          <div class="mt-1 flex justify-end gap-1">
-            <Button size="sm" variant="ghost" onclick={() => (editingMeta = false)}>取消</Button>
-            <Button size="sm" onclick={commitMeta}>保存</Button>
-          </div>
-        </div>
-      {/if}
 
-      {#if editingDetail && selectedNode}
-        <div class="absolute top-2 left-2 z-10 w-64 rounded border bg-background p-2 shadow">
-          <div class="mb-1 text-xs text-muted-foreground">
-            编辑「{displayLabel(selectedNode.label || selectedNode.id)}」的内容（每行一条）
-          </div>
-          <textarea
-            data-testid={TID.visualDetailEditor}
-            bind:value={detailDraft}
-            class="h-24 w-full rounded border border-input bg-background p-1 font-mono text-xs text-foreground"
+          {#if linkPreview}
+            <path
+              d="M{linkPreview.x1},{linkPreview.y1} L{linkPreview.x2},{linkPreview.y2}"
+              fill="none"
+              stroke="var(--primary)"
+              stroke-dasharray="5 4"
+              stroke-width="2"></path>
+          {/if}
+
+          {#each graph.nodes as node (node.id)}
+            {@const isSelected = selected?.kind === 'node' && selected.id === node.id}
+            {@const size = nodeSize(node)}
+            <g
+              role="button"
+              tabindex="-1"
+              data-node-id={node.id}
+              style="cursor: move;"
+              onpointerdown={(e) => onNodePointerDown(e, node)}
+              ondblclick={(e) => {
+                e.stopPropagation();
+                startEdit(node);
+              }}>
+              {#if node.special}
+                {#if node.special === 'start'}
+                  <circle
+                    cx={node.x + size.w / 2}
+                    cy={node.y + size.h / 2}
+                    r={11}
+                    fill="var(--foreground)"></circle>
+                {:else}
+                  <circle
+                    cx={node.x + size.w / 2}
+                    cy={node.y + size.h / 2}
+                    r={11}
+                    fill="var(--background)"
+                    stroke={isSelected ? 'var(--primary)' : 'var(--foreground)'}
+                    stroke-width={isSelected ? 2.5 : 1.5}></circle>
+                  <circle
+                    cx={node.x + size.w / 2}
+                    cy={node.y + size.h / 2}
+                    r={5.5}
+                    fill="var(--foreground)"></circle>
+                {/if}
+                <text
+                  x={node.x + size.w / 2}
+                  y={node.y + size.h + 11}
+                  fill="var(--muted-foreground)"
+                  font-size="9"
+                  text-anchor="middle"
+                  style="pointer-events: none;">
+                  {node.label}
+                </text>
+              {:else if node.shape === 'diamond'}
+                <polygon
+                  points="{node.x + size.w / 2},{node.y} {node.x + size.w},{node.y +
+                    size.h / 2} {node.x + size.w / 2},{node.y + size.h} {node.x},{node.y +
+                    size.h / 2}"
+                  fill="var(--background)"
+                  stroke={isSelected ? 'var(--primary)' : 'var(--border)'}
+                  stroke-width={isSelected ? 2.5 : 1.5}></polygon>
+              {:else}
+                <rect
+                  height={size.h}
+                  rx={node.shape === 'stadium' ? size.h / 2 : node.shape === 'round' ? 12 : 4}
+                  width={size.w}
+                  x={node.x}
+                  y={node.y}
+                  fill="var(--background)"
+                  stroke={isSelected ? 'var(--primary)' : 'var(--border)'}
+                  stroke-width={isSelected ? 2.5 : 1.5}></rect>
+              {/if}
+              {#if !node.special}
+                {#if node.role}
+                  <text
+                    x={node.x + size.w / 2}
+                    y={node.y - 4}
+                    fill="var(--muted-foreground)"
+                    font-size="8"
+                    text-anchor="middle"
+                    style="pointer-events: none;">
+                    {node.roleData ?? node.role}
+                  </text>
+                {/if}
+                <text
+                  x={node.x + size.w / 2}
+                  y={node.y + NODE_H / 2 + 4}
+                  fill="var(--foreground)"
+                  font-size="12"
+                  text-anchor="middle"
+                  style="pointer-events: none;">
+                  {displayLabel(node.label || node.id)}
+                </text>
+                {#if node.detail}
+                  {#each node.detail.split('\n').slice(0, 5) as line, i (i)}
+                    <text
+                      x={node.x + size.w / 2}
+                      y={node.y + NODE_H + 11 + i * 13}
+                      fill="var(--muted-foreground)"
+                      font-size="9"
+                      text-anchor="middle"
+                      style="pointer-events: none;">
+                      {displayLabel(line)}
+                    </text>
+                  {/each}
+                {/if}
+              {/if}
+            </g>
+            {#if isSelected && canLink}
+              {#each handles(node) as handle (handle.key)}
+                <circle
+                  role="button"
+                  tabindex="-1"
+                  cx={handle.x}
+                  cy={handle.y}
+                  r="5"
+                  fill="var(--primary)"
+                  style="cursor: crosshair;"
+                  onpointerdown={(e) => onHandlePointerDown(e, node)}></circle>
+              {/each}
+            {/if}
+          {/each}
+
+          {#if graph.nodes.length === 0}
+            <text
+              x={CANVAS_W / 2}
+              y={80}
+              fill="var(--muted-foreground)"
+              font-size="14"
+              text-anchor="middle">
+              双击画布添加{kindSpec.newNode}；拖动节点边缘圆点创建连线；双击节点/连线修改文字
+            </text>
+          {/if}
+        </svg>
+
+        {#if editing}
+          <input
+            type="text"
+            class="absolute z-10 w-44 rounded border bg-background px-1 py-0.5 text-xs text-foreground"
+            style="left: {editing.x - 88}px; top: {editing.y - 12}px;"
+            bind:value={editing.label}
+            use:focusEditor
             onkeydown={(e) => {
               e.stopPropagation();
-              if (e.key === 'Escape') editingDetail = false;
-            }}></textarea>
-          <div class="mt-1 flex justify-end gap-1">
-            <Button size="sm" variant="ghost" onclick={() => (editingDetail = false)}>取消</Button>
-            <Button size="sm" onclick={commitDetail}>保存</Button>
+              if (e.key === 'Enter') commitEdit();
+              if (e.key === 'Escape') editing = undefined;
+            }}
+            onblur={commitEdit} />
+        {/if}
+
+        {#if editingMeta}
+          <div class="absolute top-2 left-2 z-10 w-64 rounded border bg-background p-2 shadow">
+            <div class="mb-1 text-xs text-muted-foreground">图表属性</div>
+            {#if kindSpec.hasTitle}
+              <label class="mb-1 block text-xs" for="ve-meta-title">标题</label>
+              <input
+                id="ve-meta-title"
+                class="mb-2 w-full rounded border border-input bg-background p-1 text-xs text-foreground"
+                bind:value={metaTitleDraft} />
+            {/if}
+            {#each kindSpec.metaKeys ?? [] as metaKey (metaKey.key)}
+              <label class="mb-1 block text-xs" for="ve-meta-{metaKey.key}">{metaKey.label}</label>
+              <input
+                id="ve-meta-{metaKey.key}"
+                class="mb-2 w-full rounded border border-input bg-background p-1 text-xs text-foreground"
+                bind:value={metaDrafts[metaKey.key]} />
+            {/each}
+            <div class="mt-1 flex justify-end gap-1">
+              <Button size="sm" variant="ghost" onclick={() => (editingMeta = false)}>取消</Button>
+              <Button size="sm" onclick={commitMeta}>保存</Button>
+            </div>
           </div>
-        </div>
-      {/if}
+        {/if}
+
+        {#if editingDetail && selectedNode}
+          <div class="absolute top-2 left-2 z-10 w-64 rounded border bg-background p-2 shadow">
+            <div class="mb-1 text-xs text-muted-foreground">
+              编辑「{displayLabel(selectedNode.label || selectedNode.id)}」的内容（每行一条）
+            </div>
+            <textarea
+              data-testid={TID.visualDetailEditor}
+              bind:value={detailDraft}
+              class="h-24 w-full rounded border border-input bg-background p-1 font-mono text-xs text-foreground"
+              onkeydown={(e) => {
+                e.stopPropagation();
+                if (e.key === 'Escape') editingDetail = false;
+              }}></textarea>
+            <div class="mt-1 flex justify-end gap-1">
+              <Button size="sm" variant="ghost" onclick={() => (editingDetail = false)}
+                >取消</Button>
+              <Button size="sm" onclick={commitDetail}>保存</Button>
+            </div>
+          </div>
+        {/if}
+      </div>
     </div>
+    {#if showPreview}
+      <div class="hidden min-w-0 border-l md:block" style="flex: 0 0 42%;">
+        <VisualPreview
+          code={generated}
+          config={validatedState.current.mermaid}
+          rough={validatedState.current.rough ?? false}
+          visible={active} />
+      </div>
+    {/if}
   </div>
 
   {#if showCode}

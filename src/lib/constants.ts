@@ -20,6 +20,8 @@ export const TID = {
   visualDetailEditor: 'visual-detail-editor',
   visualMeta: 'visual-meta',
   visualNodeType: 'visual-node-type',
+  visualPreview: 'visual-preview',
+  visualPreviewToggle: 'visual-preview-toggle',
   visualTab: 'visual-tab'
 } as const;
 

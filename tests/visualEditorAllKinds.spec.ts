@@ -110,6 +110,38 @@ test('visual editor edits pie slices with values', async ({ page }) => {
   await expect(page.locator('#container').getByText('Dogs', { exact: true })).toBeVisible();
 });
 
+test('visual editor shows the live mermaid rendering beside the canvas', async ({ page }) => {
+  await openEditor(page);
+  await typeCode(page, 'pie title Pets\n  "Dogs" : 386\n  "Cats" : 85');
+
+  const codeOut = await enterVisual(page);
+
+  // The split pane renders the generated code through the mermaid pipeline
+  // (the display is mermaid's own, not the editor canvas boxes).
+  const preview = page.getByTestId('visual-preview');
+  await expect(preview).toBeVisible();
+  await expect(preview.locator('svg')).toBeVisible({ timeout: 10_000 });
+  await expect(preview.getByText('Dogs', { exact: true }).first()).toBeVisible();
+
+  // Editing on the canvas updates the mermaid rendering (debounced).
+  await page.getByTestId('visual-add-node').click();
+  await page.keyboard.type('Birds');
+  await page.keyboard.press('Enter');
+  await expect(codeOut).toContainText('"Birds": 1');
+  await expect(preview.getByText('Birds', { exact: true }).first()).toBeVisible({
+    timeout: 10_000
+  });
+
+  // The toggle hides the pane and the preference persists across re-entry.
+  await page.getByTestId('visual-preview-toggle').click();
+  await expect(preview).toHaveCount(0);
+  await page.getByTestId('visual-tab').click();
+  await page.locator('#view').waitFor({ state: 'visible' });
+  await page.getByTestId('visual-tab').click();
+  await expect(page.getByTestId('visual-preview')).toHaveCount(0);
+  await expect(page.getByTestId('visual-canvas')).toBeVisible();
+});
+
 test('visual editor drags quadrant points into new coordinates', async ({ page }) => {
   await openEditor(page);
   await typeCode(
@@ -122,7 +154,10 @@ test('visual editor drags quadrant points into new coordinates', async ({ page }
 
   // Coordinate kinds are position-driven: dragging a node rewrites its [x, y]
   // in the generated code (snap grid 10px; 0.45*1840+80 = 908, +150 → 0.53).
+  // The split preview pane narrows the canvas — scroll the node into view
+  // first so its world coordinates stay over the canvas, not the preview.
   const nodeB = page.locator('[data-node-id="P1"]');
+  await nodeB.scrollIntoViewIfNeeded();
   const box = await nodeB.boundingBox();
   if (!box) {
     throw new Error('quadrant point not found');

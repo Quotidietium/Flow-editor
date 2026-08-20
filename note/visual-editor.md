@@ -211,4 +211,27 @@ src/lib/util/visualEditor/model.test.ts   单元测试（15 个用例，全绿�
   detail 逐字节保留，保证往返稳定
 - ishikawa 多根（多个无父节点）时按节点序全部输出，mermaid 渲染以首个为鱼头
 
-> 版本变更汇总见 [release/2.0.68.md](release/2.0.68.md)、[release/2.0.75.md](release/2.0.75.md)、[release/2.0.76.md](release/2.0.76.md)、[release/2.0.85.md](release/2.0.85.md)
+## 8. 编辑界面内的 Mermaid 实时渲染（2.0.86）
+
+**问题**：可视化编辑界面此前是我们自绘的通用框线画布（VNode/VEdge 盒子），
+编辑非 flowchart 类图时（饼图、甘特图……）画布呈现与 Mermaid 实际渲染差异很大
+——「编辑界面看起来不像 Mermaid 的图」。
+
+**方案**：编辑界面切换回 Mermaid 显示方式——Visual 标签改为**分屏**：
+
+- 左侧：交互画布（原有全部编辑能力不变）
+- 右侧：**Mermaid 实时渲染**（新组件 `VisualPreview.svelte`），复用生产渲染管线
+  `renderAndPlaceDiagram`（与预览面板同一管线：主题/手绘/全部 31 类图渲染一致），
+  250ms 防抖跟随画布编辑实时更新；渲染失败（编辑中间态非法代码）时保留上次
+  结果并降低透明度提示
+- 工具栏「预览」Toggle（`visualEditorPreview` localStorage 记忆偏好，默认开启）；
+  移动端（<md）隐藏分屏保持单栏画布
+- 渲染经 Promise 链串行（避免并发 mermaid 渲染互踩）；快速 Visual↔预览切换时
+  组件卸载即取消未触发的防抖渲染（60 次连切零渲染，压测无回归）
+
+**为何不做「直接在 Mermaid 渲染结果上编辑」**：Mermaid 的布局不感知用户坐标——
+拖动节点后 Mermaid 不会重排连线（除非重新渲染整个图），节点与连线会脱节；
+这正是当初自绘画布的原因。分屏方案在保留可编辑性的同时，把 Mermaid 的真实
+显示带回编辑界面。
+
+> 版本变更汇总见 [release/2.0.68.md](release/2.0.68.md)、[release/2.0.75.md](release/2.0.75.md)、[release/2.0.76.md](release/2.0.76.md)、[release/2.0.85.md](release/2.0.85.md)、[release/2.0.86.md](release/2.0.86.md)
