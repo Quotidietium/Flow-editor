@@ -110,35 +110,37 @@ test('visual editor edits pie slices with values', async ({ page }) => {
   await expect(page.locator('#container').getByText('Dogs', { exact: true })).toBeVisible();
 });
 
-test('visual editor shows the live mermaid rendering beside the canvas', async ({ page }) => {
+test('compare mode shows the real mermaid preview beside code and canvas', async ({ page }) => {
   await openEditor(page);
   await typeCode(page, 'pie title Pets\n  "Dogs" : 386\n  "Cats" : 85');
 
   const codeOut = await enterVisual(page);
 
-  // The split pane renders the generated code through the mermaid pipeline
-  // (the display is mermaid's own, not the editor canvas boxes).
-  const preview = page.getByTestId('visual-preview');
-  await expect(preview).toBeVisible();
-  await expect(preview.locator('svg')).toBeVisible({ timeout: 10_000 });
-  await expect(preview.getByText('Dogs', { exact: true }).first()).toBeVisible();
+  // Plain mode (default): only the code editor + interactive canvas, no
+  // separate mermaid preview pane.
+  await expect(page.getByTestId('visual-preview')).toHaveCount(0);
 
-  // Editing on the canvas updates the mermaid rendering (debounced).
+  // 对比 mode: a third pane renders through the very same View pipeline.
+  await page.getByTestId('visual-preview-toggle').click();
+  const compare = page.getByTestId('visual-preview');
+  await expect(compare).toBeVisible();
+  await expect(compare.locator('svg[id^="graph-"]')).toBeVisible({ timeout: 10_000 });
+  await expect(compare.getByText('Dogs', { exact: true }).first()).toBeVisible();
+
+  // Canvas edits flow through the state gateway into the mermaid render.
   await page.getByTestId('visual-add-node').click();
   await page.keyboard.type('Birds');
   await page.keyboard.press('Enter');
   await expect(codeOut).toContainText('"Birds": 1');
-  await expect(preview.getByText('Birds', { exact: true }).first()).toBeVisible({
+  await expect(compare.getByText('Birds', { exact: true }).first()).toBeVisible({
     timeout: 10_000
   });
 
-  // The toggle hides the pane and the preference persists across re-entry.
-  await page.getByTestId('visual-preview-toggle').click();
-  await expect(preview).toHaveCount(0);
+  // The preference persists across re-entering the visual tab.
   await page.getByTestId('visual-tab').click();
   await page.locator('#view').waitFor({ state: 'visible' });
   await page.getByTestId('visual-tab').click();
-  await expect(page.getByTestId('visual-preview')).toHaveCount(0);
+  await expect(page.getByTestId('visual-preview')).toBeVisible();
   await expect(page.getByTestId('visual-canvas')).toBeVisible();
 });
 

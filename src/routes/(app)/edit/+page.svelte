@@ -18,6 +18,7 @@
   import { TID } from '$/constants';
   import type { EditorMode, Tab } from '$/types';
   import { PanZoomState } from '$/util/panZoom';
+  import { readJSON, writeJSON } from '$/util/persist.svelte';
   import { validatedState, updateCodeStore, urls } from '$/util/state.svelte';
   import { initHandler } from '$/util/util';
   import { onMount } from 'svelte';
@@ -50,6 +51,13 @@
   // editor keeps the code. `active` makes the visual editor reload external
   // code edits whenever the mode is entered.
   let visualMode = $state(false);
+  // 对比模式：可视化编辑旁边再并一栏真正的 Mermaid 预览（同一 View 组件），
+  // 形成 代码编辑 | 可视化画布 | 预览 三栏对比；默认关闭（纯代码+可视化两栏）。
+  const COMPARE_KEY = 'visualEditorPreview';
+  let visualCompare = $state(readJSON<boolean>(COMPARE_KEY, false));
+  $effect(() => {
+    writeJSON(COMPARE_KEY, visualCompare);
+  });
 
   let width = $state(0);
   let isMobile = $derived(width < 640);
@@ -71,6 +79,15 @@
 </script>
 
 <div class="flex h-full flex-col overflow-hidden">
+  {#snippet viewPane()}
+    <View {panZoomState} shouldShowGrid={validatedState.current.grid} />
+    <div class="absolute top-0 right-0">
+      <PanZoomToolbar {panZoomState} fullScreenHref={urls.current.view} />
+    </div>
+    <div class="absolute right-0 bottom-0"><VersionSecurityToolbar /></div>
+    <div class="absolute bottom-0 left-0 sm:left-5"><SyncRoughToolbar /></div>
+  {/snippet}
+
   {#snippet mobileToggle()}
     <div class="flex items-center gap-2">
       编辑 <Switch
@@ -126,14 +143,28 @@
         <Resizable.Handle class="mr-1 hidden opacity-0 sm:block" />
         <Resizable.Pane minSize={15} class="relative flex h-full flex-1 flex-col overflow-hidden">
           {#if visualMode}
-            <VisualEditor active={visualMode} />
-          {:else}
-            <View {panZoomState} shouldShowGrid={validatedState.current.grid} />
-            <div class="absolute top-0 right-0">
-              <PanZoomToolbar {panZoomState} fullScreenHref={urls.current.view} />
+            <div class="flex h-full min-h-0 w-full">
+              <div class="min-h-0 min-w-0 flex-1">
+                <VisualEditor
+                  active={visualMode}
+                  compareOpen={visualCompare}
+                  onToggleCompare={() => (visualCompare = !visualCompare)} />
+              </div>
+              {#if visualCompare}
+                <div
+                  class="relative hidden min-h-0 min-w-0 flex-1 flex-col border-l sm:flex"
+                  data-testid={TID.visualPreview}>
+                  <div class="flex-none border-b px-2 py-1 text-xs text-muted-foreground">
+                    预览（Mermaid 渲染）
+                  </div>
+                  <div class="relative min-h-0 flex-1 overflow-hidden">
+                    {@render viewPane()}
+                  </div>
+                </div>
+              {/if}
             </div>
-            <div class="absolute right-0 bottom-0"><VersionSecurityToolbar /></div>
-            <div class="absolute bottom-0 left-0 sm:left-5"><SyncRoughToolbar /></div>
+          {:else}
+            {@render viewPane()}
           {/if}
         </Resizable.Pane>
         {#if isHistoryOpen}
