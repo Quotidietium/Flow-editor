@@ -37,6 +37,8 @@
     sanitizePositions
   } from '$/util/visualEditor/model';
   import type { VEdge, VGraph, VLinkType, VNode, VShape } from '$/util/visualEditor/model';
+  import { pointOnRoute, routeEdge } from '$/util/visualEditor/routing';
+  import type { EdgeStyle } from '$/util/visualEditor/routing';
   import { readJSON, writeJSON } from '$/util/persist.svelte';
   import { updateCode, validatedState } from '$/util/state.svelte';
   import AddIcon from '~icons/material-symbols/add-2-rounded';
@@ -247,6 +249,18 @@
   // scroll panning (space-drag / middle-drag), like every office canvas.
   let view = $state({ k: 1 });
   let panning = $state<undefined | { lastX: number; lastY: number }>();
+  let resize = $state<
+    | undefined
+    | {
+        corner: 'ne' | 'nw' | 'se' | 'sw';
+        h0: number;
+        id: string;
+        preState: VGraph;
+        w0: number;
+        x: number;
+        y: number;
+      }
+  >();
   let spaceDown = false;
 
   const ZOOM_MIN = 0.4;
@@ -304,6 +318,30 @@
 
   const snap = (value: number): number => Math.round(value / SNAP) * SNAP;
 
+  const sanitizeSizes = (raw: unknown): Record<string, { h: number; w: number }> => {
+    if (typeof raw !== 'object' || raw === null) {
+      return {};
+    }
+    const clean: Record<string, { h: number; w: number }> = {};
+    for (const [id, value] of Object.entries(raw)) {
+      if (typeof value !== 'object' || value === null) {
+        continue;
+      }
+      const { w, h } = value as { h?: unknown; w?: unknown };
+      if (
+        typeof w === 'number' &&
+        typeof h === 'number' &&
+        Number.isFinite(w) &&
+        Number.isFinite(h) &&
+        w >= 0 &&
+        h >= 0
+      ) {
+        clean[id] = { h, w };
+      }
+    }
+    return clean;
+  };
+
   // Remembered canvas positions per node id. Mermaid source carries no
   // coordinates, so re-entering the visual tab would re-layout everything
   // (nodes visibly jumping back to auto-layout slots). The map is overlaid
@@ -313,6 +351,32 @@
   // the editor remounts on every tab switch but there is only one instance.
   const POSITIONS_KEY = 'visualEditorLayout';
   let rememberedPositions = sanitizePositions(readJSON(POSITIONS_KEY, null));
+  // Editor-local edge routing style and manual node sizes (both never enter
+  // the generated code — same channel as the position memory).
+  const EDGE_STYLE_KEY = 'visualEditorEdgeStyle';
+  let edgeStyle = $state<EdgeStyle>(
+    readJSON<EdgeStyle>(EDGE_STYLE_KEY, 'orthogonal') === 'straight'
+      ? 'straight'
+      : readJSON<EdgeStyle>(EDGE_STYLE_KEY, 'orthogonal') === 'curved'
+        ? 'curved'
+        : 'orthogonal'
+  );
+  $effect(() => {
+    writeJSON(EDGE_STYLE_KEY, edgeStyle);
+  });
+  const SIZES_KEY = 'visualEditorSizes';
+  let rememberedSizes = sanitizeSizes(readJSON(SIZES_KEY, null));
+  const rememberSizes = (): void => {
+    rememberedSizes = Object.fromEntries(
+      graph.nodes
+        .filter((n) => n.w !== undefined || n.h !== undefined)
+        .map((n) => [n.id, { h: n.h ?? 0, w: n.w ?? 0 }] as const)
+    );
+    if (JSON.stringify(rememberedSizes).length > 100_000) {
+      return;
+    }
+    writeJSON(SIZES_KEY, rememberedSizes);
+  };
   const rememberPositions = (): void => {
     if (isCoordKind) {
       return; // coordinates live in the generated code itself
@@ -334,6 +398,7 @@
   const syncCode = (): void => {
     lastSyncedCode = generateCode(graph);
     rememberPositions();
+    rememberSizes();
     updateCode(lastSyncedCode, { updateDiagram: true });
   };
 
@@ -343,6 +408,13 @@
       const laid = layoutGraph(parsed.result.graph);
       const parsedKind = parsed.result.graph.kind ?? 'flowchart';
       graph = COORD_KINDS.has(parsedKind) ? laid : applyPositions(laid, rememberedPositions);
+      for (const node of graph.nodes) {
+        const size = rememberedSizes[node.id];
+        if (size && (size.w > 0 || size.h > 0)) {
+          node.w = size.w > 0 ? size.w : undefined;
+          node.h = size.h > 0 ? size.h : undefined;
+        }
+      }
       rememberPositions();
       if (announce) {
         notify(
@@ -671,6 +743,8 @@
 
   // Visio AutoConnect arrows: connect the nearest unconnected node in the
   // direction, or spawn a fresh connected node there (draw.io drop-on-arrow).
+  const GROUP_ROLES = new Set(['column', 'domain', 'period', 'section']);
+  const isGroupNode = (node: VNode): boolean => Boolean(node.role && GROUP_ROLES.has(node.role));
   const GROUP_ROLE_BY_KIND: Partial<Record<string, string>> = {
     cynefin: 'domain',
     gantt: 'section',
@@ -951,6 +1025,35 @@
     };
   };
 
+  const onResizePointerDown = (
+    event: PointerEvent,
+    node: VNode,
+    corner: 'ne' | 'nw' | 'se' | 'sw'
+  ): void => {
+    event.stopPropagation();
+    const size = nodeSize(node);
+    const p = svgPoint(event);
+    resize = {
+      corner,
+      h0: size.h,
+      id: node.id,
+      preState: snapshotGraph(graph),
+      w0: size.w,
+      x: p.x,
+      y: p.y
+    };
+  };
+
+  const resetNodeSize = (): void => {
+    if (!selectedNode) {
+      return;
+    }
+    pushUndo();
+    selectedNode.w = undefined;
+    selectedNode.h = undefined;
+    syncCode();
+  };
+
   const onHandlePointerDown = (event: PointerEvent, node: VNode): void => {
     if (!canLink) return;
     event.stopPropagation();
@@ -995,6 +1098,21 @@
   };
 
   const onWindowPointerMove = (event: PointerEvent): void => {
+    if (resize) {
+      const node = nodeById.get(resize.id);
+      if (node) {
+        const p = svgPoint(event);
+        const dx = p.x - resize.x;
+        const dy = p.y - resize.y;
+        const flipX = resize.corner === 'nw' || resize.corner === 'ne';
+        const flipY = resize.corner === 'nw' || resize.corner === 'sw';
+        const w = flipX ? resize.w0 - dx : resize.w0 + dx;
+        const h = flipY ? resize.h0 - dy : resize.h0 + dy;
+        node.w = Math.max(60, Math.min(900, snap(w)));
+        node.h = Math.max(36, Math.min(600, snap(h)));
+      }
+      return;
+    }
     if (panning && canvasEl) {
       canvasEl.scrollLeft -= event.clientX - panning.lastX;
       canvasEl.scrollTop -= event.clientY - panning.lastY;
@@ -1045,6 +1163,14 @@
 
   const onWindowPointerUp = (event: PointerEvent): void => {
     panning = undefined;
+    if (resize) {
+      const pre = resize.preState;
+      resize = undefined;
+      undoStack = [...undoStack.slice(-(UNDO_LIMIT - 1)), pre];
+      redoStack = [];
+      syncCode();
+      return;
+    }
     if (drag?.moved) {
       // Snapshot taken at gesture start (drag.preState) — see onNodePointerDown.
       undoStack = [...undoStack.slice(-(UNDO_LIMIT - 1)), drag.preState];
@@ -1273,12 +1399,6 @@
     if (event.code === 'Space') {
       spaceDown = false;
     }
-  };
-
-  const edgeGeom = (edge: VEdge) => {
-    const s = nodeById.get(edge.source);
-    const t = nodeById.get(edge.target);
-    return s && t ? edgeAnchor(s, t) : undefined;
   };
 
   const linkPreview = $derived.by(() => {
@@ -1544,8 +1664,13 @@
           <rect width={CANVAS_W} height={CANVAS_H} fill="transparent"></rect>
 
           {#each graph.edges as edge (edge.id)}
-            {@const geom = edgeGeom(edge)}
-            {#if geom}
+            {@const sNode = nodeById.get(edge.source)}
+            {@const tNode = nodeById.get(edge.target)}
+            {#if sNode && tNode}
+              {@const route = routeEdge(edgeStyle, sNode, tNode, graph.nodes)}
+              {@const cardLPos = pointOnRoute(route, 0.15)}
+              {@const cardRPos = pointOnRoute(route, 0.85)}
+              {@const labelPos = pointOnRoute(route, 0.5)}
               {@const selectedEdgeId = selectedEdgeIds.has(edge.id) ? edge.id : undefined}
               {@const endMarker = END_MARKERS[edge.type]}
               {@const startMarker = START_MARKERS[edge.type]}
@@ -1553,7 +1678,7 @@
                 role="button"
                 tabindex="0"
                 data-edge-id={edge.id}
-                d="M{geom.x1},{geom.y1} L{geom.x2},{geom.y2}"
+                d={route.d}
                 fill="none"
                 stroke="transparent"
                 stroke-width="14"
@@ -1575,7 +1700,7 @@
                   startEdit(edge);
                 }}></path>
               <path
-                d="M{geom.x1},{geom.y1} L{geom.x2},{geom.y2}"
+                d={route.d}
                 fill="none"
                 stroke={selectedEdgeId === edge.id ? 'var(--primary)' : 'var(--foreground)'}
                 stroke-width={selectedEdgeId === edge.id ? 2.5 : 1.5}
@@ -1586,8 +1711,8 @@
               {#if edge.cardL || edge.cardR}
                 {#if edge.cardL}
                   <text
-                    x={geom.x1 + (geom.x2 - geom.x1) * 0.15}
-                    y={geom.y1 + (geom.y2 - geom.y1) * 0.15 - 4}
+                    x={cardLPos.x}
+                    y={cardLPos.y - 4}
                     fill="var(--foreground)"
                     font-size="9"
                     text-anchor="middle"
@@ -1597,8 +1722,8 @@
                 {/if}
                 {#if edge.cardR}
                   <text
-                    x={geom.x1 + (geom.x2 - geom.x1) * 0.85}
-                    y={geom.y1 + (geom.y2 - geom.y1) * 0.85 - 4}
+                    x={cardRPos.x}
+                    y={cardRPos.y - 4}
                     fill="var(--foreground)"
                     font-size="9"
                     text-anchor="middle"
@@ -1609,8 +1734,8 @@
               {/if}
               {#if edge.label}
                 <text
-                  x={(geom.x1 + geom.x2) / 2}
-                  y={(geom.y1 + geom.y2) / 2 - 6}
+                  x={labelPos.x}
+                  y={labelPos.y - 6}
                   fill="var(--foreground)"
                   font-size="11"
                   text-anchor="middle"
@@ -1660,8 +1785,9 @@
               y={marqueeRect.y}></rect>
           {/if}
 
-          {#each graph.nodes as node (node.id)}
+          {#each [...graph.nodes].sort((a, b) => (isGroupNode(b) ? 1 : 0) - (isGroupNode(a) ? 1 : 0)) as node (node.id)}
             {@const isSelected = selectedNodeIds.has(node.id)}
+            {@const container = isGroupNode(node) && !node.special}
             {@const size = nodeSize(node)}
             <g
               role="button"
@@ -1711,6 +1837,18 @@
                   fill="var(--background)"
                   stroke={isSelected ? 'var(--primary)' : 'var(--border)'}
                   stroke-width={isSelected ? 2.5 : 1.5}></polygon>
+              {:else if container}
+                <rect
+                  fill="var(--primary)"
+                  fill-opacity={isSelected ? 0.12 : 0.06}
+                  height={size.h}
+                  rx={10}
+                  stroke={isSelected ? 'var(--primary)' : 'var(--border)'}
+                  stroke-dasharray="8 5"
+                  stroke-width={isSelected ? 2.5 : 1.5}
+                  width={size.w}
+                  x={node.x}
+                  y={node.y}></rect>
               {:else}
                 <rect
                   height={size.h}
@@ -1735,11 +1873,12 @@
                   </text>
                 {/if}
                 <text
-                  x={node.x + size.w / 2}
-                  y={node.y + NODE_H / 2 + 4}
-                  fill="var(--foreground)"
+                  x={container ? node.x + 12 : node.x + size.w / 2}
+                  y={container ? node.y + 18 : node.y + NODE_H / 2 + 4}
+                  fill={container ? 'var(--primary)' : 'var(--foreground)'}
                   font-size="12"
-                  text-anchor="middle"
+                  font-weight={container ? '600' : undefined}
+                  text-anchor={container ? 'start' : 'middle'}
                   style="pointer-events: none;">
                   {displayLabel(node.label || node.id)}
                 </text>
@@ -1769,6 +1908,29 @@
                   fill="var(--primary)"
                   style="cursor: crosshair;"
                   onpointerdown={(e) => onHandlePointerDown(e, node)}></circle>
+              {/each}
+            {/if}
+            {#if isSelected && !node.special && selectedNodeIds.size === 1}
+              {@const corners = [
+                { key: 'nw', x: node.x + 4, y: node.y + 4 },
+                { key: 'ne', x: node.x + size.w - 4, y: node.y + 4 },
+                { key: 'se', x: node.x + size.w - 4, y: node.y + size.h - 4 },
+                { key: 'sw', x: node.x + 4, y: node.y + size.h - 4 }
+              ]}
+              {#each corners as corner (corner.key)}
+                <rect
+                  role="button"
+                  tabindex="-1"
+                  aria-label="调整大小"
+                  data-testid="visual-resize-{corner.key}"
+                  fill="var(--primary)"
+                  height="8"
+                  style="cursor: nwse-resize;"
+                  width="8"
+                  x={corner.x - 4}
+                  y={corner.y - 4}
+                  onpointerdown={(e) =>
+                    onResizePointerDown(e, node, corner.key as 'ne' | 'nw' | 'se' | 'sw')}></rect>
               {/each}
             {/if}
             {#if isSelected && !node.special && canLink && selectedNodeIds.size === 1}
@@ -2080,6 +2242,13 @@
           </div>
         {/if}
         <div class="my-1 border-t"></div>
+        {#if selectedNode?.w !== undefined || selectedNode?.h !== undefined}
+          <button
+            class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
+            onclick={() => menuAction(resetNodeSize)}>
+            重置尺寸
+          </button>
+        {/if}
         <button
           class="flex w-full items-center justify-between rounded px-2 py-1 text-left text-destructive hover:bg-accent"
           data-testid={TID.visualMenuDelete}
@@ -2140,6 +2309,31 @@
           全选 <span class="ml-4 text-muted-foreground">Ctrl+A</span>
         </button>
         <div class="my-1 border-t"></div>
+        <div
+          class="relative"
+          onmouseenter={() => (menu = menu && { ...menu, submenu: 'edgestyle' })}
+          onmouseleave={() => (menu = menu && { ...menu, submenu: undefined })}>
+          <button
+            class="flex w-full items-center justify-between rounded px-2 py-1 text-left hover:bg-accent">
+            连线风格 ▸
+          </button>
+          {#if menu.submenu === 'edgestyle'}
+            <div
+              class="absolute top-0 left-full z-10 ml-1 min-w-28 rounded-md border bg-popover p-1 shadow-md">
+              {#each [{ key: 'orthogonal', name: '直角' }, { key: 'straight', name: '直线' }, { key: 'curved', name: '曲线' }] as styleItem (styleItem.key)}
+                <button
+                  class="flex w-full items-center justify-between rounded px-2 py-1 text-left hover:bg-accent"
+                  onclick={() =>
+                    menuAction(() => {
+                      edgeStyle = styleItem.key as EdgeStyle;
+                    })}>
+                  {styleItem.name}
+                  {#if edgeStyle === styleItem.key}<span>✓</span>{/if}
+                </button>
+              {/each}
+            </div>
+          {/if}
+        </div>
         <button
           class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
           onclick={() => menuAction(alignToGrid)}>

@@ -83,6 +83,9 @@ export interface VNode {
   shape: VShape;
   x: number;
   y: number;
+  /** Editor-local manual size (resize handles); never serialized to code. */
+  w?: number;
+  h?: number;
   /** Body lines below the title (class members, ER attributes, state descriptions). */
   detail?: string;
   /** Per-kind node type keyword (`Person` for C4, `section` for journey, …). */
@@ -1185,13 +1188,16 @@ const interpretStatement = (
 // Layout & geometry
 // ---------------------------------------------------------------------------
 
-/** Outer box of a node: detail lines extend the height, special dots are small. */
+/** Outer box of a node: manual size widens; detail lines extend the height. */
 export const nodeSize = (node: VNode): { h: number; w: number } => {
   if (node.special) {
     return { h: SPECIAL_SIZE, w: SPECIAL_SIZE };
   }
   const lines = node.detail ? node.detail.split('\n').length : 0;
-  return { h: NODE_H + lines * DETAIL_LINE_H, w: NODE_W };
+  return {
+    h: Math.max(node.h ?? 0, NODE_H + lines * DETAIL_LINE_H),
+    w: node.w ?? NODE_W
+  };
 };
 
 /** Layered layout (Kahn layering along the flow direction; cycles appended). */

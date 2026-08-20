@@ -20,6 +20,16 @@ const enterVisual = async (page: Page) => {
   return codeOut;
 };
 
+// Clipboard paste into the code editor (typing special chars races Monaco).
+const typeCode = async (page: Page, code: string): Promise<void> => {
+  const editor = page.locator('.monaco-editor');
+  await editor.click();
+  await page.evaluate((c) => navigator.clipboard.writeText(c), code);
+  await page.keyboard.press('Control+KeyA');
+  await page.keyboard.press('Control+V');
+  await expect(editor).toContainText(code.split('\n')[0]?.trim() ?? '');
+};
+
 const canvasBox = async (page: Page) => {
   const box = await page.getByTestId('visual-canvas').boundingBox();
   if (!box) {
@@ -327,4 +337,79 @@ test('space+drag pans the canvas', async ({ page }) => {
   await page.keyboard.up(' ');
   const after = await canvas.evaluate((el) => el.scrollLeft);
   expect(after).toBeGreaterThan(before);
+});
+
+test('orthogonal routing renders manhattan edges with rounded bends', async ({ page }) => {
+  await openEditor(page);
+  const codeOut = await enterVisual(page);
+  await page.getByTestId('visual-clear').click();
+
+  const box = await canvasBox(page);
+  await addNode(page, box.x + 200, box.y + 160, 'A');
+  await addNode(page, box.x + 600, box.y + 420, 'B');
+  // Connect via the bottom handle of A dragged onto B.
+  const a = await page.locator('[data-node-id="N1"]').boundingBox();
+  const b = await page.locator('[data-node-id="N2"]').boundingBox();
+  if (!a || !b) {
+    throw new Error('nodes missing');
+  }
+  await page.mouse.click(a.x + 20, a.y + 10);
+  await page.mouse.move(a.x + a.width / 2, a.y + a.height);
+  await page.mouse.down();
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 6 });
+  await page.mouse.up();
+  await expect(codeOut).toContainText('N1 --> N2');
+
+  // The rendered visual path is a routed manhattan with rounded bends.
+  const path = page.locator('path[data-edge-id="E1"]');
+  const d = await path.getAttribute('d');
+  expect(d).toMatch(/^M/);
+  expect((d?.match(/Q/g) ?? []).length).toBeGreaterThan(0);
+});
+
+test('resize handles change the node size and persist', async ({ page }) => {
+  await openEditor(page);
+  const codeOut = await enterVisual(page);
+  await page.getByTestId('visual-clear').click();
+
+  const box = await canvasBox(page);
+  await addNode(page, box.x + 240, box.y + 180, 'Resize');
+  const node = page.locator('[data-node-id="N1"]');
+  const before = await node.boundingBox();
+  if (!before) {
+    throw new Error('node missing');
+  }
+  await page.mouse.click(before.x + 20, before.y + 10);
+
+  const se = page.getByTestId('visual-resize-se');
+  const handle = await se.boundingBox();
+  if (!handle) {
+    throw new Error('handle missing');
+  }
+  await page.mouse.move(handle.x + 4, handle.y + 4);
+  await page.mouse.down();
+  await page.mouse.move(handle.x + 104, handle.y + 44, { steps: 4 });
+  await page.mouse.up();
+
+  const after = await node.boundingBox();
+  expect(after?.width ?? 0).toBeGreaterThan(before.width + 80);
+  expect(after?.height ?? 0).toBeGreaterThan(before.height + 20);
+  // Size is editor-local: the generated code keeps the plain node syntax.
+  await expect(codeOut).toContainText('N1[Resize]');
+
+  // 重置尺寸 via the node context menu restores the default size.
+  await page.mouse.click(after!.x + 20, after!.y + 10, { button: 'right' });
+  await page.getByTestId('visual-context-menu').getByRole('button', { name: '重置尺寸' }).click();
+  const reset = await node.boundingBox();
+  expect(Math.abs((reset?.width ?? 0) - before.width)).toBeLessThanOrEqual(1);
+});
+
+test('group nodes render as dashed containers', async ({ page }) => {
+  await openEditor(page);
+  await typeCode(page, 'journey\n  title T\n  section S1\n    task: 5: Me');
+  await enterVisual(page);
+
+  const group = page.locator('[data-node-id="G1"]');
+  await expect(group).toBeVisible();
+  await expect(group.locator('rect')).toHaveAttribute('stroke-dasharray', '8 5');
 });
