@@ -4,6 +4,7 @@
  * without import cycles; everything routes through the state gateway.
  */
 
+import { runInputTransforms } from './registry.svelte';
 import { updateCode, updateCodeStore, validatedState } from '$/util/state.svelte';
 
 export interface EditorApi {
@@ -42,10 +43,11 @@ export const installEditorApi = (): void => {
     },
     getSvg,
     getState: () => window.__FLOW_EDITOR_STATE__?.() ?? { code: '', mermaid: '{}', rough: false },
-    setCode: (code) => updateCode(code, { updateDiagram: true }),
+    // Bridge writes pass through the plugin input pipeline (source 'bridge').
+    setCode: (code) => updateCode(runInputTransforms(code, 'bridge'), { updateDiagram: true }),
     setState: (state) =>
       updateCodeStore({
-        code: state.code,
+        code: runInputTransforms(state.code, 'bridge'),
         ...(state.mermaid !== undefined ? { mermaid: state.mermaid } : {}),
         updateDiagram: true
       })

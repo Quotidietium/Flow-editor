@@ -261,11 +261,26 @@ export const sanitizeConfig = (config: string | MermaidConfig) => {
 
 export const loadState = (data: string): void => {
   console.log(`Loading '${data}'`);
-  update((state) => {
-    let next: State;
+  // URL share links pass through the plugin input pipeline (source 'url').
+  // The registry is imported dynamically: state is a low-level module and this
+  // keeps the static dependency graph acyclic; plugins are loaded by then.
+  void import('../plugins/registry.svelte').then(({ runInputTransforms }) => {
+    update((state) => {
+      applyLoadedState(state, data, runInputTransforms);
+    });
+  });
+};
+
+const applyLoadedState = (
+  state: State,
+  data: string,
+  transform: (code: string, source: 'bridge' | 'file' | 'url') => string
+): void => {
+  let next: State;
     try {
       next = deserializeState(data);
       next.mermaid = sanitizeConfig(next.mermaid || defaultState.mermaid);
+      next.code = transform(next.code, 'url');
     } catch (error) {
       next = $state.snapshot(state) as State;
       if (data) {
@@ -274,8 +289,7 @@ export const loadState = (data: string): void => {
         next.mermaid = defaultState.mermaid;
       }
     }
-    applyPartial(state, next);
-  });
+  applyPartial(state, next);
 };
 
 let renderCount = 0;

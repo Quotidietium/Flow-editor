@@ -226,9 +226,11 @@ const applyPluginTheme = (plugin: FlowPlugin): void => {
     style.id = themeStyleId(plugin.id);
     document.head.append(style);
   }
-  style.textContent = `:root { ${Object.entries(theme.variables)
+  const vars = Object.entries(theme.variables ?? {})
     .map(([k, v]) => `${k.startsWith('--') ? k : `--${k}`}: ${v};`)
-    .join(' ')} }`;
+    .join(' ');
+  style.textContent = `${vars ? `:root { ${vars} }` : ''}
+${theme.css ?? ''}`;
 };
 
 const removePluginTheme = (plugin: FlowPlugin): void => {

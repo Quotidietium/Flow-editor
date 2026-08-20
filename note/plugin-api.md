@@ -1,6 +1,6 @@
 # Flow 编辑器插件 API
 
-> 版本：2.0.92 起提供｜模块：`src/lib/plugins/`
+> 版本：2.0.92 引入，2.0.93 补齐 bridge/url 管道接线与 theme.css｜模块：`src/lib/plugins/`
 > 目标：**项目的每一层都可通过插件处理**——输入、导入、导出、主题、整页前端替换、AI（MCP）。
 
 ## 1. 插件是什么
@@ -43,8 +43,9 @@ inputTransform: {
 }
 ```
 
-- 触发点：**文件打开**（`source='file'`）、**桥接写入**（`'bridge'`）、
-  URL 分享链接载入（`'url'`）。按安装顺序链式执行。
+- 触发点：**文件打开**（`source='file'`）、**桥接写入**（`'bridge'`，
+  含 MCP `set_code`/`set_state`）、**URL 分享链接载入**（`'url'`，插件先于
+  URL 初始化加载，首次进入即生效）。按安装顺序链式执行。
 - 典型用途：换行归一、注释清洗、PlantUML→Mermaid 转换、脱敏。
 
 ### 2.2 文件导入 `import`（自定义格式优先权）
@@ -76,13 +77,17 @@ export: {
 注册后出现在「导出 ▾」菜单底部（testid `plugin-export-<id>`）。
 `svg` 是当前渲染的 SVG 字符串（未渲染为 undefined）。
 
-### 2.4 主题 `theme`
+### 2.4 主题与样式 `theme`
 
 ```js
-theme: { variables: { '--primary': '0.8 0.4 0.9', '--ring': '…' } }
+theme: {
+  variables: { '--primary': '0.8 0.4 0.9', '--ring': '…' },  // CSS 变量
+  css: '.visual-canvas { background-image: url(贴图.png); }'   // 任意 CSS
+}
 ```
 
-以 `<style>` 注入 `:root`，启用即生效、停用即还原。
+以 `<style>` 注入：`variables` 生成 `:root{…}`，`css` 原样追加（布局调整、
+背景贴图、字体替换等一切 CSS 可表达之物）。启用即生效、停用即还原。
 
 ### 2.5 整页前端替换 `frontend`
 

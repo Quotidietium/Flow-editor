@@ -69,7 +69,7 @@
   let isMobile = $derived(width < 640);
   let isViewMode = $state(true);
 
-  onMount(() => initHandler());
+
 
   // Record the Timeline for the whole session, not just while the panel is open.
   onMount(() => startAutoSave());
@@ -78,10 +78,12 @@
   let pluginManagerOpen = $state(false);
   let pluginFrontend = $state<undefined | { id: string; url: string }>(undefined);
 
+  // Plugins load before init so the URL-share input pipeline (source 'url')
+  // and bridge handlers see installed plugins on first entry.
   onMount(() => {
     installEditorApi();
     startBridge();
-    void loadRegistry();
+    void loadRegistry().then(() => initHandler());
   });
 
   let editorPane: Resizable.Pane | undefined;

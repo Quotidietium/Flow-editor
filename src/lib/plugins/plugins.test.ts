@@ -101,6 +101,39 @@ describe('plugin hook dispatch', () => {
     expect(payload?.text).toContain('lines');
   });
 
+  it('theme.css injects arbitrary CSS (layout/stickers) into a style tag', () => {
+    registerPluginInstance(
+      basePlugin({
+        id: 'styler',
+        theme: { css: '.visual-canvas { background-image: url(sticker.png); }' }
+      })
+    );
+    const style = document.getElementById('flow-plugin-theme-styler');
+    expect(style?.textContent).toContain('sticker.png');
+  });
+
+  it(
+    'editorApi.setCode routes through the bridge input pipeline',
+    { timeout: 20_000 },
+    async () => {
+      registerPluginInstance(
+        basePlugin({
+          id: 'bridger',
+          inputTransform: {
+            name: 'strip',
+            transform: (code, source) =>
+              source === 'bridge' ? code.replace('@startuml\n', '') : code
+          }
+        })
+      );
+      const { installEditorApi } = await import('./editorApi');
+      installEditorApi();
+      window.__FLOW_EDITOR_API__?.setCode('@startuml\nflowchart TD\n  A --> B');
+      // The state gateway received the cleaned code (read back through it).
+      expect(window.__FLOW_EDITOR_STATE__?.().code).not.toContain('@startuml');
+    }
+  );
+
   it('disabled plugins contribute nothing', () => {
     registerPluginInstance(
       basePlugin({ id: 'off', inputTransform: { name: 'x', transform: () => 'NOPE' } }),

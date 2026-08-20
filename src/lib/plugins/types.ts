@@ -88,10 +88,15 @@ export interface ExportFormat {
   ): { blob?: Blob; text?: string; mime: string; filename: string } | undefined;
 }
 
-/** Theme override: CSS custom properties (`--background`, `--primary`, …). */
+/** Theme override: CSS custom properties and/or arbitrary CSS. */
 export interface ThemeHook {
   /** Plain key/value map applied as inline CSS variables on :root. */
-  variables: Record<string, string>;
+  variables?: Record<string, string>;
+  /**
+   * Arbitrary CSS appended after the variables — layout tweaks, background
+   * images (贴图), font swaps, anything expressible in CSS.
+   */
+  css?: string;
 }
 
 /**
