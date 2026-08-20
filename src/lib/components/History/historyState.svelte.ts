@@ -129,7 +129,11 @@ export const renameEntry = (id: string, name: string): void => {
   if (!trimmed || !slot) {
     return;
   }
-  slot.value = slot.value.map((entry) => (entry.id === id ? { ...entry, name: trimmed } : entry));
+  // Same multi-tab guard as addEntry: rename against the latest persisted
+  // value so concurrent saves from other tabs survive this write.
+  const storeKey = mode.value === 'auto' ? AUTO_STORE_KEY : MANUAL_STORE_KEY;
+  const latest = readJSON<HistoryEntry[]>(storeKey, slot.value);
+  slot.value = latest.map((entry) => (entry.id === id ? { ...entry, name: trimmed } : entry));
 };
 
 export const clearActive = (): void => {
@@ -160,25 +164,28 @@ export interface RestoreResult {
 
 // Routes each uploaded entry to the store matching its own type, skipping ids
 // that already exist. Entries beyond MAX_RESTORE_ENTRIES count as invalid.
+// Like every history write this merges into the latest persisted value so
+// concurrent saves from other tabs are not dropped.
 export const restoreEntries = (data: HistoryEntry[]): RestoreResult => {
   const capped = data.slice(0, MAX_RESTORE_ENTRIES);
   const valid = capped.filter((entry) => validateEntry(entry));
   const invalid = data.length - valid.length;
   let restored = 0;
 
-  const slots: [HistoryType, Persisted<HistoryEntry[]>][] = [
-    ['auto', auto],
-    ['manual', manual]
+  const slots: [HistoryType, Persisted<HistoryEntry[]>, string][] = [
+    ['auto', auto, AUTO_STORE_KEY],
+    ['manual', manual, MANUAL_STORE_KEY]
   ];
-  for (const [type, slot] of slots) {
+  for (const [type, slot, storeKey] of slots) {
     const incoming = valid.filter((entry) => entry.type === type);
     if (incoming.length === 0) {
       continue;
     }
-    const existingIDs = slot.value.map(({ id }) => id);
+    const latest = readJSON<HistoryEntry[]>(storeKey, slot.value);
+    const existingIDs = latest.map(({ id }) => id);
     const fresh = incoming.filter(({ id }) => !existingIDs.includes(id));
     restored += fresh.length;
-    slot.value = [...slot.value, ...fresh].sort((a, b) => b.time - a.time);
+    slot.value = [...latest, ...fresh].sort((a, b) => b.time - a.time);
   }
 
   const duplicates = valid.length - restored;

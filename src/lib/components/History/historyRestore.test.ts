@@ -101,3 +101,75 @@ describe('cross-tab merge on write', () => {
     }
   });
 });
+
+describe('cross-tab merge on rename and restore', () => {
+  const stubStorage = (initial: string): Map<string, string> => {
+    const store = new Map<string, string>([['manualHistoryStore', initial]]);
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (key: string) => store.get(key) ?? null,
+        setItem: (key: string, value: string) => void store.set(key, value)
+      }
+    });
+    return store;
+  };
+  const teardown = (): void => {
+    delete (window as { localStorage?: unknown }).localStorage;
+    vi.resetModules();
+  };
+
+  it('renames against the latest persisted value, keeping other tabs saves', async () => {
+    const otherTabsEntry = {
+      id: 'tab-b',
+      name: 'from-b',
+      state: { code: 'graph TD\n  Z-->Y', mermaid: '{}', rough: false, updateDiagram: true },
+      time: 7,
+      type: 'manual'
+    };
+    const store = stubStorage(JSON.stringify([otherTabsEntry]));
+    try {
+      vi.resetModules();
+      const mod = await import('./historyState.svelte');
+      mod.setMode('manual');
+      mod.renameEntry('tab-b', 'renamed-here');
+      const persisted = JSON.parse(store.get('manualHistoryStore') ?? '[]') as {
+        id: string;
+        name?: string;
+      }[];
+      expect(persisted).toHaveLength(1);
+      expect(persisted[0]?.name).toBe('renamed-here');
+    } finally {
+      teardown();
+    }
+  });
+
+  it('restores uploaded entries into the latest persisted value', async () => {
+    const otherTabsEntry = {
+      id: 'tab-b2',
+      name: 'from-b',
+      state: { code: 'graph TD\n  Z-->Y', mermaid: '{}', rough: false, updateDiagram: true },
+      time: 7,
+      type: 'manual'
+    };
+    const store = stubStorage(JSON.stringify([otherTabsEntry]));
+    try {
+      vi.resetModules();
+      const mod = await import('./historyState.svelte');
+      const { restored } = mod.restoreEntries([
+        {
+          id: 'upload-1',
+          name: 'up',
+          state: { code: 'graph TD\n  U-->V', mermaid: '{}', rough: false, updateDiagram: true },
+          time: 9,
+          type: 'manual'
+        }
+      ]);
+      expect(restored).toBe(1);
+      const persisted = JSON.parse(store.get('manualHistoryStore') ?? '[]') as { id: string }[];
+      expect(persisted.map((e) => e.id).sort()).toEqual(['tab-b2', 'upload-1']);
+    } finally {
+      teardown();
+    }
+  });
+});
