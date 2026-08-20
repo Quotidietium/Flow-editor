@@ -15,6 +15,12 @@
     parseOpenedFile,
     stateFileOf
   } from '$/util/fileIO';
+  import {
+    pluginExportFormats,
+    runImportHandler,
+    runInputTransforms,
+    runPluginExport
+  } from '$/plugins/registry.svelte';
   import { inputState, updateCode, updateCodeStore, validatedState } from '$lib/util/state.svelte';
   import dayjs from 'dayjs';
   import { toBase64 } from 'js-base64';
@@ -334,17 +340,43 @@ ${svgString}`);
     if (!file) {
       return;
     }
-    const parsed = parseOpenedFile(file.name, file.text);
+    // Plugin import handlers get first claim (custom formats), then the
+    // built-in parser; either way the entering source passes the plugin
+    // input-transform pipeline (cleaning/format conversion).
+    const handled = runImportHandler(file.name, file.text);
+    const parsed = handled ?? parseOpenedFile(file.name, file.text);
     if (!parsed) {
       notify(`无法识别文件「${file.name}」的内容`);
       return;
     }
+    const code = runInputTransforms(parsed.code, 'file');
     if (parsed.mermaid !== undefined) {
-      updateCodeStore({ code: parsed.code, mermaid: parsed.mermaid });
+      updateCodeStore({ code, mermaid: parsed.mermaid });
     } else {
-      updateCode(parsed.code, { updateDiagram: true });
+      updateCode(code, { updateDiagram: true });
     }
     notify(`已载入「${file.name}」`);
+  };
+
+  // Plugin-registered export formats run fully inside the plugin and hand
+  // back a payload we just download (text or blob, private formats welcome).
+  const runPluginFormat = (formatId: string) => {
+    const format = pluginExportFormats().find((f: { id: string }) => f.id === formatId);
+    if (!format) {
+      return;
+    }
+    const payload = runPluginExport(format);
+    if (!payload) {
+      notify(`导出失败：插件 ${format.pluginId} 未产出内容`);
+      return;
+    }
+    if (payload.blob) {
+      const url = URL.createObjectURL(payload.blob);
+      simulateDownload(payload.filename, url);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } else if (payload.text !== undefined) {
+      downloadTextFile(payload.filename, payload.text, payload.mime);
+    }
   };
 
   const onDownloadWebP = async (event: Event) => {
@@ -500,6 +532,15 @@ ${svgString}`);
             onclick={onDownloadState}>
             状态文件（.json）
           </button>
+          {#each pluginExportFormats() as format (format.pluginId + ':' + format.id)}
+            <div class="my-1 border-t"></div>
+            <button
+              class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
+              data-testid="plugin-export-{format.id}"
+              onclick={() => runPluginFormat(format.id)}>
+              {format.label}
+            </button>
+          {/each}
         </div>
       {/if}
     </div>

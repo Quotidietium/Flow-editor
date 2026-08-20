@@ -1,0 +1,155 @@
+# Flow 编辑器插件 API
+
+> 版本：2.0.92 起提供｜模块：`src/lib/plugins/`
+> 目标：**项目的每一层都可通过插件处理**——输入、导入、导出、主题、整页前端替换、AI（MCP）。
+
+## 1. 插件是什么
+
+一个 ES 模块（`.mjs`/`.js`），default export 一个对象：
+
+```js
+export default {
+  id: 'com.your.plugin',          // 必填，全局唯一
+  name: '你的插件',                // 必填
+  version: '1.0.0',
+  description: '……',
+  permissions: ['input:transform', 'export:format'],  // 声明式权限（展示给用户）
+  // —— 以下钩子全部可选 ——
+  inputTransform: { … },   // 输入管道：清洗/格式转换
+  import: { … },           // 自定义文件格式导入（打开）
+  export: { … },           // 自定义导出格式（导出菜单）
+  theme: { … },            // 主题配色（CSS 变量）
+  frontend: { … },          // 整页前端替换（iframe + 桥）
+  activate(ctx) { … },      // 启用时调用一次
+  deactivate() { … }        // 停用/卸载时调用
+};
+```
+
+安装：导航栏 **插件 → 从本地安装（.mjs）**。源码持久化于 localStorage（键
+`flowPlugins`），重启自动恢复；可随时停用/启用/卸载。每个钩子调用都有错误
+隔离，**连续 3 次抛错的插件自动停用**，不影响编辑器运行。
+
+示例插件：[`plugins/examples/`](../plugins/examples/)（输入清洗 / MC 函数
+导出 / 紫色主题 / 整页前端替换 HTML）。
+
+## 2. 扩展点
+
+### 2.1 输入管道 `inputTransform`（清洗 / 格式转换）
+
+```js
+inputTransform: {
+  name: 'clean',
+  transform(code, source) { /* return 新 code */ }
+}
+```
+
+- 触发点：**文件打开**（`source='file'`）、**桥接写入**（`'bridge'`）、
+  URL 分享链接载入（`'url'`）。按安装顺序链式执行。
+- 典型用途：换行归一、注释清洗、PlantUML→Mermaid 转换、脱敏。
+
+### 2.2 文件导入 `import`（自定义格式优先权）
+
+```js
+import: {
+  extensions: ['puml', 'plantuml'],
+  name: 'PlantUML',
+  import(file, ctx) { return { code: 'flowchart TD\n …', mermaid: '…' } }  // 返回 undefined 表示放弃
+}
+```
+
+「打开」按钮按扩展名分派：插件处理器优先，内置 `.mmd/.md/.json` 兜底，
+之后统一过 2.1 输入管道。
+
+### 2.3 导出格式 `export`（含私有格式 / MC 插件等）
+
+```js
+export: {
+  id: 'mcfunction',
+  label: 'MC 函数（.mcfunction）',
+  run({ code, svg, config }, ctx) {
+    return { filename: 'out.mcfunction', mime: 'text/plain', text: '…' };
+    // 或二进制：{ blob: new Blob([…]), filename, mime }
+  }
+}
+```
+
+注册后出现在「导出 ▾」菜单底部（testid `plugin-export-<id>`）。
+`svg` 是当前渲染的 SVG 字符串（未渲染为 undefined）。
+
+### 2.4 主题 `theme`
+
+```js
+theme: { variables: { '--primary': '0.8 0.4 0.9', '--ring': '…' } }
+```
+
+以 `<style>` 注入 `:root`，启用即生效、停用即还原。
+
+### 2.5 整页前端替换 `frontend`
+
+```js
+frontend: {
+  url: 'https://your-host/ui.html';
+} // data:/blob:/http(s): 均可
+```
+
+插件管理器出现「打开 <插件名>」按钮 → 整页 iframe 渲染你的页面（含
+**退出插件前端** 按钮）。页面通过 **postMessage 桥**（见下）完全驱动编辑器
+——读改代码/配置、取渲染 SVG、导出。示例：
+[`plugins/examples/custom-frontend.html`](../plugins/examples/custom-frontend.html)。
+
+### 2.6 AI 接入：MCP 桥
+
+编辑器内置 **MCP（Model Context Protocol）JSON-RPC 2.0 over postMessage**
+服务器（频道 `flow-editor`）。向页面发消息即可调用：
+
+```js
+parent.postMessage(
+  {
+    channel: 'flow-editor',
+    id: 1,
+    jsonrpc: '2.0',
+    method: 'tools/call',
+    params: { name: 'set_code', arguments: { code: 'flowchart TD\n A-->B' } }
+  },
+  '*'
+);
+```
+
+方法：`initialize` / `tools/list` / `tools/call` / `ping`。工具集：
+
+| 工具                      | 说明                                          |
+| ------------------------- | --------------------------------------------- |
+| `get_code` / `set_code`   | 读写 Mermaid 源码（经状态网关，自动校验渲染） |
+| `get_state` / `set_state` | 读写完整状态（源码 + 配置 JSON）              |
+| `render_svg`              | 当前渲染 SVG 字符串                           |
+| `export`                  | `svg` / `png-dataurl` / `code` 三种格式       |
+
+外部 stdio MCP 客户端接入方式：用 Electron/Puppeteer 等宿主加载本页面，
+把 stdio JSON-RPC 与该 postMessage 协议互转即可（线格式即 MCP）。
+
+## 3. 插件上下文 `ctx`（activate 与各钩子的第二参数）
+
+```js
+ctx.getState(); // { code, mermaid, rough }
+ctx.setCode(code); // 经状态网关写入
+ctx.setState({ code, mermaid });
+ctx.notify('消息'); // toast
+ctx.storage.get / set; // 命名空间 localStorage：flow-plugin:<id>:<key>
+ctx.getSvg(); // 当前渲染 SVG
+```
+
+## 4. 命令式 API（嵌入宿主）
+
+- `window.__FLOW_EDITOR_API__`：`getState/setCode/setState/getSvg/exportPngDataUrl`
+- `window.__FLOW_EDITOR_STATE__()`：只读快照
+- 运行时注册实例（不持久化）：`registerPluginInstance(plugin)` /
+  `unregisterAllPluginInstances()`（`$/plugins/registry.svelte`）
+
+## 5. 安全模型
+
+- 插件由**用户主动从本地安装**（与 VS Code 扩展同信任级）；本项目为离线
+  应用，不存在远程插件市场，不会自动拉取任何脚本。
+- 权限清单在安装卡片上明示；钩子错误隔离 + 三振自动停用；存储按插件 id
+  命名空间隔离。
+- iframe 前端运行于 `allow-scripts allow-same-origin allow-forms allow-popups`
+  沙箱，仅能通过桥协议访问编辑器能力。

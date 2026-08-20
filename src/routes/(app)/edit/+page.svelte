@@ -5,10 +5,15 @@
   import History from '$/components/History/History.svelte';
   import { startAutoSave } from '$/components/History/historyState.svelte';
   import Navbar from '$/components/Navbar.svelte';
+  import PluginManager from '$/components/PluginManager.svelte';
+  import { installEditorApi } from '$/plugins/editorApi';
+  import { startBridge } from '$/plugins/bridge';
+  import { loadRegistry } from '$/plugins/registry.svelte';
   import PanZoomToolbar from '$/components/PanZoomToolbar.svelte';
   import Preset from '$/components/Preset.svelte';
   import Share from '$/components/Share.svelte';
   import SyncRoughToolbar from '$/components/SyncRoughToolbar.svelte';
+  import { Button } from '$/components/ui/button';
   import * as Resizable from '$/components/ui/resizable';
   import { Switch } from '$/components/ui/switch';
   import { Toggle } from '$/components/ui/toggle';
@@ -26,6 +31,7 @@
   import HistoryIcon from '~icons/material-symbols/history';
   import EditIcon from '~icons/material-symbols/edit-note-rounded';
   import GearIcon from '~icons/material-symbols/settings-outline-rounded';
+  import PluginIcon from '~icons/material-symbols/extension-rounded';
 
   const panZoomState = new PanZoomState();
 
@@ -69,6 +75,14 @@
   onMount(() => startAutoSave());
 
   let isHistoryOpen = $state(false);
+  let pluginManagerOpen = $state(false);
+  let pluginFrontend = $state<undefined | { id: string; url: string }>(undefined);
+
+  onMount(() => {
+    installEditorApi();
+    startBridge();
+    void loadRegistry();
+  });
 
   let editorPane: Resizable.Pane | undefined;
   $effect(() => {
@@ -110,6 +124,15 @@
       <EditIcon />
       可视化
     </Toggle>
+    <Button
+      size="sm"
+      variant="outline"
+      data-testid={TID.pluginManagerOpen}
+      title="插件管理"
+      onclick={() => (pluginManagerOpen = true)}>
+      <PluginIcon />
+      插件
+    </Button>
     <Share />
   </Navbar>
 
@@ -176,4 +199,29 @@
       </Resizable.PaneGroup>
     </div>
   </div>
+
+  {#if pluginFrontend}
+    <div class="relative flex-1 overflow-hidden">
+      <iframe
+        title="插件前端"
+        src={pluginFrontend.url}
+        class="h-full w-full border-0"
+        sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+      <Button
+        size="sm"
+        variant="outline"
+        class="absolute top-2 right-2 z-10"
+        data-testid={TID.pluginFrontendExit}
+        onclick={() => (pluginFrontend = undefined)}>
+        退出插件前端
+      </Button>
+    </div>
+  {/if}
+
+  <PluginManager
+    bind:open={pluginManagerOpen}
+    onFrontendSelect={(frontend) => {
+      pluginManagerOpen = false;
+      pluginFrontend = frontend;
+    }} />
 </div>

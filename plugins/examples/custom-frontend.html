@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>插件前端示例</title>
+    <style>
+      body { font-family: system-ui; margin: 2rem; background: #0f0f12; color: #eee; }
+      textarea { width: 100%; height: 40%; }
+      button { margin: 0.5rem 0.25rem; padding: 0.4rem 1rem; }
+    </style>
+  </head>
+  <body>
+    <h2>插件前端（整页替换示例）</h2>
+    <p>此页面完全替换了编辑器 UI，通过 postMessage 桥（MCP 协议）驱动编辑器。</p>
+    <textarea id="code"></textarea>
+    <button id="get">读取编辑器代码</button>
+    <button id="set">写回编辑器</button>
+    <button id="svg">取渲染 SVG</button>
+    <pre id="out" style="white-space: pre-wrap; opacity: 0.8"></pre>
+    <script type="module">
+      const CH = 'flow-editor';
+      let id = 0;
+      const call = (method, params) => new Promise((resolve) => {
+        const mid = ++id;
+        const onMsg = (e) => {
+          if (e.data?.channel === CH && e.data.id === mid) {
+            window.removeEventListener('message', onMsg);
+            resolve(e.data.result ?? e.data.error);
+          }
+        };
+        window.addEventListener('message', onMsg);
+        parent.postMessage({ channel: CH, id: mid, jsonrpc: '2.0', method, params }, '*');
+      });
+      document.getElementById('get').onclick = async () => {
+        const r = await call('tools/call', { name: 'get_code', arguments: {} });
+        document.getElementById('code').value = r?.content?.[0]?.text ?? String(r);
+      };
+      document.getElementById('set').onclick = async () => {
+        const code = document.getElementById('code').value;
+        await call('tools/call', { name: 'set_code', arguments: { code } });
+        document.getElementById('out').textContent = '已写回编辑器';
+      };
+      document.getElementById('svg').onclick = async () => {
+        const r = await call('tools/call', { name: 'render_svg', arguments: {} });
+        document.getElementById('out').textContent = (r?.content?.[0]?.text ?? '').slice(0, 300);
+      };
+      await call('initialize', {});
+    </script>
+  </body>
+</html>
