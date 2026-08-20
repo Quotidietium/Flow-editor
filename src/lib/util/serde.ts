@@ -28,7 +28,16 @@ export const pakoSerde: Serde = {
   },
   deserialize: (state: string): string => {
     const data = toUint8Array(state);
-    return inflate(data, { to: 'string' });
+    // Deflate decompression bombs: a hand-crafted ~1KB payload can expand
+    // to gigabytes. Cap the accepted inflated size well above any real
+    // diagram state; over the cap this throws and the caller shows the
+    // URL-troubleshooting diagram instead of freezing the tab.
+    const MAX_INFLATED_BYTES = 20 * 1024 * 1024;
+    const inflated = inflate(data);
+    if (inflated.byteLength > MAX_INFLATED_BYTES) {
+      throw new Error('Serialized state too large');
+    }
+    return new TextDecoder().decode(inflated);
   }
 };
 

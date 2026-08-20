@@ -38,3 +38,19 @@ describe('Serde tests', () => {
     expect(() => deserializeState('unknown:hello')).toThrowError('Unknown serde type: unknown');
   });
 });
+
+describe('decompression-bomb guard', () => {
+  it('rejects inflated states over the size cap instead of freezing', () => {
+    // Highly compressible >20MB payload: tiny in the URL, huge when inflated.
+    const bomb = serializeState({
+      ...defaultState,
+      code: `flowchart TD\n${'  A[text '.repeat(3_000_000)}end]\n`
+    });
+    expect(() => deserializeState(bomb)).toThrowError(/too large/i);
+  });
+
+  it('keeps round-tripping real states untouched by the cap', () => {
+    const big = serializeState({ ...defaultState, code: 'graph TD\n' + 'A-->B\n'.repeat(5_000) });
+    expect(deserializeState(big).code).toContain('A-->B');
+  });
+});
