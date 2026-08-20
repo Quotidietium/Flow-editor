@@ -813,6 +813,25 @@ const withPositions = (graph: VGraph, positions: Map<string, { x: number; y: num
   }))
 });
 
+/**
+ * Overlay remembered canvas positions (by node id) on top of an auto layout.
+ * Mermaid source carries no coordinates, so re-entering the visual editor
+ * would otherwise re-layout everything — nodes the user just placed would
+ * visibly jump. Cached ids keep their positions; new ids keep whatever the
+ * auto layout gave them. This is what makes the canvas WYSIWYG across mode
+ * switches (and, when the caller persists the map, across reloads).
+ */
+export const applyPositions = (
+  graph: VGraph,
+  positions: Record<string, { x: number; y: number }>
+): VGraph => ({
+  ...graph,
+  nodes: graph.nodes.map((node) => {
+    const remembered = positions[node.id];
+    return remembered ? { ...node, x: remembered.x, y: remembered.y } : node;
+  })
+});
+
 export const nodeCenter = (node: VNode): { x: number; y: number } => {
   const size = nodeSize(node);
   return { x: node.x + size.w / 2, y: node.y + size.h / 2 };

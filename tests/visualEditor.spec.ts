@@ -106,6 +106,53 @@ const typeCode = async (page: Page, code: string): Promise<void> => {
   await expect(editor).toContainText(code.split('\n')[1]?.trim() ?? '');
 };
 
+// boundingBox includes the selection stroke (2.5px vs 1.5px), so compare
+// with a 1px tolerance instead of exact equality.
+const sameSpot = (
+  box: { height: number; width: number; x: number; y: number } | null,
+  ref: { x: number; y: number }
+): boolean => Math.abs((box?.x ?? -9999) - ref.x) <= 1 && Math.abs((box?.y ?? -9999) - ref.y) <= 1;
+
+test('visual editor keeps node positions across mode switches and reloads', async ({ page }) => {
+  await openEditor(page);
+  await page.getByTestId('visual-tab').click();
+
+  const nodeA = page.locator('[data-node-id="A"]');
+  await expect(nodeA).toBeVisible();
+  const before = await nodeA.boundingBox();
+  if (!before) {
+    throw new Error('node A not found in canvas');
+  }
+
+  // Drag node A to a clearly different place (snap grid = 10px).
+  const cx = before.x + before.width / 2;
+  const cy = before.y + before.height / 2;
+  await page.mouse.move(cx, cy);
+  await page.mouse.down();
+  await page.mouse.move(cx + 120, cy + 60, { steps: 6 });
+  await page.mouse.up();
+  const moved = await nodeA.boundingBox();
+  if (!moved) {
+    throw new Error('node A disappeared after drag');
+  }
+  expect(moved.x).not.toBe(before.x);
+
+  // Leave and re-enter visual mode: the canvas must not visibly re-layout
+  // (the whole point of WYSIWYG — positions are remembered per node id).
+  await page.getByTestId('visual-tab').click();
+  await page.locator('#view').waitFor({ state: 'visible' });
+  await page.getByTestId('visual-tab').click();
+  await expect(nodeA).toBeVisible();
+  expect(sameSpot(await nodeA.boundingBox(), moved)).toBe(true);
+
+  // Positions survive a reload via localStorage.
+  await page.reload();
+  await page.locator('#view').waitFor({ state: 'visible' });
+  await page.getByTestId('visual-tab').click();
+  await expect(nodeA).toBeVisible();
+  expect(sameSpot(await nodeA.boundingBox(), moved)).toBe(true);
+});
+
 test('visual editor imports and edits sequence diagrams', async ({ page }) => {
   await openEditor(page);
   await typeCode(page, 'sequenceDiagram\n  Alice->>Bob: Hello\n  Bob-->>Alice: Hi');

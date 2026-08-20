@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parse } from '../mermaid';
 import {
+  applyPositions,
   detectDiagramKind,
   ER_CARDINALITIES,
   generateCode,
@@ -368,6 +369,34 @@ describe('nodeSize with detail', () => {
       h: 28,
       w: 28
     });
+  });
+});
+
+describe('applyPositions (WYSIWYG position overlay)', () => {
+  const laidOut = (): VGraph => {
+    const parsed = parseCode('flowchart TD\n    A --> B\n');
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) {
+      throw new Error('unreachable');
+    }
+    return layoutGraph(parsed.result.graph);
+  };
+
+  it('restores remembered positions by id and keeps auto slots for new ids', () => {
+    const graph = laidOut();
+    const moved = applyPositions(graph, { A: { x: 500, y: 300 } });
+    const a = moved.nodes.find((n) => n.id === 'A');
+    const b = moved.nodes.find((n) => n.id === 'B');
+    expect(a).toMatchObject({ x: 500, y: 300 });
+    // B has no remembered position: keeps its auto-layout slot.
+    expect(b).toEqual(graph.nodes.find((n) => n.id === 'B'));
+  });
+
+  it('is a no-op for empty or stale position maps', () => {
+    const graph = laidOut();
+    expect(applyPositions(graph, {})).toEqual(graph);
+    // Ids that no longer exist are simply ignored.
+    expect(applyPositions(graph, { GONE: { x: 1, y: 1 } })).toEqual(graph);
   });
 });
 

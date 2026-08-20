@@ -3,6 +3,7 @@
   import { TID } from '$/constants';
   import { notify } from '$/util/notify';
   import {
+    applyPositions,
     edgeAnchor,
     ER_CARDINALITIES,
     generateCode,
@@ -16,6 +17,7 @@
     parseCode
   } from '$/util/visualEditor/model';
   import type { VEdge, VGraph, VLinkType, VNode, VShape } from '$/util/visualEditor/model';
+  import { readJSON, writeJSON } from '$/util/persist.svelte';
   import { updateCode, validatedState } from '$/util/state.svelte';
   import AddIcon from '~icons/material-symbols/add-2-rounded';
   import DeleteIcon from '~icons/material-symbols/delete-outline-rounded';
@@ -110,15 +112,34 @@
 
   const snap = (value: number): number => Math.round(value / SNAP) * SNAP;
 
+  // Remembered canvas positions per node id. Mermaid source carries no
+  // coordinates, so re-entering the visual tab would re-layout everything
+  // (nodes visibly jumping back to auto-layout slots). The map is overlaid
+  // on the auto layout by id: untouched nodes keep their placed positions
+  // across mode switches, reloads and small external code edits, while new
+  // ids fall back to their auto-layout slot. Module-level + localStorage:
+  // the editor remounts on every tab switch but there is only one instance.
+  const POSITIONS_KEY = 'visualEditorLayout';
+  let rememberedPositions: Record<string, { x: number; y: number }> = readJSON(POSITIONS_KEY, {});
+
+  const rememberPositions = (): void => {
+    rememberedPositions = Object.fromEntries(
+      graph.nodes.map((node) => [node.id, { x: node.x, y: node.y }] as const)
+    );
+    writeJSON(POSITIONS_KEY, rememberedPositions);
+  };
+
   const syncCode = (): void => {
     lastSyncedCode = generateCode(graph);
+    rememberPositions();
     updateCode(lastSyncedCode, { updateDiagram: true });
   };
 
   const loadFromCode = (announce: boolean): void => {
     const parsed = parseCode(validatedState.current.code);
     if (parsed.ok) {
-      graph = layoutGraph(parsed.result.graph);
+      graph = applyPositions(layoutGraph(parsed.result.graph), rememberedPositions);
+      rememberPositions();
       if (announce) {
         notify(
           parsed.result.skipped > 0
@@ -128,6 +149,7 @@
       }
     } else {
       graph = { direction: 'TD', kind: 'flowchart', nodes: [], edges: [] };
+      rememberPositions();
       if (announce) {
         notify(
           '当前图类型暂不支持可视化编辑（支持：流程图/时序图/类图/状态图/ER 图/思维导图），已载入空白画布；绘制新图形将生成流程图，可用「从代码重载」恢复原代码'
