@@ -46,10 +46,6 @@ export interface ValidatedState extends State {
   serialized: string;
 }
 
-export interface LoadingState {
-  loading: boolean;
-  message?: string;
-}
 export type HistoryType = 'auto' | 'manual' | 'loader';
 export type HistoryEntry = { id: string; state: State; time: number; url?: string } & (
   | {

@@ -181,3 +181,30 @@ describe('buildEditUrl', () => {
     expect(JSON.parse(state.mermaid)).toMatchObject({ securityLevel: 'strict', theme: 'forest' });
   });
 });
+
+describe('untrusted pan/zoom clamping', () => {
+  it('clamps pathological query magnitudes to a usable range', () => {
+    const { settings } = resolveEmbedSettings(
+      new URL(
+        'https://mermaid.live/embed?pan=1e308,-99999999&zoom=1e300#code:graph%20TD%0A%20%20A--%3EB'
+      )
+    );
+    expect(settings).toBeDefined();
+    if (!settings) {
+      return;
+    }
+    expect(settings.pan).toEqual({ x: 1e6, y: -1e6 });
+    expect(settings.zoom).toBe(1000);
+  });
+
+  it('clamps untrusted pan/zoom carried in the hash state too', () => {
+    const { settings } = resolveEmbedSettings(
+      embedUrl({ code: 'graph TD\n  A-->B', pan: { x: -5e9, y: 5e9 }, zoom: 1e-9 })
+    );
+    if (!settings) {
+      throw new Error('settings missing');
+    }
+    expect(settings.pan).toEqual({ x: -1e6, y: 1e6 });
+    expect(settings.zoom).toBe(0.01);
+  });
+});

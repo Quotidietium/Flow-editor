@@ -136,10 +136,21 @@ export const resolveEmbedSettings = (url: URL): ResolvedEmbed => {
   const grid = q.get('grid') !== '0' && baseState?.grid !== false;
   const rough = baseState?.rough ?? false;
 
-  const pan = parsePan(q.get('pan')) ?? baseState?.pan;
+  // Pan/zoom arrive from the URL (or an untrusted hash state) — finiteness
+  // alone still admits pathological magnitudes that wreck the pan-zoom
+  // transform, so clamp to a generous usable range.
+  const clampPan = (p: { x: number; y: number }): { x: number; y: number } => ({
+    x: Math.max(-1e6, Math.min(1e6, p.x)),
+    y: Math.max(-1e6, Math.min(1e6, p.y))
+  });
+  const clampZoom = (z: number): number => Math.max(0.01, Math.min(1000, z));
+
+  const rawPan = parsePan(q.get('pan')) ?? baseState?.pan;
+  const pan = rawPan ? clampPan(rawPan) : undefined;
   const zoomParam = q.get('zoom');
-  const zoom =
+  const rawZoom =
     zoomParam !== null && Number.isFinite(Number(zoomParam)) ? Number(zoomParam) : baseState?.zoom;
+  const zoom = rawZoom === undefined ? undefined : clampZoom(rawZoom);
 
   return { settings: { code, config, controls, grid, look, mode, pan, rough, theme, zoom } };
 };
