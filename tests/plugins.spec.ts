@@ -115,3 +115,34 @@ test('MCP bridge drives the editor over postMessage', async ({ page }) => {
   expect(result.code).toContain('Dogs');
   await expect(page.locator('#container')).toContainText('Dogs');
 });
+
+test('plugin frontend replaces the UI and drives the editor via the bridge', async ({
+  page
+}) => {
+  await page.getByTestId('plugin-manager-open').click();
+  const chooserPromise = page.waitForEvent('filechooser');
+  await page.getByTestId('plugin-install').click();
+  const chooser = await chooserPromise;
+  await chooser.setFiles(join(EXAMPLES, 'frontend-embed.mjs'));
+  await page.getByTestId('plugin-card-demo.frontend-embed').waitFor({ timeout: 10_000 });
+
+  // Open the plugin frontend — a full-screen iframe replaces the UI.
+  await page.getByRole('button', { name: /打开 内嵌前端替换/ }).click();
+  const frame = page.frameLocator('iframe[title="插件前端"]');
+  await expect(page.getByTestId('plugin-frontend-exit')).toBeVisible();
+  // The embedded page auto-loads the editor code on mount.
+  await expect(frame.locator('#code')).toHaveValue(/flowchart TD/, { timeout: 10_000 });
+
+  // Write back through the bridge and verify the editor actually changed.
+  const edited = 'pie\n  "Dogs" : 386\n  "Cats" : 85\n';
+  await frame.locator('#code').fill(edited);
+  await frame.getByRole('button', { name: '写回编辑器' }).click();
+  await expect
+    .poll(() => page.evaluate(() => window.__FLOW_EDITOR_STATE__?.().code ?? ''))
+    .toContain('Dogs');
+
+  // Exit restores the regular UI.
+  await page.getByTestId('plugin-frontend-exit').click();
+  await expect(page.locator('iframe[title="插件前端"]')).toHaveCount(0);
+  await expect(page.locator('.monaco-editor')).toBeVisible();
+});

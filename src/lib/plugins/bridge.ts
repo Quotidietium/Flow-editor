@@ -178,7 +178,10 @@ export const startBridge = (): void => {
     }
     const request = data as unknown as JsonRpcRequest;
     const response = handleBridgeRequest(request);
-    (event.source as Window | null)?.postMessage(response, { targetOrigin: event.origin || '*' });
+    // data:/blob: plugin frontends have opaque origins serialized as "null" —
+    // not a valid targetOrigin, fall back to "*".
+    const targetOrigin = !event.origin || event.origin === 'null' ? '*' : event.origin;
+    (event.source as Window | null)?.postMessage(response, { targetOrigin });
   });
 };
 

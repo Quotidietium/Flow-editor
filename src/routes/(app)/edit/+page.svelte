@@ -69,8 +69,6 @@
   let isMobile = $derived(width < 640);
   let isViewMode = $state(true);
 
-
-
   // Record the Timeline for the whole session, not just while the panel is open.
   onMount(() => startAutoSave());
 
@@ -203,21 +201,22 @@
   </div>
 
   {#if pluginFrontend}
-    <div class="relative flex-1 overflow-hidden">
+    <!-- Full-screen overlay: the plugin page completely replaces the UI. -->
+    <div class="absolute inset-0 z-40 overflow-hidden">
       <iframe
         title="插件前端"
         src={pluginFrontend.url}
         class="h-full w-full border-0"
         sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
-      <Button
-        size="sm"
-        variant="outline"
-        class="absolute top-2 right-2 z-10"
-        data-testid={TID.pluginFrontendExit}
-        onclick={() => (pluginFrontend = undefined)}>
-        退出插件前端
-      </Button>
     </div>
+    <Button
+      size="sm"
+      variant="outline"
+      class="fixed top-2 right-2 z-50"
+      data-testid={TID.pluginFrontendExit}
+      onclick={() => (pluginFrontend = undefined)}>
+      退出插件前端
+    </Button>
   {/if}
 
   <PluginManager
