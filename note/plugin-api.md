@@ -30,7 +30,15 @@ export default {
 隔离，**连续 3 次抛错的插件自动停用**，不影响编辑器运行。
 
 示例插件：[`plugins/examples/`](../plugins/examples/)（输入清洗 / MC 函数
-导出 / 紫色主题 / 整页前端替换 HTML）。
+导出 / 紫色主题 / 内嵌前端替换 / AI 提示词导出）。
+
+**类型提示**：插件是 `.mjs`，加一行引用即可获得完整 IDE 类型：
+
+```js
+/// <reference path="../plugins/flow-plugin.d.ts" />
+/** @satisfies {import('../flow-plugin.d.ts').FlowPlugin} */
+export default {/* … */};
+```
 
 ## 2. 扩展点
 
@@ -131,6 +139,12 @@ parent.postMessage(
 
 外部 stdio MCP 客户端接入方式：用 Electron/Puppeteer 等宿主加载本页面，
 把 stdio JSON-RPC 与该 postMessage 协议互转即可（线格式即 MCP）。
+
+**插件作为 AI 客户端**：插件本身也可以主动接外部 AI——在 `activate(ctx)`
+里 `fetch` 任意自建/自选端点（安装即授权，信任级同 VS Code 扩展），把结果
+用 `ctx.setCode()` 写回（自动经输入管道与状态校验）。开箱即用的轻量做法见
+示例 `ai-prompt-exporter.mjs`：不调用网络，而是导出「图表 + 工具协议」的
+提示词文件，投喂给任意 LLM/客户端后按同一 MCP 协议回写图表。
 
 ## 3. 插件上下文 `ctx`（activate 与各钩子的第二参数）
 

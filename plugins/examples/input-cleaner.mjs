@@ -16,7 +16,11 @@ export default {
       if (source === 'url') {
         return code; // URL 分享链接按原样恢复
       }
-      let out = code.replaceAll('\r\n', '\n').split('\n').map((l) => l.replace(/\s+$/, '')).join('\n');
+      let out = code
+        .replaceAll('\r\n', '\n')
+        .split('\n')
+        .map((l) => l.replace(/\s+$/, ''))
+        .join('\n');
       out = out.replace(/^@startuml\s*\n?/, '').replace(/\n?@enduml\s*$/, '');
       return out;
     }
