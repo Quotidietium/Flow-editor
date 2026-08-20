@@ -12,8 +12,11 @@ const MAX_AUTO_HISTORY_LENGTH = 30;
 const MAX_MANUAL_HISTORY_LENGTH = 200;
 const AUTO_SAVE_INTERVAL = 60_000;
 
-const auto = persisted<HistoryEntry[]>('autoHistoryStore', []);
-const manual = persisted<HistoryEntry[]>('manualHistoryStore', []);
+const AUTO_STORE_KEY = 'autoHistoryStore';
+const MANUAL_STORE_KEY = 'manualHistoryStore';
+
+const auto = persisted<HistoryEntry[]>(AUTO_STORE_KEY, []);
+const manual = persisted<HistoryEntry[]>(MANUAL_STORE_KEY, []);
 const mode = persisted<HistoryType>('autoHistoryMode', 'manual');
 let loader = $state<HistoryEntry[]>([]);
 
@@ -67,27 +70,35 @@ const createEntry = (state: State, type: 'auto' | 'manual'): HistoryEntry => ({
 });
 
 // Returns true if added, false if it duplicated the most recent entry.
+//
+// Multi-tab lost-update guard: this tab's in-memory copy can be stale when
+// another tab wrote to the same store since our last read, and a blind
+// wholesale set would silently drop those saves. Writes therefore re-read
+// the latest persisted value and merge (new entry prepended, then the cap).
+// The window between re-read and write still exists, but it shrinks from
+// "since page load" to milliseconds.
 const addEntry = (
   slot: Persisted<HistoryEntry[]>,
+  storeKey: string,
   state: State,
   type: 'auto' | 'manual',
   maxLength?: number
 ): boolean => {
-  const entries = slot.value;
-  if (entries.length > 0 && stateKey(entries[0].state) === stateKey(state)) {
+  const latest = readJSON<HistoryEntry[]>(storeKey, slot.value);
+  if (latest.length > 0 && stateKey(latest[0].state) === stateKey(state)) {
+    slot.value = latest;
     return false;
   }
-  const trimmed =
-    maxLength && entries.length >= maxLength ? entries.slice(0, maxLength - 1) : entries;
+  const trimmed = maxLength && latest.length >= maxLength ? latest.slice(0, maxLength - 1) : latest;
   slot.value = [createEntry(state, type), ...trimmed];
   return true;
 };
 
 export const addManualEntry = (state: State): boolean =>
-  addEntry(manual, state, 'manual', MAX_MANUAL_HISTORY_LENGTH);
+  addEntry(manual, MANUAL_STORE_KEY, state, 'manual', MAX_MANUAL_HISTORY_LENGTH);
 
 export const addAutoEntry = (state: State): boolean =>
-  addEntry(auto, state, 'auto', MAX_AUTO_HISTORY_LENGTH);
+  addEntry(auto, AUTO_STORE_KEY, state, 'auto', MAX_AUTO_HISTORY_LENGTH);
 
 // Read-only accessors for tests and future UI (e.g. quota-aware indicators).
 export const manualEntryCount = (): number => manual.value.length;
@@ -105,7 +116,11 @@ export const removeEntry = (id: string): void => {
   if (!slot) {
     return;
   }
-  slot.value = slot.value.filter((entry) => entry.id !== id);
+  // Same multi-tab guard as addEntry: drop the id from the latest persisted
+  // value so concurrent saves from other tabs survive this deletion.
+  const storeKey = mode.value === 'auto' ? AUTO_STORE_KEY : MANUAL_STORE_KEY;
+  const latest = readJSON<HistoryEntry[]>(storeKey, slot.value);
+  slot.value = latest.filter((entry) => entry.id !== id);
 };
 
 export const renameEntry = (id: string, name: string): void => {

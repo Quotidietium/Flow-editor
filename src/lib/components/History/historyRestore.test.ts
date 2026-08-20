@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { MAX_RESTORE_ENTRIES, restoreEntries } from './historyState.svelte';
 import type { HistoryEntry } from '$lib/types';
 
@@ -46,5 +46,58 @@ describe('manual history growth cap', () => {
       });
     }
     expect(manualEntryCount()).toBe(MAX_MANUAL_HISTORY);
+  });
+});
+
+// Multi-tab lost-update guard: another tab may have written entries to the
+// same store since this tab's in-memory copy was last refreshed; saves from
+// this tab must merge with (not overwrite) those.
+describe('cross-tab merge on write', () => {
+  it('keeps entries written by another tab when saving and removing here', async () => {
+    const otherTabsEntry = {
+      id: 'other-tab-1',
+      name: 'from-tab-b',
+      state: { code: 'graph TD\n  Z-->Y', mermaid: '{}', rough: false, updateDiagram: true },
+      time: 42,
+      type: 'manual'
+    };
+    const store = new Map<string, string>([
+      ['manualHistoryStore', JSON.stringify([otherTabsEntry])]
+    ]);
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (key: string) => store.get(key) ?? null,
+        setItem: (key: string, value: string) => void store.set(key, value)
+      }
+    });
+    try {
+      vi.resetModules();
+      const { addManualEntry, manualEntryCount } = await import('./historyState.svelte');
+
+      // Save from this tab: the other tab's entry must survive the write.
+      addManualEntry({
+        code: 'graph TD\n  A-->B',
+        mermaid: '{}',
+        rough: false,
+        updateDiagram: true
+      });
+      const persisted = JSON.parse(store.get('manualHistoryStore') ?? '[]') as {
+        id: string;
+      }[];
+      expect(persisted.map((e) => e.id)).toContain('other-tab-1');
+      expect(manualEntryCount()).toBe(2);
+
+      // Remove only our own entry; the other tab's survives the deletion.
+      const ours = persisted.find((e) => e.id !== 'other-tab-1');
+      const { setMode, removeEntry } = await import('./historyState.svelte');
+      setMode('manual');
+      removeEntry(ours?.id ?? 'missing');
+      const after = JSON.parse(store.get('manualHistoryStore') ?? '[]') as { id: string }[];
+      expect(after.map((e) => e.id)).toEqual(['other-tab-1']);
+    } finally {
+      delete (window as { localStorage?: unknown }).localStorage;
+      vi.resetModules();
+    }
   });
 });

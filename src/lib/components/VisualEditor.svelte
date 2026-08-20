@@ -127,6 +127,14 @@
     rememberedPositions = Object.fromEntries(
       graph.nodes.map((node) => [node.id, { x: node.x, y: node.y }] as const)
     );
+    // Pathologically large graphs (thousands of nodes) would push a ~100KB+
+    // JSON through a synchronous stringify+setItem on every drag release.
+    // The in-memory map still serves this session's WYSIWYG; only the
+    // persistence is skipped. Write frequency is one per committed gesture,
+    // so normal diagrams never approach the cap.
+    if (JSON.stringify(rememberedPositions).length > 100_000) {
+      return;
+    }
     writeJSON(POSITIONS_KEY, rememberedPositions);
   };
 

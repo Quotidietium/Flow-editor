@@ -335,7 +335,16 @@ export const replaceInputState = (next: State): void => {
 
 export const initURLSubscription = (): void => {
   updateHash = debounce(() => {
-    history.replaceState(undefined, '', `#${validatedCurrent.serialized}`);
+    try {
+      history.replaceState(undefined, '', `#${validatedCurrent.serialized}`);
+    } catch (error) {
+      // Extremely large diagrams can exceed the browser's URL-length limit;
+      // the address bar then keeps the last state that fit. Editor function
+      // is unaffected (localStorage stays the source of truth) and the Share
+      // dialog still serializes on demand — but without this guard every
+      // keystroke re-raised an uncaught error from the debounce timer.
+      console.warn('Failed to sync diagram state to the URL:', error);
+    }
   }, 250);
   updateHash();
 };
