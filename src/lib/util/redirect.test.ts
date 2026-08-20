@@ -49,3 +49,10 @@ describe('buildRedirectUrl', () => {
     ).toBe('/edit?utm_source=gh&utm_medium=link&utm_campaign=test#pako:data');
   });
 });
+
+describe('untrusted legacy route whitelist', () => {
+  it('falls back to /edit for unknown or traversal routes', () => {
+    expect(buildRedirectUrl(mockLocation('https://mermaid.live/#/../evil/pako:x'))).toBe('/edit');
+    expect(buildRedirectUrl(mockLocation('https://mermaid.live/#/hacker/pako:x'))).toBe('/edit');
+  });
+});
