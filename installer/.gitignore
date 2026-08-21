@@ -1,0 +1,6 @@
+# 构建依赖与产物（不入库；icon.ico 由脚本生成但体积小且可复现，入库以便跳过图标步骤）
+node_modules/
+dist/
+.cache/
+.smoke/
+app/site/

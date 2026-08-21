@@ -1,0 +1,25 @@
+{
+  "name": "flow-editor-installer",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Flow 编辑器 Windows 安装包构建工程（Electron + NSIS，最终用户零前置依赖）",
+  "engines": {
+    "node": ">=24.16.0"
+  },
+  "scripts": {
+    "icon": "node scripts/build-icon.mjs",
+    "pack:dir": "electron-builder --win --x64 --dir",
+    "dist": "electron-builder --win --x64",
+    "smoke": "node scripts/smoke.mjs"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron"
+    ]
+  },
+  "devDependencies": {
+    "electron": "43.4.1",
+    "electron-builder": "26.15.3",
+    "sharp": "0.35.3"
+  }
+}

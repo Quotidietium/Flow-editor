@@ -1,0 +1,39 @@
+# electron-builder 配置：Flow 编辑器 Windows 离线安装包
+# 产物：dist/Flow-Editor-Setup-<version>.exe（NSIS 辅助安装向导，per-user 免管理员）
+appId: com.floweditor.desktop
+productName: Flow 编辑器
+copyright: Copyright © 2026 Flow Editor contributors
+asar: true
+
+directories:
+  app: app
+  output: dist
+  buildResources: resources
+
+# 应用无任何运行时 npm 依赖，只打包主进程脚本与站点静态资源
+files:
+  - package.json
+  - main.cjs
+  - server.cjs
+  - site/**
+
+win:
+  target: nsis
+  icon: resources/icon.ico
+  artifactName: Flow-Editor-Setup-${version}.${ext}
+  requestedExecutionLevel: asInvoker
+
+nsis:
+  # 辅助安装向导（可选择安装目录）；/S 仍可静默安装（冒烟测试依赖这一点）
+  oneClick: false
+  # per-user 安装到 %LocalAppData%\Programs，免 UAC
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Flow 编辑器
+  uninstallDisplayName: Flow 编辑器
+  # 2052 = 简体中文安装界面
+  language: "2052"
+  # 卸载不删除用户数据（图表草稿在 localStorage，位于应用数据目录）
+  deleteAppDataOnUninstall: false

@@ -1,0 +1,10 @@
+{
+  "name": "flow-editor",
+  "productName": "Flow 编辑器",
+  "version": "2.0.127",
+  "description": "Flow 编辑器（Mermaid 实时编辑/可视化编辑）离线桌面版",
+  "main": "main.cjs",
+  "author": "Flow Editor contributors",
+  "license": "MIT",
+  "private": true
+}
