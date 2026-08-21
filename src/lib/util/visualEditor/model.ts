@@ -341,7 +341,8 @@ export const KIND_SPECS: Record<DiagramKind, KindSpec> = {
       { name: '合并', role: 'merge' }
     ],
     shapes: [],
-    startEnd: false
+    startEnd: false,
+    view: 'git'
   },
   ishikawa: {
     detail: false,

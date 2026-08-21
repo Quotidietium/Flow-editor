@@ -2,6 +2,7 @@
   import { Button } from '$/components/ui/button';
   import { Toggle } from '$/components/ui/toggle';
   import BoardEditor from '$/components/visual/BoardEditor.svelte';
+  import GitEditor from '$/components/visual/GitEditor.svelte';
   import OutlineEditor from '$/components/visual/OutlineEditor.svelte';
   import SequenceEditor from '$/components/visual/SequenceEditor.svelte';
   import SheetEditor from '$/components/visual/SheetEditor.svelte';
@@ -1679,7 +1680,7 @@
     </span>
   </div>
 
-  {#if kindSpec.view && kindSpec.view !== 'git'}
+  {#if kindSpec.view}
     <div class="relative flex min-h-0 flex-1 flex-col">
       {#if kindSpec.view === 'board'}
         <BoardEditor {commit} {graph} kind={graph.kind ?? 'flowchart'} />
@@ -1689,6 +1690,8 @@
         <OutlineEditor {commit} {graph} kind={graph.kind ?? 'flowchart'} />
       {:else if kindSpec.view === 'sequence'}
         <SequenceEditor {commit} {graph} kind={graph.kind ?? 'flowchart'} />
+      {:else if kindSpec.view === 'git'}
+        <GitEditor {commit} {graph} />
       {/if}
       {@render metaDialog()}
     </div>

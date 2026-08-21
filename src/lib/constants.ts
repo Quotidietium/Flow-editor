@@ -26,6 +26,7 @@ export const TID = {
   visualCodeOut: 'visual-code-out',
   visualContextMenu: 'visual-context-menu',
   visualDetailEditor: 'visual-detail-editor',
+  visualGit: 'visual-git',
   visualInsert: 'visual-insert',
   visualInsertMenu: 'visual-insert-menu',
   visualLayoutMenu: 'visual-layout-menu',

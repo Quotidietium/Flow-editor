@@ -65,7 +65,7 @@ test('visual editor imports journey diagrams into the board view', async ({ page
   ).toBeVisible();
 });
 
-test('visual editor replays git graphs and appends commits', async ({ page }) => {
+test('visual editor edits git graphs as an operation list', async ({ page }) => {
   await openEditor(page);
   await typeCode(
     page,
@@ -77,15 +77,25 @@ test('visual editor replays git graphs and appends commits', async ({ page }) =>
   await expect(codeOut).toContainText('checkout main');
   await expect(codeOut).toContainText('merge dev id: "m1"');
 
-  // The replay order keeps the branch before the merge.
-  const text = await codeOut.textContent();
-  expect((text ?? '').indexOf('branch dev')).toBeLessThan((text ?? '').indexOf('merge dev'));
+  // Git edits as an ordered operation list: commit / merge rows.
+  const editor = page.getByTestId('visual-git');
+  await expect(editor).toBeVisible();
+  await expect(page.getByTestId('visual-canvas')).toHaveCount(0);
+  await expect(editor.locator('[data-operation-id]')).toHaveCount(3);
+
+  // The merge row carries its source branch; commits carry id and branch.
+  const mergeRow = editor.locator('[data-operation-id="C3"]');
+  await expect(mergeRow.getByLabel('合并来源')).toHaveValue('dev');
+  await expect(mergeRow.getByLabel('提交 ID')).toHaveValue('m1');
 
   // A new commit lands on the active branch (main).
-  await page.getByTestId('visual-add-node').click();
-  await page.keyboard.type('c9');
-  await page.keyboard.press('Enter');
+  await editor.getByTestId('visual-git-add-commit').click();
+  const newRow = editor.locator('[data-operation-id="N4"]');
+  await newRow.getByLabel('提交 ID').fill('c9');
+  await newRow.getByLabel('提交 ID').blur();
   await expect(codeOut).toContainText('commit id: "c9"');
+  const text = (await codeOut.textContent()) ?? '';
+  expect(text.indexOf('merge dev')).toBeLessThan(text.indexOf('commit id: "c9"'));
 });
 
 test('visual editor edits pie slices with values', async ({ page }) => {
