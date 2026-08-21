@@ -296,7 +296,8 @@ export const KIND_SPECS: Record<DiagramKind, KindSpec> = {
       { name: '读模型', role: 'rmo' }
     ],
     shapes: [],
-    startEnd: false
+    startEnd: false,
+    view: 'sheet'
   },
   flowchart: {
     detail: false,
@@ -397,7 +398,8 @@ export const KIND_SPECS: Record<DiagramKind, KindSpec> = {
     links: [],
     newNode: '字段',
     shapes: [],
-    startEnd: false
+    startEnd: false,
+    view: 'sheet'
   },
   pie: {
     canLink: false,
@@ -408,7 +410,8 @@ export const KIND_SPECS: Record<DiagramKind, KindSpec> = {
     links: [],
     newNode: '切片',
     shapes: [],
-    startEnd: false
+    startEnd: false,
+    view: 'sheet'
   },
   quadrant: {
     canLink: false,
@@ -447,7 +450,8 @@ export const KIND_SPECS: Record<DiagramKind, KindSpec> = {
       { name: '轴', role: 'axis' }
     ],
     shapes: [],
-    startEnd: false
+    startEnd: false,
+    view: 'sheet'
   },
   railroad: {
     canLink: false,
@@ -458,7 +462,8 @@ export const KIND_SPECS: Record<DiagramKind, KindSpec> = {
     links: [],
     newNode: '规则',
     shapes: [],
-    startEnd: false
+    startEnd: false,
+    view: 'sheet'
   },
   requirement: {
     canLink: true,
@@ -573,7 +578,8 @@ export const KIND_SPECS: Record<DiagramKind, KindSpec> = {
       { name: '交集', role: 'union' }
     ],
     shapes: [],
-    startEnd: false
+    startEnd: false,
+    view: 'sheet'
   },
   wardley: {
     canLink: true,
@@ -609,7 +615,8 @@ export const KIND_SPECS: Record<DiagramKind, KindSpec> = {
       { name: 'Y 轴', role: 'yaxis' }
     ],
     shapes: [],
-    startEnd: false
+    startEnd: false,
+    view: 'sheet'
   },
   zenuml: {
     canLink: true,

@@ -96,22 +96,19 @@ test('visual editor edits pie slices with values', async ({ page }) => {
   await expect(codeOut).toContainText('pie title Pets');
   await expect(codeOut).toContainText('"Dogs": 386');
 
-  // New slices default their value to 1.
-  await page.getByTestId('visual-add-node').click();
-  await page.keyboard.type('Birds');
-  await page.keyboard.press('Enter');
-  await expect(codeOut).toContainText('"Birds": 1');
+  // Pie edits on the sheet: one row per slice, name + value inline.
+  const sheet = page.getByTestId('visual-sheet');
+  await expect(sheet).toBeVisible();
+  await expect(page.getByTestId('visual-canvas')).toHaveCount(0);
 
-  // Values are edited through the detail editor (one line).
-  await page.locator('[data-node-id="S1"]').click();
-  await page.getByRole('button', { name: '编辑内容' }).click();
-  await page.getByTestId('visual-detail-editor').fill('400');
-  await page.getByRole('button', { name: '保存', exact: true }).click();
+  const dogsRow = sheet.locator('[data-row-id="S1"]');
+  await dogsRow.getByLabel('数值').fill('400');
+  await dogsRow.getByLabel('数值').blur();
   await expect(codeOut).toContainText('"Dogs": 400');
 
   // The pie renders after leaving visual mode.
   await page.getByTestId('visual-tab').click();
-  await expect(page.locator('#container').getByText('Dogs', { exact: true })).toBeVisible();
+  await expect(page.locator('#container').getByText('Dogs', { exact: true }).first()).toBeVisible();
 });
 
 test('compare mode shows the real mermaid preview beside code and canvas', async ({ page }) => {
@@ -131,10 +128,11 @@ test('compare mode shows the real mermaid preview beside code and canvas', async
   await expect(compare.locator('svg[id^="graph-"]')).toBeVisible({ timeout: 10_000 });
   await expect(compare.getByText('Dogs', { exact: true }).first()).toBeVisible();
 
-  // Canvas edits flow through the state gateway into the mermaid render.
-  await page.getByTestId('visual-add-node').click();
-  await page.keyboard.type('Birds');
-  await page.keyboard.press('Enter');
+  // Sheet edits flow through the state gateway into the mermaid render.
+  await page.getByTestId('visual-sheet-add-row').click();
+  const nameInput = page.getByTestId('visual-sheet').getByLabel('切片名').last();
+  await nameInput.fill('Birds');
+  await nameInput.blur();
   await expect(codeOut).toContainText('"Birds": 1');
   await expect(compare.getByText('Birds', { exact: true }).first()).toBeVisible({
     timeout: 10_000
@@ -145,7 +143,7 @@ test('compare mode shows the real mermaid preview beside code and canvas', async
   await page.locator('#view').waitFor({ state: 'visible' });
   await page.getByTestId('visual-tab').click();
   await expect(page.getByTestId('visual-preview')).toBeVisible();
-  await expect(page.getByTestId('visual-canvas')).toBeVisible();
+  await expect(page.getByTestId('visual-sheet')).toBeVisible();
 });
 
 test('visual editor drags quadrant points into new coordinates', async ({ page }) => {
