@@ -6,6 +6,7 @@
   import { Separator } from '$/components/ui/separator';
   import * as ToggleGroup from '$/components/ui/toggle-group';
   import { waitForRender } from '$/util/autoSync';
+  import { exportCanvasSize } from '$/util/fileIO';
   import { notify } from '$/util/notify';
   import {
     diagramFileName,
@@ -175,19 +176,11 @@ ${svgString}`);
     const contentWidth = viewBox && viewBox.width > 0 ? viewBox.width : box.width;
     const contentHeight = viewBox && viewBox.height > 0 ? viewBox.height : box.height;
 
-    if (imageSizeMode === 'width') {
-      const ratio = contentHeight / contentWidth;
-      canvas.width = imageSize;
-      canvas.height = imageSize * ratio;
-    } else if (imageSizeMode === 'height') {
-      const ratio = contentWidth / contentHeight;
-      canvas.width = imageSize * ratio;
-      canvas.height = imageSize;
-    } else {
-      const multiplier = 2;
-      canvas.width = contentWidth * multiplier;
-      canvas.height = contentHeight * multiplier;
-    }
+    // Typed sizes and degenerate content dimensions are clamped here — the
+    // number input's HTML min/max only advises the spinner UI.
+    const size = exportCanvasSize(imageSizeMode, imageSize, contentWidth, contentHeight);
+    canvas.width = size.width;
+    canvas.height = size.height;
 
     const context = canvas.getContext('2d');
     if (!context) {

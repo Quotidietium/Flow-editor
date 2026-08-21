@@ -10,6 +10,49 @@ import { toBase64 } from 'js-base64';
 export const diagramFileName = (extension: string): string =>
   `mermaid-diagram-${dayjs().format('YYYY-MM-DD-HHmmss')}.${extension}`;
 
+// PNG/raster export sizing bounds, shared by the Actions input (HTML
+// min/max only advise the spinner — typed values pass straight through).
+export const IMAGE_SIZE_MIN = 3;
+export const IMAGE_SIZE_MAX = 10_000;
+export const IMAGE_SIZE_DEFAULT = 1080;
+
+/**
+ * Clamp a typed export size: 0/negative would silently produce an empty
+ * canvas, and 1e9 is an allocation the browser refuses (blank export).
+ * Non-finite values (empty input binds null/NaN) fall back to the default.
+ */
+export const clampImageSize = (value: number): number => {
+  if (!Number.isFinite(value)) {
+    return IMAGE_SIZE_DEFAULT;
+  }
+  return Math.min(IMAGE_SIZE_MAX, Math.max(IMAGE_SIZE_MIN, Math.round(value)));
+};
+
+/**
+ * Canvas dimensions for a raster export. `width`/`height` modes lock one
+ * side to the clamped size and scale the other by the content ratio; auto
+ * doubles the content size. Zero/non-finite content dimensions collapse to
+ * 1px first so the ratio can never be Infinity or NaN.
+ */
+export const exportCanvasSize = (
+  mode: 'auto' | 'width' | 'height',
+  imageSize: number,
+  contentWidth: number,
+  contentHeight: number
+): { height: number; width: number } => {
+  const contentW = Math.max(1, Math.round(contentWidth));
+  const contentH = Math.max(1, Math.round(contentHeight));
+  if (mode === 'width') {
+    const size = clampImageSize(imageSize);
+    return { height: Math.round((size * contentH) / contentW), width: size };
+  }
+  if (mode === 'height') {
+    const size = clampImageSize(imageSize);
+    return { width: Math.round((size * contentW) / contentH), height: size };
+  }
+  return { height: contentH * 2, width: contentW * 2 };
+};
+
 /** Wrap mermaid source in a fenced Markdown code block. */
 export const markdownOf = (code: string): string =>
   `# Mermaid 图表\n\n\`\`\`mermaid\n${code.trimEnd()}\n\`\`\`\n`;

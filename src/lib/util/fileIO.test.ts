@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { diagramFileName, markdownOf, parseOpenedFile, stateFileOf } from './fileIO';
+import {
+  IMAGE_SIZE_DEFAULT,
+  IMAGE_SIZE_MAX,
+  IMAGE_SIZE_MIN,
+  clampImageSize,
+  diagramFileName,
+  exportCanvasSize,
+  markdownOf,
+  parseOpenedFile,
+  stateFileOf
+} from './fileIO';
 
 describe('diagramFileName', () => {
   it('builds a timestamped file name with the given extension', () => {
@@ -40,5 +50,38 @@ describe('stateFileOf / parseOpenedFile', () => {
     expect(parseOpenedFile('a.mmd', '   ')).toBeUndefined();
     expect(parseOpenedFile('a.json', 'not json')).toBeUndefined();
     expect(parseOpenedFile('a.json', JSON.stringify({ noCode: true }))).toBeUndefined();
+  });
+});
+
+describe('exportCanvasSize / clampImageSize', () => {
+  it('keeps typed sizes inside the spinner bounds (HTML min/max does not)', () => {
+    // Typed 0/negative would silently produce an empty canvas.
+    expect(clampImageSize(0)).toBe(IMAGE_SIZE_MIN);
+    expect(clampImageSize(-500)).toBe(IMAGE_SIZE_MIN);
+    // Typed 1e9 is an allocation the browser refuses (blank export).
+    expect(clampImageSize(1e9)).toBe(IMAGE_SIZE_MAX);
+    // Cleared input binds null/NaN — falls back rather than poisoning the canvas.
+    expect(clampImageSize(Number.NaN)).toBe(IMAGE_SIZE_DEFAULT);
+    expect(clampImageSize(null as unknown as number)).toBe(IMAGE_SIZE_DEFAULT);
+    expect(clampImageSize(320.7)).toBe(321);
+  });
+
+  it('scales the free side by the content ratio in width/height modes', () => {
+    expect(exportCanvasSize('width', 1000, 800, 400)).toEqual({ height: 500, width: 1000 });
+    expect(exportCanvasSize('height', 500, 800, 400)).toEqual({ height: 500, width: 1000 });
+  });
+
+  it('collapses degenerate content dimensions instead of a NaN/Infinity ratio', () => {
+    // viewBox 0 and rect 0 (hidden pane) previously made ratio = Infinity/NaN,
+    // which canvas.width silently treated as 0.
+    const size = exportCanvasSize('width', 1000, 0, 0);
+    expect(Number.isFinite(size.width)).toBe(true);
+    expect(Number.isFinite(size.height)).toBe(true);
+    expect(size.width).toBeGreaterThan(0);
+    expect(size.height).toBeGreaterThan(0);
+  });
+
+  it('auto mode doubles the (collapsed) content size', () => {
+    expect(exportCanvasSize('auto', 1e9, 300, 200)).toEqual({ height: 400, width: 600 });
   });
 });
