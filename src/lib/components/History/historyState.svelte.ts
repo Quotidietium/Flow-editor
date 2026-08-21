@@ -165,18 +165,21 @@ export interface RestoreResult {
 // Routes each uploaded entry to the store matching its own type, skipping ids
 // that already exist. Entries beyond MAX_RESTORE_ENTRIES count as invalid.
 // Like every history write this merges into the latest persisted value so
-// concurrent saves from other tabs are not dropped.
+// concurrent saves from other tabs are not dropped. The merged result is
+// capped at the slot's own maximum: repeated uploads must not grow the
+// store past the bounds addEntry enforces (quota exhaustion is exactly the
+// failure the input cap guards against).
 export const restoreEntries = (data: HistoryEntry[]): RestoreResult => {
   const capped = data.slice(0, MAX_RESTORE_ENTRIES);
   const valid = capped.filter((entry) => validateEntry(entry));
   const invalid = data.length - valid.length;
   let restored = 0;
 
-  const slots: [HistoryType, Persisted<HistoryEntry[]>, string][] = [
-    ['auto', auto, AUTO_STORE_KEY],
-    ['manual', manual, MANUAL_STORE_KEY]
+  const slots: [HistoryType, Persisted<HistoryEntry[]>, string, number][] = [
+    ['auto', auto, AUTO_STORE_KEY, MAX_AUTO_HISTORY_LENGTH],
+    ['manual', manual, MANUAL_STORE_KEY, MAX_MANUAL_HISTORY_LENGTH]
   ];
-  for (const [type, slot, storeKey] of slots) {
+  for (const [type, slot, storeKey, maxLength] of slots) {
     const incoming = valid.filter((entry) => entry.type === type);
     if (incoming.length === 0) {
       continue;
@@ -184,8 +187,10 @@ export const restoreEntries = (data: HistoryEntry[]): RestoreResult => {
     const latest = readJSON<HistoryEntry[]>(storeKey, slot.value);
     const existingIDs = latest.map(({ id }) => id);
     const fresh = incoming.filter(({ id }) => !existingIDs.includes(id));
-    restored += fresh.length;
-    slot.value = [...latest, ...fresh].sort((a, b) => b.time - a.time);
+    const kept = [...latest, ...fresh].sort((a, b) => b.time - a.time).slice(0, maxLength);
+    const keptIDs = kept.map(({ id }) => id);
+    restored += fresh.filter(({ id }) => keptIDs.includes(id)).length;
+    slot.value = kept;
   }
 
   const duplicates = valid.length - restored;

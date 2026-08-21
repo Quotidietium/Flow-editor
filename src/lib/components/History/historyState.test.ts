@@ -296,6 +296,37 @@ describe('restoreEntries', () => {
     expect(result.invalid).toBe(0);
     expect(entriesFor('manual')).toHaveLength(1);
   });
+
+  it('caps the merged store: repeated uploads cannot outgrow the slot maximum', () => {
+    const batch = (prefix: string, from: number, count: number): HistoryEntry[] =>
+      Array.from({ length: count }, (_, i) => ({
+        id: `${prefix}${i}`,
+        name: `${prefix}${i}`,
+        state: defaultState,
+        time: from + i,
+        type: 'manual' as const
+      }));
+
+    // First upload: 150 entries land (well under the 200 cap).
+    expect(restoreEntries(batch('a', 1, 150)).restored).toBe(150);
+    expect(entriesFor('manual')).toHaveLength(150);
+
+    // Second upload of 100 NEWER entries: merge would be 250 — the store
+    // must stay at 200 with the oldest dropped, and `restored` must count
+    // only the entries actually retained.
+    const second = restoreEntries(batch('b', 1000, 100));
+    expect(second.restored).toBe(100);
+    expect(entriesFor('manual')).toHaveLength(200);
+    expect(entriesFor('manual').at(-1)?.id).toBe('a50'); // oldest 50 dropped
+
+    // A further upload of mid-aged entries displaces the oldest — the store
+    // never grows past the cap, whatever the upload cadence.
+    const third = restoreEntries(batch('c', 500, 50));
+    expect(third.restored).toBe(50);
+    expect(third.duplicates + third.invalid).toBe(0);
+    expect(entriesFor('manual')).toHaveLength(200);
+    expect(entriesFor('manual').at(-1)?.id).toBe('a100'); // a50..a99 displaced
+  });
 });
 
 describe('injectHistoryIDs migration', () => {
