@@ -1,14 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { parse } from '../mermaid';
 import {
-  applyPositions,
-  detectDiagramKind,
   ER_CARDINALITIES,
-  generateCode,
   KIND_SPECS,
+  NODE_H,
+  applyPositions,
+  clampPosition,
+  detectDiagramKind,
+  generateCode,
   layoutGraph,
   nodeSize,
-  NODE_H,
   parseCode,
   sanitizePositions,
   type VGraph
@@ -473,5 +474,31 @@ describe('untrusted-input hardening', () => {
     }
     expect(() => generateCode(parsed.result.graph)).not.toThrow();
     expect(parsed.result.graph.nodes).toHaveLength(6000);
+  });
+});
+
+describe('clampPosition', () => {
+  it('keeps runtime moves inside the bound sanitizePositions accepts', () => {
+    // Paste offsets (+24 per paste) and held-key nudges could otherwise walk
+    // a coordinate past the persisted-map bound — the entry would then be
+    // silently DROPPED by sanitizePositions on the next boot.
+    expect(clampPosition(10_024, -10_050)).toEqual({ x: 10_000, y: -10_000 });
+    expect(clampPosition(24, -24)).toEqual({ x: 24, y: -24 });
+    expect(clampPosition(0, 0)).toEqual({ x: 0, y: 0 });
+  });
+
+  it('matches the sanitizePositions acceptance bound exactly', () => {
+    expect(sanitizePositions({ n: clampPosition(10_001, 10_001) }).n).toEqual({
+      x: 10_000,
+      y: 10_000
+    });
+    // Anything clampPosition emits is accepted by the loader.
+    for (const [x, y] of [
+      [-10_000, 10_000],
+      [9_999, -9_999],
+      [0, 0]
+    ]) {
+      expect(sanitizePositions({ n: clampPosition(x, y) }).n).toEqual({ x, y });
+    }
   });
 });

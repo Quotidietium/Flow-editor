@@ -1317,6 +1317,16 @@ export const applyPositions = (
  * coordinates and from there into every geometry calculation and SVG
  * attribute on the canvas.
  */
+/** Shared world bound: keep runtime moves (paste offsets, nudges, drags)
+ * inside the same margin sanitizePositions accepts, so a position written
+ * by the editor can never be rejected by its own loader on the next boot. */
+const POSITION_BOUND = 10_000;
+
+export const clampPosition = (x: number, y: number): { x: number; y: number } => ({
+  x: Math.max(-POSITION_BOUND, Math.min(POSITION_BOUND, x)),
+  y: Math.max(-POSITION_BOUND, Math.min(POSITION_BOUND, y))
+});
+
 export const sanitizePositions = (raw: unknown): Record<string, { x: number; y: number }> => {
   if (typeof raw !== 'object' || raw === null) {
     return {};
@@ -1334,8 +1344,8 @@ export const sanitizePositions = (raw: unknown): Record<string, { x: number; y: 
       typeof y === 'number' &&
       Number.isFinite(x) &&
       Number.isFinite(y) &&
-      Math.abs(x) <= 10_000 &&
-      Math.abs(y) <= 10_000
+      Math.abs(x) <= POSITION_BOUND &&
+      Math.abs(y) <= POSITION_BOUND
     ) {
       clean[id] = { x, y };
     }

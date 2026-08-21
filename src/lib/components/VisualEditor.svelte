@@ -34,6 +34,7 @@
     nodeSize,
     NODE_W,
     parseCode,
+    clampPosition,
     sanitizePositions
   } from '$/util/visualEditor/model';
   import type { VEdge, VGraph, VLinkType, VNode, VShape } from '$/util/visualEditor/model';
@@ -386,7 +387,7 @@
       return; // coordinates live in the generated code itself
     }
     rememberedPositions = Object.fromEntries(
-      graph.nodes.map((node) => [node.id, { x: node.x, y: node.y }] as const)
+      graph.nodes.map((node) => [node.id, clampPosition(node.x, node.y)] as const)
     );
     // Pathologically large graphs (thousands of nodes) would push a ~100KB+
     // JSON through a synchronous stringify+setItem on every drag release.
@@ -666,8 +667,9 @@
     pushUndo();
     const { edges, nodes } = remintIds(clipboard, graph.nodes, graph.edges);
     for (const node of nodes) {
-      node.x = snap(node.x + 24);
-      node.y = snap(node.y + 24);
+      const at = clampPosition(snap(node.x + 24), snap(node.y + 24));
+      node.x = at.x;
+      node.y = at.y;
       graph.nodes.push(node);
     }
     for (const edge of edges) {
