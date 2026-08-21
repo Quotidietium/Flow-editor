@@ -4,7 +4,16 @@ import type * as Monaco from 'monaco-editor';
 
 const commentRegex = /(?<!["'])%%(?![^"']*["']\)).*$/;
 
+// Registration is NOT idempotent on Monaco's side — every call adds another
+// provider/override (and DesktopEditor calls initEditor on each mount), so
+// desktop<->mobile crossings would stack duplicate providers. Run once.
+let editorInitialized = false;
+
 export const initEditor = (monacoEditor: typeof Monaco): void => {
+  if (editorInitialized) {
+    return;
+  }
+  editorInitialized = true;
   monacoEditor.languages.register({ id: 'mermaid' });
   const requirementDiagrams = [
     'requirement',

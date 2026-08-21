@@ -516,6 +516,14 @@ test('editor survives the mobile boundary with state intact', async ({ page }) =
   await expect(cm).toBeVisible();
   await expect(cm).toContainText('Boundary');
 
+  // Round-trip back to desktop: Monaco must remount (dispose-before-create
+  // across the boundary — duplicate model URIs would throw otherwise).
+  await page.setViewportSize({ height: 1080, width: 1920 });
+  await expect(page.locator('.monaco-editor')).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator('.monaco-editor')).toContainText('Boundary');
+  await page.setViewportSize({ height: 800, width: 400 });
+  await page.waitForTimeout(600);
+
   // Editing on mobile still flows through the gateway and renders. Click the
   // content host directly (the cm-editor chrome intercepts plain clicks).
   await page.locator('.cm-content').focus();
