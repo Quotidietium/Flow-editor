@@ -247,9 +247,11 @@
   let svgRect: DOMRect | undefined;
 
   // Canvas viewport: CSS-scale zoom on the world content + programmatic
-  // scroll panning (space-drag / middle-drag), like every office canvas.
+  // scroll panning (blank-drag / space-drag / middle-drag), like every
+  // office canvas. `moved` distinguishes a pan gesture from a blank click
+  // (which clears the selection on pointerup).
   let view = $state({ k: 1 });
-  let panning = $state<undefined | { lastX: number; lastY: number }>();
+  let panning = $state<undefined | { lastX: number; lastY: number; moved: boolean }>();
   let resize = $state<
     | undefined
     | {
@@ -1015,20 +1017,28 @@
     // Middle button or space+drag pans the canvas (office convention).
     if (event.button === 1 || spaceDown) {
       event.preventDefault();
-      panning = { lastX: event.clientX, lastY: event.clientY };
+      panning = { lastX: event.clientX, lastY: event.clientY, moved: false };
       return;
     }
     if (event.button !== 0) {
       return;
     }
-    const p = svgPoint(event);
-    marquee = {
-      additive: event.shiftKey || event.ctrlKey || event.metaKey,
-      x0: p.x,
-      x1: p.x,
-      y0: p.y,
-      y1: p.y
-    };
+    if (event.shiftKey || event.ctrlKey || event.metaKey) {
+      // Rubber band lives behind a modifier since plain blank drag pans
+      // (below): Shift+drag replaces the selection with the enclosed set,
+      // Ctrl/Meta+drag adds to it (draw.io semantics, one modifier deeper).
+      const p = svgPoint(event);
+      marquee = {
+        additive: event.ctrlKey || event.metaKey,
+        x0: p.x,
+        x1: p.x,
+        y0: p.y,
+        y1: p.y
+      };
+      return;
+    }
+    // Plain left-drag on blank canvas pans the view.
+    panning = { lastX: event.clientX, lastY: event.clientY, moved: false };
   };
 
   const onResizePointerDown = (
@@ -1120,9 +1130,15 @@
       return;
     }
     if (panning && canvasEl) {
-      canvasEl.scrollLeft -= event.clientX - panning.lastX;
-      canvasEl.scrollTop -= event.clientY - panning.lastY;
-      panning = { lastX: event.clientX, lastY: event.clientY };
+      const dx = event.clientX - panning.lastX;
+      const dy = event.clientY - panning.lastY;
+      canvasEl.scrollLeft -= dx;
+      canvasEl.scrollTop -= dy;
+      panning = {
+        lastX: event.clientX,
+        lastY: event.clientY,
+        moved: panning.moved || dx !== 0 || dy !== 0
+      };
       return;
     }
     const p = svgPoint(event);
@@ -1168,7 +1184,15 @@
   };
 
   const onWindowPointerUp = (event: PointerEvent): void => {
-    panning = undefined;
+    if (panning) {
+      // Blank click (no movement) clears the selection — same outcome the
+      // sub-threshold marquee produced before blank-drag became the panner.
+      if (!panning.moved) {
+        selected = [];
+      }
+      panning = undefined;
+      return;
+    }
     if (resize) {
       const pre = resize.preState;
       resize = undefined;
@@ -1610,7 +1634,7 @@
         <svg
           bind:this={svgEl}
           class="absolute inset-0 block h-full w-full"
-          style="touch-action: none;"
+          style="touch-action: none; cursor: {panning ? 'grabbing' : 'grab'};"
           ondblclick={(e) => {
             const p = svgPoint(e);
             addNodeAt(p.x, p.y);
@@ -1976,7 +2000,7 @@
               fill="var(--muted-foreground)"
               font-size="14"
               text-anchor="middle">
-              双击画布添加{kindSpec.newNode}；拖动节点边缘圆点创建连线；双击节点/连线修改文字
+              双击画布添加{kindSpec.newNode}；拖动空白平移画布（Shift+拖拽框选）；拖动节点边缘圆点创建连线；双击节点/连线修改文字
             </text>
           {/if}
         </svg>

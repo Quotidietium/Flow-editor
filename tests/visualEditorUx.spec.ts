@@ -79,15 +79,54 @@ test('rubber band selects enclosed nodes for a batch delete', async ({ page }) =
   await addNode(page, box.x + 220, box.y + 260, 'B');
   await addNode(page, box.x + 700, box.y + 200, 'C');
 
-  // Rubber band around A and B only; Delete removes exactly the enclosed set.
+  // Rubber band (Shift+drag) around A and B only; Delete removes exactly
+  // the enclosed set.
+  await page.keyboard.down('Shift');
   await page.mouse.move(box.x + 100, box.y + 80);
   await page.mouse.down();
   await page.mouse.move(box.x + 430, box.y + 350, { steps: 5 });
   await page.mouse.up();
+  await page.keyboard.up('Shift');
   await page.keyboard.press('Delete');
   await expect(codeOut).not.toContainText('N1[A]');
   await expect(codeOut).not.toContainText('N2[B]');
   await expect(codeOut).toContainText('N3[C]');
+  expect(pageErrors).toEqual([]);
+});
+
+test('blank drag pans the canvas; blank click clears the selection', async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (e) => pageErrors.push(e.message));
+  await openEditor(page);
+  await enterVisual(page);
+  await page.getByTestId('visual-clear').click();
+
+  const box = await canvasBox(page);
+  await addNode(page, box.x + 240, box.y + 180, 'Pan');
+  const canvas = page.getByTestId('visual-canvas');
+
+  // Plain left-drag on empty canvas scrolls the view (no modifier needed).
+  const before = await canvas.evaluate((el) => ({ x: el.scrollLeft, y: el.scrollTop }));
+  await page.mouse.move(box.x + 400, box.y + 300);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 250, box.y + 220, { steps: 4 });
+  await page.mouse.up();
+  const after = await canvas.evaluate((el) => ({ x: el.scrollLeft, y: el.scrollTop }));
+  expect(after.x).toBeGreaterThan(before.x + 100);
+  expect(after.y).toBeGreaterThan(before.y + 50);
+
+  // A blank click without movement clears the selection instead of panning.
+  // (The node moved on screen during the pan — re-measure before clicking.)
+  const node = page.locator('[data-node-id="N1"]');
+  const nb = await node.boundingBox();
+  if (!nb) {
+    throw new Error('node missing after pan');
+  }
+  await page.mouse.click(nb.x + nb.width / 2, nb.y + nb.height / 2);
+  const selectedStroke = page.locator('[data-node-id="N1"] rect[stroke="var(--primary)"]');
+  await expect(selectedStroke).toHaveCount(1);
+  await page.mouse.click(box.x + 700, box.y + 450);
+  await expect(selectedStroke).toHaveCount(0);
   expect(pageErrors).toEqual([]);
 });
 
@@ -499,10 +538,7 @@ test('editor survives the mobile boundary with state intact', async ({ page }) =
   // Desktop Monaco: replace the diagram with something recognizable.
   const editor = page.locator('.monaco-editor');
   await editor.click();
-  await page.evaluate(
-    (c) => navigator.clipboard.writeText(c),
-    'graph LR\n  Edge --> Boundary'
-  );
+  await page.evaluate((c) => navigator.clipboard.writeText(c), 'graph LR\n  Edge --> Boundary');
   await page.keyboard.press('Control+KeyA');
   await page.keyboard.press('Control+V');
   await expect(page.locator('#container')).toContainText('Boundary');
