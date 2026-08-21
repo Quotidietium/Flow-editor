@@ -75,10 +75,14 @@
 
     editor.onDidChangeModelContent(({ isFlush }) => {
       const newText = editor?.getValue();
-      if (!newText || currentText === newText || isFlush || isUpdatingFromState) {
+      // Empty text propagates like any other edit: swallowing it left the
+      // persisted state (exports/share URL/history) carrying the previous
+      // diagram while the editor showed an empty document — MobileEditor
+      // already behaves this way.
+      if (currentText === newText || isFlush || isUpdatingFromState) {
         return;
       }
-      currentText = newText;
+      currentText = newText ?? '';
       onUpdate(currentText);
     });
 

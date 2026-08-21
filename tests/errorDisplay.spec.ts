@@ -49,4 +49,17 @@ test.describe('Error display tests', () => {
     await editPage.setEditorMode('代码');
     await expect(squiggles.first()).toBeVisible();
   });
+
+  // Clearing the editor must clear the persisted code too: swallowing the
+  // empty edit left exports/share URL/history carrying the previous diagram
+  // while the editor showed an empty document (MobileEditor always
+  // propagated; this pins the desktop parity).
+  test('clearing the editor clears the persisted code', async ({ editPage }) => {
+    await editPage.clearEditor();
+    await editPage.checkError('语法错误');
+    const codeLength = await editPage.page.evaluate(
+      () => (JSON.parse(localStorage.getItem('codeStore') ?? '{}').code ?? '').length
+    );
+    expect(codeLength).toBe(0);
+  });
 });
