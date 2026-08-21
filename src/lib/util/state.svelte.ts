@@ -259,12 +259,16 @@ export const sanitizeConfig = (config: string | MermaidConfig) => {
   return formatJSON(mermaidConfig);
 };
 
-export const loadState = (data: string): void => {
+export const loadState = (data: string): Promise<void> => {
   console.log(`Loading '${data}'`);
   // URL share links pass through the plugin input pipeline (source 'url').
   // The registry is imported dynamically: state is a low-level module and this
   // keeps the static dependency graph acyclic; plugins are loaded by then.
-  void import('../plugins/registry.svelte').then(({ runInputTransforms }) => {
+  // The promise is returned so startup can subscribe the URL writer only
+  // AFTER the shared state lands — otherwise initURLSubscription's immediate
+  // flush would overwrite the incoming share-link hash with the default
+  // state for the import window.
+  return import('../plugins/registry.svelte').then(({ runInputTransforms }) => {
     update((state) => {
       applyLoadedState(state, data, runInputTransforms);
     });

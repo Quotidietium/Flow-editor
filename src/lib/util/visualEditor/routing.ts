@@ -56,7 +56,12 @@ const hitsVertical = (nodes: VNode[], x: number, y1: number, y2: number, skipIds
       return false;
     }
     const size = nodeSize(node);
-    return x > node.x - AVOID_PAD && x < node.x + size.w + AVOID_PAD && y1 < node.y + size.h && y2 > node.y;
+    return (
+      x > node.x - AVOID_PAD &&
+      x < node.x + size.w + AVOID_PAD &&
+      y1 < node.y + size.h &&
+      y2 > node.y
+    );
   });
 
 const hitsHorizontal = (nodes: VNode[], y: number, x1: number, x2: number, skipIds: Set<string>) =>
@@ -65,7 +70,12 @@ const hitsHorizontal = (nodes: VNode[], y: number, x1: number, x2: number, skipI
       return false;
     }
     const size = nodeSize(node);
-    return y > node.y - AVOID_PAD && y < node.y + size.h + AVOID_PAD && x1 < node.x + size.w && x2 > node.x;
+    return (
+      y > node.y - AVOID_PAD &&
+      y < node.y + size.h + AVOID_PAD &&
+      x1 < node.x + size.w &&
+      x2 > node.x
+    );
   });
 
 /** Path through the points with rounded bends (radius clamped per segment). */
@@ -73,7 +83,11 @@ const roundedPath = (points: Point[]): string => {
   if (points.length < 2) {
     return '';
   }
-  let d = `M${points[0]!.x},${points[0]!.y}`;
+  const first = points[0];
+  if (!first) {
+    return '';
+  }
+  let d = `M${first.x},${first.y}`;
   for (let i = 1; i < points.length - 1; i++) {
     const prev = points[i - 1] as Point;
     const corner = points[i] as Point;
@@ -97,11 +111,7 @@ const roundedPath = (points: Point[]): string => {
  * 3-segment manhattan (with a shared mid axis), and push the mid axis out of
  * any node it would cross. Falls back to straight when the ports align.
  */
-export const routeOrthogonal = (
-  source: VNode,
-  target: VNode,
-  obstacles: VNode[] = []
-): Route => {
+export const routeOrthogonal = (source: VNode, target: VNode, obstacles: VNode[] = []): Route => {
   const skipIds = new Set([source.id, target.id]);
   const sc = centerOf(source);
   const tc = centerOf(target);
@@ -109,14 +119,10 @@ export const routeOrthogonal = (
   const dy = tc.y - sc.y;
   const horizontal = Math.abs(dx) >= Math.abs(dy);
   const points: Point[] = horizontal
-    ? [
-        portOn(source, dx >= 0 ? 'right' : 'left'),
-        portOn(target, dx >= 0 ? 'left' : 'right')
-      ]
+    ? [portOn(source, dx >= 0 ? 'right' : 'left'), portOn(target, dx >= 0 ? 'left' : 'right')]
     : [portOn(source, dy >= 0 ? 'bottom' : 'top'), portOn(target, dy >= 0 ? 'top' : 'bottom')];
   const p1 = points[0] as Point;
   const p2 = points[1] as Point;
-  let mid: Point[] = [];
   if (horizontal) {
     if (Math.abs(p1.y - p2.y) < 1) {
       return { points: [p1, p2], d: roundedPath([p1, p2]) };
@@ -140,10 +146,12 @@ export const routeOrthogonal = (
         }
       }
     }
-    mid = [
+    const mid: Point[] = [
       { x: midX, y: p1.y },
       { x: midX, y: p2.y }
     ];
+    const all = [p1, ...mid, p2];
+    return { points: all, d: roundedPath(all) };
   } else {
     if (Math.abs(p1.x - p2.x) < 1) {
       return { points: [p1, p2], d: roundedPath([p1, p2]) };
@@ -165,13 +173,13 @@ export const routeOrthogonal = (
         }
       }
     }
-    mid = [
+    const mid: Point[] = [
       { x: p1.x, y: midY },
       { x: p2.x, y: midY }
     ];
+    const all = [p1, ...mid, p2];
+    return { points: all, d: roundedPath(all) };
   }
-  const all = [p1, ...mid, p2];
-  return { points: all, d: roundedPath(all) };
 };
 
 export const routeStraight = (source: VNode, target: VNode): Route => {
@@ -181,11 +189,7 @@ export const routeStraight = (source: VNode, target: VNode): Route => {
   const dy = tc.y - sc.y;
   // Border-to-border like the classic edgeAnchor, but expressed as points.
   const halfA = { x: nodeSize(source).w / 2, y: nodeSize(source).h / 2 };
-  const s = Math.min(
-    halfA.x / Math.max(Math.abs(dx), 1),
-    halfA.y / Math.max(Math.abs(dy), 1),
-    0.5
-  );
+  const s = Math.min(halfA.x / Math.max(Math.abs(dx), 1), halfA.y / Math.max(Math.abs(dy), 1), 0.5);
   const p1 = { x: sc.x + dx * s, y: sc.y + dy * s };
   const p2 = { x: tc.x - dx * s, y: tc.y - dy * s };
   return { points: [p1, p2], d: roundedPath([p1, p2]) };

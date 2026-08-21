@@ -17,8 +17,11 @@ describe('routeOrthogonal', () => {
     const b = node('B', 600, 200); // dx=670 dominates dy=222
     const route = routeOrthogonal(a, b);
     expect(route.points.length).toBe(4);
-    const p1 = route.points[0]!;
-    const p2 = route.points.at(-1)!;
+    const p1 = route.points[0];
+    const p2 = route.points.at(-1);
+    if (!p1 || !p2) {
+      throw new Error('route points missing');
+    }
     expect(p1.x).toBe(NODE_W); // exits right
     expect(p1.y).toBe(NODE_H / 2);
     expect(p2.x).toBe(600); // enters left
@@ -40,7 +43,11 @@ describe('routeOrthogonal', () => {
     const b = node('B', 600, 300);
     const obstacle = node('O', 330, 100); // sits right on the default mid axis (~370)
     const route = routeOrthogonal(a, b, [obstacle]);
-    const midX = route.points[1]!.x;
+    const midPoint = route.points[1];
+    if (!midPoint) {
+      throw new Error('mid point missing');
+    }
+    const midX = midPoint.x;
     const size = NODE_W;
     // The mid axis must clear the obstacle box (with padding).
     expect(midX < obstacle.x - 25 || midX > obstacle.x + size + 25).toBe(true);

@@ -1,8 +1,6 @@
 import { initURLSubscription, loadState, updateCodeStore, verifyState } from './state.svelte';
 
-export const loadStateFromURL = (): void => {
-  loadState(window.location.hash.slice(1));
-};
+export const loadStateFromURL = (): Promise<void> => loadState(window.location.hash.slice(1));
 
 export const syncDiagram = (): void => {
   updateCodeStore({
@@ -11,7 +9,7 @@ export const syncDiagram = (): void => {
 };
 
 export const initHandler = async (): Promise<void> => {
-  loadStateFromURL();
+  await loadStateFromURL();
   syncDiagram();
   initURLSubscription();
   verifyState();

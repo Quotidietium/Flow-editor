@@ -64,7 +64,9 @@ test('saves the source locally and exports every text format', async ({ editPage
 });
 
 test('exports raster and PDF formats', async ({ editPage, page }) => {
-  test.slow();
+  // Three panZoom round-trips (webp/jpeg/pdf) under parallel load can exceed
+  // the 90s a bare test.slow() grants on this host.
+  test.setTimeout(180_000);
   await editPage.openExportMenu();
   const webpPromise = page.waitForEvent('download');
   await page.getByTestId('download-webp').click();

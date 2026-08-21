@@ -133,7 +133,10 @@ describe('remintIds', () => {
 
   it('drops edges whose endpoints were not copied', () => {
     const { edges } = remintIds(
-      { edges: [{ id: 'E1', source: 'N1', target: 'X', type: 'arrow' }], nodes: [node('N1', 0, 0)] },
+      {
+        edges: [{ id: 'E1', source: 'N1', target: 'X', type: 'arrow' }],
+        nodes: [node('N1', 0, 0)]
+      },
       [],
       []
     );
@@ -205,9 +208,14 @@ describe('layoutGroupedGrid', () => {
       nodes: [g1, g2, t1, t2]
     };
     const moves = layoutGroupedGrid(graph, 'column');
+    const colRoot = moves.G1;
+    const firstItem = moves.T1;
+    if (!colRoot || !firstItem) {
+      throw new Error('layout moves missing');
+    }
     expect(moves.G1?.x).toBe(60);
     expect(moves.G2?.x).toBe(60 + NODE_W + 80);
-    expect(moves.T1?.y).toBe(moves.G1!.y + NODE_H + 40);
-    expect(moves.T2?.y).toBe(moves.T1!.y + NODE_H + 40);
+    expect(moves.T1?.y).toBe(colRoot.y + NODE_H + 40);
+    expect(moves.T2?.y).toBe(firstItem.y + NODE_H + 40);
   });
 });

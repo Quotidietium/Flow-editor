@@ -398,7 +398,10 @@ test('resize handles change the node size and persist', async ({ page }) => {
   await expect(codeOut).toContainText('N1[Resize]');
 
   // 重置尺寸 via the node context menu restores the default size.
-  await page.mouse.click(after!.x + 20, after!.y + 10, { button: 'right' });
+  if (!after) {
+    throw new Error('node box missing after resize');
+  }
+  await page.mouse.click(after.x + 20, after.y + 10, { button: 'right' });
   await page.getByTestId('visual-context-menu').getByRole('button', { name: '重置尺寸' }).click();
   const reset = await node.boundingBox();
   expect(Math.abs((reset?.width ?? 0) - before.width)).toBeLessThanOrEqual(1);
