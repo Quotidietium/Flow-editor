@@ -7,6 +7,7 @@ import {
   NODE_H,
   NODE_W,
   parseFlowchart,
+  sanitizePositions,
   type VGraph,
   type VNode
 } from './model';
@@ -244,5 +245,21 @@ describe('nextNodeId', () => {
         { id: 'N2', label: 'x', shape: 'rect', x: 0, y: 0 }
       ])
     ).toBe('N3');
+  });
+});
+
+describe('sanitizePositions bounds (untrusted localStorage)', () => {
+  it('rejects inflated coordinates that would poison geometry', () => {
+    expect(
+      sanitizePositions({
+        BIG: { x: 1e300, y: 5 },
+        NEG_BIG: { x: 5, y: -1e300 },
+        OK: { x: 3000, y: 2000 },
+        EDGE: { x: 10_000, y: -10_000 }
+      })
+    ).toEqual({
+      OK: { x: 3000, y: 2000 },
+      EDGE: { x: 10_000, y: -10_000 }
+    });
   });
 });

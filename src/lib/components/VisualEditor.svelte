@@ -328,13 +328,17 @@
         continue;
       }
       const { w, h } = value as { h?: unknown; w?: unknown };
+      // Untrusted storage: finite AND bounded — an inflated w/h (1e300)
+      // would blow up every geometry calculation and SVG attribute.
       if (
         typeof w === 'number' &&
         typeof h === 'number' &&
         Number.isFinite(w) &&
         Number.isFinite(h) &&
         w >= 0 &&
-        h >= 0
+        h >= 0 &&
+        w <= 900 &&
+        h <= 600
       ) {
         clean[id] = { h, w };
       }

@@ -1327,11 +1327,15 @@ export const sanitizePositions = (raw: unknown): Record<string, { x: number; y: 
       continue;
     }
     const { x, y } = value as { x?: unknown; y?: unknown };
+    // Canvas world is 3000x2000 — accept a margin, but reject inflated
+    // coordinates (1e300) that would poison every geometry calculation.
     if (
       typeof x === 'number' &&
       typeof y === 'number' &&
       Number.isFinite(x) &&
-      Number.isFinite(y)
+      Number.isFinite(y) &&
+      Math.abs(x) <= 10_000 &&
+      Math.abs(y) <= 10_000
     ) {
       clean[id] = { x, y };
     }
