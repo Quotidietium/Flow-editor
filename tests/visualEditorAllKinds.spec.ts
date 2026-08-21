@@ -28,9 +28,7 @@ const enterVisual = async (page: Page): Promise<ReturnType<Page['getByTestId']>>
   return codeOut;
 };
 
-test('visual editor imports journey diagrams and attaches tasks to the selected section', async ({
-  page
-}) => {
+test('visual editor imports journey diagrams into the board view', async ({ page }) => {
   await openEditor(page);
   await typeCode(
     page,
@@ -41,12 +39,18 @@ test('visual editor imports journey diagrams and attaches tasks to the selected 
   await expect(codeOut).toContainText('journey');
   await expect(codeOut).toContainText('Make tea: 5: Me');
 
-  // Selecting a section node and adding a task attaches it to that section.
-  await page.locator('[data-node-id="G1"]').click();
-  await page.getByTestId('visual-add-node').click();
-  await page.keyboard.type('Walk dog');
-  await page.keyboard.press('Enter');
+  // Journey edits on the board: one column per section, one card per task.
+  const board = page.getByTestId('visual-board');
+  await expect(board).toBeVisible();
+  await expect(page.getByTestId('visual-canvas')).toHaveCount(0);
+  await expect(board.getByLabel('分组名称')).toHaveCount(1);
+  await expect(board.getByTestId('visual-board-card')).toHaveCount(2);
 
+  // Adding a task under the section appends it after the existing tasks.
+  await board.getByTestId('visual-board-add-card').first().click();
+  const input = board.getByLabel('任务名称').last();
+  await input.fill('Walk dog');
+  await input.blur();
   const text = await codeOut.textContent();
   const sectionIdx = text?.indexOf('section Go to work') ?? -1;
   const taskIdx = text?.indexOf('Walk dog: 5') ?? -1;

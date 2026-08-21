@@ -167,6 +167,11 @@ export interface KindSpec {
   shapes: VShape[];
   /** Whether start/end pseudo nodes exist (stateDiagram `[*]`). */
   startEnd: boolean;
+  /**
+   * Dedicated editor view replacing the free canvas for kinds whose semantics
+   * are not node-link (boards, sheets, outlines, …); undefined = canvas.
+   */
+  view?: 'board' | 'git' | 'outline' | 'sequence' | 'sheet';
 }
 
 // Per-kind capability table; drives both the toolbar and the generators.
@@ -262,7 +267,8 @@ export const KIND_SPECS: Record<DiagramKind, KindSpec> = {
       { name: '困惑域', role: 'domain', data: 'confusion' }
     ],
     shapes: [],
-    startEnd: false
+    startEnd: false,
+    view: 'board'
   },
   er: {
     detail: true,
@@ -318,7 +324,8 @@ export const KIND_SPECS: Record<DiagramKind, KindSpec> = {
       { name: '阶段', role: 'section' }
     ],
     shapes: [],
-    startEnd: false
+    startEnd: false,
+    view: 'board'
   },
   git: {
     canLink: false,
@@ -356,7 +363,8 @@ export const KIND_SPECS: Record<DiagramKind, KindSpec> = {
       { name: '分组', role: 'section' }
     ],
     shapes: [],
-    startEnd: false
+    startEnd: false,
+    view: 'board'
   },
   kanban: {
     detail: true,
@@ -369,7 +377,8 @@ export const KIND_SPECS: Record<DiagramKind, KindSpec> = {
       { name: '列表', role: 'column' }
     ],
     shapes: [],
-    startEnd: false
+    startEnd: false,
+    view: 'board'
   },
   mindmap: {
     detail: false,
@@ -530,7 +539,8 @@ export const KIND_SPECS: Record<DiagramKind, KindSpec> = {
       { name: '时期', role: 'period' }
     ],
     shapes: [],
-    startEnd: false
+    startEnd: false,
+    view: 'board'
   },
   treemap: {
     detail: true,

@@ -20,6 +20,7 @@ export const TID = {
   pluginManagerOpen: 'plugin-manager-open',
   themeToggleButton: 'theme-toggle-button',
   visualAddNode: 'visual-add-node',
+  visualBoard: 'visual-board',
   visualCanvas: 'visual-canvas',
   visualClear: 'visual-clear',
   visualCodeOut: 'visual-code-out',
