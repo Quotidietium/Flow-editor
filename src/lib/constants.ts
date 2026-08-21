@@ -33,6 +33,7 @@ export const TID = {
   visualMenuDelete: 'visual-menu-delete',
   visualMeta: 'visual-meta',
   visualNodeType: 'visual-node-type',
+  visualOutline: 'visual-outline',
   visualPreview: 'visual-preview',
   visualPreviewToggle: 'visual-preview-toggle',
   visualRedo: 'visual-redo',

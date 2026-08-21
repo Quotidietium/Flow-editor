@@ -2,6 +2,7 @@
   import { Button } from '$/components/ui/button';
   import { Toggle } from '$/components/ui/toggle';
   import BoardEditor from '$/components/visual/BoardEditor.svelte';
+  import OutlineEditor from '$/components/visual/OutlineEditor.svelte';
   import SheetEditor from '$/components/visual/SheetEditor.svelte';
   import { TID } from '$/constants';
   import { notify } from '$/util/notify';
@@ -1677,12 +1678,14 @@
     </span>
   </div>
 
-  {#if kindSpec.view === 'board' || kindSpec.view === 'sheet'}
+  {#if kindSpec.view === 'board' || kindSpec.view === 'sheet' || kindSpec.view === 'outline'}
     <div class="relative flex min-h-0 flex-1 flex-col">
       {#if kindSpec.view === 'board'}
         <BoardEditor {commit} {graph} kind={graph.kind ?? 'flowchart'} />
-      {:else}
+      {:else if kindSpec.view === 'sheet'}
         <SheetEditor {commit} {graph} kind={graph.kind ?? 'flowchart'} />
+      {:else}
+        <OutlineEditor {commit} {graph} kind={graph.kind ?? 'flowchart'} />
       {/if}
       {@render metaDialog()}
     </div>

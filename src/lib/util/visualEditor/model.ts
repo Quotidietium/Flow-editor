@@ -350,7 +350,8 @@ export const KIND_SPECS: Record<DiagramKind, KindSpec> = {
     links: [],
     newNode: '节点',
     shapes: [],
-    startEnd: false
+    startEnd: false,
+    view: 'outline'
   },
   journey: {
     detail: true,
@@ -388,7 +389,8 @@ export const KIND_SPECS: Record<DiagramKind, KindSpec> = {
     links: [],
     newNode: '节点',
     shapes: ['rect', 'round', 'stadium', 'diamond'],
-    startEnd: false
+    startEnd: false,
+    view: 'outline'
   },
   packet: {
     canLink: false,
@@ -530,7 +532,8 @@ export const KIND_SPECS: Record<DiagramKind, KindSpec> = {
     links: [],
     newNode: '节点',
     shapes: [],
-    startEnd: false
+    startEnd: false,
+    view: 'outline'
   },
   timeline: {
     detail: false,
@@ -554,7 +557,8 @@ export const KIND_SPECS: Record<DiagramKind, KindSpec> = {
     links: [],
     newNode: '节点',
     shapes: [],
-    startEnd: false
+    startEnd: false,
+    view: 'outline'
   },
   treeview: {
     detail: false,
@@ -563,7 +567,8 @@ export const KIND_SPECS: Record<DiagramKind, KindSpec> = {
     links: [],
     newNode: '节点',
     shapes: [],
-    startEnd: false
+    startEnd: false,
+    view: 'outline'
   },
   venn: {
     canLink: false,
