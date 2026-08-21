@@ -37,7 +37,7 @@
 </script>
 
 <ModeWatcher />
-<Toaster />
+<Toaster visibleToasts={4} />
 
 <main class="h-dvh">
   {@render children()}

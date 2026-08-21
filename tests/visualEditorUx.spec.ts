@@ -491,3 +491,36 @@ test('history restore reloads the visual canvas and resets undo', async ({ page 
   // (undoing across a history restore is undefined history).
   await expect(page.getByTestId('visual-undo')).toBeDisabled();
 });
+
+test('editor survives the mobile boundary with state intact', async ({ page }) => {
+  await openEditor(page);
+  await page.setViewportSize({ height: 1080, width: 1920 });
+
+  // Desktop Monaco: replace the diagram with something recognizable.
+  const editor = page.locator('.monaco-editor');
+  await editor.click();
+  await page.evaluate(
+    (c) => navigator.clipboard.writeText(c),
+    'graph LR\n  Edge --> Boundary'
+  );
+  await page.keyboard.press('Control+KeyA');
+  await page.keyboard.press('Control+V');
+  await expect(page.locator('#container')).toContainText('Boundary');
+
+  // Cross the 640px boundary: the CodeMirror mobile editor mounts and must
+  // carry the same state (it syncs from the gateway, not from Monaco).
+  await page.setViewportSize({ height: 800, width: 400 });
+  await page.waitForTimeout(600);
+  await expect(page.locator('.monaco-editor')).toHaveCount(0);
+  const cm = page.locator('.cm-editor');
+  await expect(cm).toBeVisible();
+  await expect(cm).toContainText('Boundary');
+
+  // Editing on mobile still flows through the gateway and renders. Click the
+  // content host directly (the cm-editor chrome intercepts plain clicks).
+  await page.locator('.cm-content').focus();
+  await page.keyboard.press('Control+KeyA');
+  await page.keyboard.type('pie\n  "M": 1');
+  await page.waitForTimeout(800);
+  await expect(page.locator('#container')).toContainText('M');
+});
