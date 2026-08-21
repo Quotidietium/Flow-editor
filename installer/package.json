@@ -8,16 +8,18 @@
   },
   "scripts": {
     "icon": "node scripts/build-icon.mjs",
+    "fetch-electron": "node scripts/fetch-electron.mjs",
     "pack:dir": "electron-builder --win --x64 --dir",
     "dist": "electron-builder --win --x64",
     "smoke": "node scripts/smoke.mjs"
   },
   "pnpm": {
-    "onlyBuiltDependencies": [
+    "ignoredBuiltDependencies": [
       "electron"
     ]
   },
   "devDependencies": {
+    "@electron/get": "3.1.0",
     "electron": "43.4.1",
     "electron-builder": "26.15.3",
     "sharp": "0.35.3"

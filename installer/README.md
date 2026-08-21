@@ -24,24 +24,30 @@ Electron 主进程（main.cjs + server.cjs）───────────�
   无地址栏干扰，体验与桌面软件一致；Chromium 版本确定，渲染行为可复现。
 - **离线一致性**：本项目 2.0.69 起已移除全部自主联网行为（见
   `note/privacy-simplify.md`），桌面版天然继承——安装后运行零外联。
+- **目录自包含**：打包过程的一切文件（脚本、配置、依赖、缓存、产物）都在
+  `installer/` 内。Electron 运行时 zip 经 `scripts/fetch-electron.mjs` 以编程
+  `cacheRoot` 下载到 `.cache/electron-dist/`（npm postinstall 的默认缓存位于
+  用户目录且无环境变量可改道，故已通过 `pnpm.ignoredBuiltDependencies` 关闭），
+  再由 `build.ps1` 以 `-c.electronDist=` 传给 electron-builder。
 
 ## 目录结构
 
-| 路径                     | 说明                                                              |
-| ------------------------ | ----------------------------------------------------------------- |
-| `build.ps1`              | 一键构建编排（见下）                                              |
-| `package.json`           | 打包工程自身依赖（electron / electron-builder / sharp，精确锁版） |
-| `electron-builder.yml`   | NSIS 安装包配置（辅助向导、per-user 免管理员、简体中文界面）      |
-| `app/package.json`       | 应用清单（版本号由 build.ps1 从根 package.json 同步）             |
-| `app/main.cjs`           | Electron 主进程：内嵌服务器 + 窗口生命周期 + 单实例锁             |
-| `app/server.cjs`         | 静态文件服务器（MIME / SPA 兜底 / 目录穿越防护）                  |
-| `app/site/`              | 站点产物（`robocopy /MIR` 自 `docs/`，不入库）                    |
-| `scripts/build-icon.mjs` | `static/favicon.png` → `resources/icon.ico`（多尺寸）             |
-| `scripts/smoke.mjs`      | 冒烟测试：静默安装 → 启动探测 → 卸载                              |
-| `resources/icon.ico`     | 安装包/快捷方式图标（入库，可由脚本再生成）                       |
-| `dist/`                  | 最终产物（不入库）                                                |
-| `.cache/`                | Electron / electron-builder 二进制缓存（不入库，自包含）          |
-| `.smoke/`                | 冒烟测试临时目录（不入库）                                        |
+| 路径                         | 说明                                                              |
+| ---------------------------- | ----------------------------------------------------------------- |
+| `build.ps1`                  | 一键构建编排（见下）                                              |
+| `package.json`               | 打包工程自身依赖（electron / electron-builder / sharp，精确锁版） |
+| `electron-builder.yml`       | NSIS 安装包配置（辅助向导、per-user 免管理员、简体中文界面）      |
+| `app/package.json`           | 应用清单（版本号由 build.ps1 从根 package.json 同步）             |
+| `app/main.cjs`               | Electron 主进程：内嵌服务器 + 窗口生命周期 + 单实例锁             |
+| `app/server.cjs`             | 静态文件服务器（MIME / SPA 兜底 / 目录穿越防护）                  |
+| `app/site/`                  | 站点产物（`robocopy /MIR` 自 `docs/`，不入库）                    |
+| `scripts/build-icon.mjs`     | `static/favicon.png` → `resources/icon.ico`（多尺寸）             |
+| `scripts/fetch-electron.mjs` | Electron 运行时 zip 拉取到 `.cache/electron-dist/`                |
+| `scripts/smoke.mjs`          | 冒烟测试：静默安装 → 启动探测 → 卸载                              |
+| `resources/icon.ico`         | 安装包/快捷方式图标（入库，可由脚本再生成）                       |
+| `dist/`                      | 最终产物（不入库）                                                |
+| `.cache/`                    | Electron / electron-builder 二进制缓存（不入库，自包含）          |
+| `.smoke/`                    | 冒烟测试临时目录（不入库）                                        |
 
 ## 用法
 

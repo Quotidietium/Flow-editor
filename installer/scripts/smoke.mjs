@@ -124,7 +124,8 @@ if (port) {
   );
 
   if (edit) {
-    const assetMatch = edit.body.match(/(?:src|href)="(\/_app\/immutable\/[^"]+\.js)"/);
+    // adapter-static 预渲染页默认输出相对路径（./_app/...），探测时归一为绝对路径
+    const assetMatch = edit.body.match(/(?:src|href)="\.?(\/_app\/immutable\/[^"]+\.js)"/);
     if (!assetMatch) {
       check('immutable JS asset discoverable in /edit html', false);
     } else {

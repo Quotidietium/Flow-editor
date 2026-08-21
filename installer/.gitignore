@@ -4,3 +4,4 @@ dist/
 .cache/
 .smoke/
 app/site/
+.build-log.txt

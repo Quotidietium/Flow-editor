@@ -47,7 +47,9 @@ function Set-MirrorEnv {
 }
 
 # 工具缓存收敛到 installer/.cache，保持目录自包含
-$env:ELECTRON_CACHE = Join-Path $InstallerRoot '.cache\electron'
+# （electron-builder 的 NSIS/7zip 等二进制缓存；Electron 运行时 zip 由 fetch-electron.mjs
+#   以编程 cacheRoot 下载到 .cache/electron-dist —— electron 的 npm postinstall 已通过
+#   pnpm.ignoredBuiltDependencies 关闭，避免其写入用户目录的固定缓存）
 $env:ELECTRON_BUILDER_CACHE = Join-Path $InstallerRoot '.cache\electron-builder'
 if ($UseMirror) { Set-MirrorEnv }
 
@@ -71,16 +73,18 @@ if (-not $SkipSiteBuild) {
 }
 
 Write-Step '同步站点产物 docs/ -> installer/app/site/'
-robocopy (Join-Path $RepoRoot 'docs') $SiteDir /MIR /NFL /NDL /NJH /NPS | Out-Null
+robocopy (Join-Path $RepoRoot 'docs') $SiteDir /MIR /NFL /NDL /NJH /NJS /NP | Out-Null
 if ($LASTEXITCODE -gt 7) { throw "robocopy 失败，退出码 $LASTEXITCODE" }
 $global:LASTEXITCODE = 0 # robocopy 0-7 均为成功，复位避免误伤后续检查
 
 Write-Step '同步版本号到 installer/app/package.json'
-$rootPkg = Get-Content (Join-Path $RepoRoot 'package.json') -Raw | ConvertFrom-Json
+$rootPkg = [System.IO.File]::ReadAllText((Join-Path $RepoRoot 'package.json')) | ConvertFrom-Json
 $appPkgPath = Join-Path $AppDir 'package.json'
-$appPkgRaw = Get-Content $appPkgPath -Raw
+# .NET 显式 UTF-8（无 BOM）读写：PS 5.1 的 Get-Content/Set-Content 会把中文读成乱码、写出 BOM，均会损坏 JSON
+$appPkgRaw = [System.IO.File]::ReadAllText($appPkgPath)
 $appPkgRaw = $appPkgRaw -replace '"version"\s*:\s*"[^"]*"', ('"version": "' + $rootPkg.version + '"')
-Set-Content -Path $appPkgPath -Value $appPkgRaw -NoNewline -Encoding utf8
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+[System.IO.File]::WriteAllText($appPkgPath, $appPkgRaw, $utf8NoBom)
 Write-Host "    应用版本 $($rootPkg.version)"
 
 if ($Install -or -not (Test-Path (Join-Path $InstallerRoot 'node_modules'))) {
@@ -107,14 +111,33 @@ try {
   if ($LASTEXITCODE -ne 0) { throw "build-icon 退出码 $LASTEXITCODE" }
 } finally { Pop-Location }
 
+Write-Step '拉取 Electron 运行时（缓存于 installer/.cache/electron-dist）'
+Push-Location $InstallerRoot
+try {
+  $electronZip = $null
+  try {
+    $electronZip = (node scripts\fetch-electron.mjs | Select-Object -Last 1)
+    if ($LASTEXITCODE -ne 0) { throw "fetch-electron 退出码 $LASTEXITCODE" }
+  } catch {
+    if ($UseMirror) { throw }
+    Write-Host '    直连失败，回退 npmmirror 镜像重试…' -ForegroundColor Yellow
+    Set-MirrorEnv
+    $electronZip = (node scripts\fetch-electron.mjs | Select-Object -Last 1)
+    if ($LASTEXITCODE -ne 0) { throw "fetch-electron（镜像）退出码 $LASTEXITCODE" }
+  }
+  $electronZip = "$electronZip".Trim()
+  if (-not (Test-Path $electronZip)) { throw "Electron zip 不存在：$electronZip" }
+  Write-Host "    $electronZip"
+} finally { Pop-Location }
+
 Write-Step 'electron-builder 打包（NSIS，数分钟）'
 Push-Location $InstallerRoot
 try {
-  pnpm exec electron-builder --win --x64
+  pnpm exec electron-builder --win --x64 "-c.electronDist=$electronZip"
   if ($LASTEXITCODE -ne 0 -and -not $UseMirror) {
     Write-Host '    打包失败，回退 npmmirror 镜像重试一次…' -ForegroundColor Yellow
     Set-MirrorEnv
-    pnpm exec electron-builder --win --x64
+    pnpm exec electron-builder --win --x64 "-c.electronDist=$electronZip"
   }
   if ($LASTEXITCODE -ne 0) { throw "electron-builder 退出码 $LASTEXITCODE" }
 } finally { Pop-Location }
