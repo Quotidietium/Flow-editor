@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { VEdge, VNode } from './model';
-import { NODE_H, NODE_W, nodeSize } from './model';
+import { NODE_H, nodeSize } from './model';
 import {
   alignSelection,
   alignmentGuides,
   autoConnect,
   distributeSelection,
-  layoutGroupedGrid,
   nodesInRect,
   remintIds,
   snapshotGraph
@@ -189,33 +188,5 @@ describe('autoConnect', () => {
   it('spawns below for the down direction', () => {
     const result = autoConnect([a], [], a, 'down');
     expect(result.spawn.y).toBeGreaterThan(a.y);
-  });
-});
-
-describe('layoutGroupedGrid', () => {
-  it('lays groups out as columns with items stacked below', () => {
-    const g1 = { ...node('G1', 0, 0), role: 'column' };
-    const g2 = { ...node('G2', 0, 0), role: 'column' };
-    const t1 = { ...node('T1', 0, 0), role: 'ticket' };
-    const t2 = { ...node('T2', 0, 0), role: 'ticket' };
-    const graph = {
-      direction: 'TD' as const,
-      edges: [
-        { id: 'E1', source: 'G1', target: 'T1', type: 'line' as const },
-        { id: 'E2', source: 'G1', target: 'T2', type: 'line' as const }
-      ],
-      kind: 'kanban' as const,
-      nodes: [g1, g2, t1, t2]
-    };
-    const moves = layoutGroupedGrid(graph, 'column');
-    const colRoot = moves.G1;
-    const firstItem = moves.T1;
-    if (!colRoot || !firstItem) {
-      throw new Error('layout moves missing');
-    }
-    expect(moves.G1?.x).toBe(60);
-    expect(moves.G2?.x).toBe(60 + NODE_W + 80);
-    expect(moves.T1?.y).toBe(colRoot.y + NODE_H + 40);
-    expect(moves.T2?.y).toBe(firstItem.y + NODE_H + 40);
   });
 });

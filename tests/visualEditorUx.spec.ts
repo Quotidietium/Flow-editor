@@ -446,14 +446,17 @@ test('resize handles change the node size and persist', async ({ page }) => {
   expect(Math.abs((reset?.width ?? 0) - before.width)).toBeLessThanOrEqual(1);
 });
 
-test('group nodes render as dashed containers', async ({ page }) => {
+test('grouped-list kinds render on the board editor (not the canvas)', async ({ page }) => {
   await openEditor(page);
   await typeCode(page, 'journey\n  title T\n  section S1\n    task: 5: Me');
   await enterVisual(page);
 
-  const group = page.locator('[data-node-id="G1"]');
-  await expect(group).toBeVisible();
-  await expect(group.locator('rect')).toHaveAttribute('stroke-dasharray', '8 5');
+  // Grouped-list kinds moved to the board editor (2.0.119): the journey
+  // section renders as a board column, not a canvas container.
+  const board = page.getByTestId('visual-board');
+  await expect(board).toBeVisible();
+  await expect(board.getByLabel('分组名称')).toHaveValue('S1');
+  await expect(board.getByTestId('visual-board-card').getByLabel('任务名称')).toHaveValue('task');
 });
 
 test('inline label editor keeps its size at any canvas zoom', async ({ page }) => {

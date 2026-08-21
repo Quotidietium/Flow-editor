@@ -5,7 +5,7 @@
 
 ## 1. 功能概述
 
-**所见即所得（WYSIWYG）**：导航栏的 **Visual** 开关把可视化编辑器切换进右侧的大预览区（左侧 Code/Config 编辑区保持不变）。用户直接在预览区的画布上用鼠标编辑图形，编辑器实时生成 Mermaid flowchart 源代码，并通过项目唯一的状态网关 `updateCode()` 同步——切回预览即见渲染结果，URL 分享链接、localStorage 持久化全部自动生效。
+**所见即所得（WYSIWYG）**：导航栏的 **Visual** 开关把可视化编辑器切换进右侧的大预览区（左侧 Code/Config 编辑区保持不变）。编辑器按图族分流（§9）：节点-边/坐标语义的类型在自绘交互画布上编辑；分组列表、记录列表、缩进树、时序、git 等类型分别使用看板、表格、大纲、时序、操作序列专用编辑器。所有形态都实时生成 Mermaid 源代码，并通过项目唯一的状态网关 `updateCode()` 同步——切回预览即见渲染结果，URL 分享链接、localStorage 持久化全部自动生效。
 
 ### 1.1 画布操作（类 Draw.io）
 
@@ -236,3 +236,41 @@ src/lib/util/visualEditor/model.test.ts   单元测试（15 个用例，全绿�
   对比模式让「显示用 Mermaid、编辑用画布」各得其所
 
 > 版本变更汇总见 [release/2.0.68.md](release/2.0.68.md)、[release/2.0.75.md](release/2.0.75.md)、[release/2.0.76.md](release/2.0.76.md)、[release/2.0.85.md](release/2.0.85.md)、[release/2.0.86.md](release/2.0.86.md)、[release/2.0.87.md](release/2.0.87.md)
+
+## 9. 分族专用编辑器（2.0.119–2.0.123，重大重写）
+
+**动因**：实际体验发现非流程图的可视化编辑交互极差——31 类图共用一套
+自由框线画布，对非节点-边语义的图族是错误的心智模型（饼图切片是漂浮
+方框、看板列与卡片间画着误导性连线、时序图参与者可拖到任意位置摧毁
+生命线次序、git 提交的位置毫无语义……）。
+
+**方案**：按图族替换为专用编辑器，`KindSpec.view` 声明形态，全部操作
+同一 VGraph 模型、经 `commit()`（pushUndo + mutate + syncCode）单一
+网关发布——**解析/生成层零改动**，撤销重做、代码同步、URL 分享自动继承。
+
+| 编辑器         | 覆盖类型                                                                                               | 交互形态                                                                                                        |
+| -------------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| BoardEditor    | journey / gantt / timeline / kanban / cynefin                                                          | 看板：列=分组、卡片=条目；拖卡换列/列内排序（HTML5 DnD）；行内编辑名称与详情；cynefin 固定五域 + 域间转换编辑器 |
+| SheetEditor    | pie / packet / radar / xychart / venn / eventmodeling / railroad                                       | 分区表格：一行一记录、一列一字段（文本 + 下拉）；增删、上移/下移                                                |
+| OutlineEditor  | mindmap / treeview / treemap / ishikawa / swimlane                                                     | Outliner：Enter=同级、Tab=缩进、Shift+Tab=反缩进；删除行子级原位提升；treemap 数值、mindmap 形状行内可改        |
+| SequenceEditor | sequence / zenuml                                                                                      | 参与者列表（次序=生命线序，actor 切换，删除级联消息）+ 消息列表（源/箭头/目标/内容，上下移动改时间序）          |
+| GitEditor      | git                                                                                                    | 操作序列行：类型/分支/ID/标签/合并来源；行序=重放序，branch/checkout 自动推导                                   |
+| 画布（保留）   | flowchart / state / er / class / c4 / architecture / sankey / requirement / block / quadrant / wardley | 节点-边/坐标语义本就适合画布，配合既有交互（多选/撤销/正交路由/AutoConnect…）                                   |
+
+**架构要点**：
+
+- `src/lib/util/visualEditor/{board,sheet,outline}.ts`：纯逻辑层（分组
+  派生视图与生成器 `groupedEmit` 同语义、行/树操作），单测覆盖；
+  sequence/git 操作为琐碎数组变换，直接内联组件。
+- `src/lib/components/visual/{Board,Sheet,Outline,Sequence,Git}Editor.svelte`：
+  五个视图组件，props 仅 `{ graph, commit }`（+kind）。
+- `VisualEditor.svelte`：工具栏按 `canvasView` 分流（画布专属按钮仅画布
+  模式），属性对话框抽 snippet 供全部视图复用；undo/redo、从代码重载、
+  对比、清空对各视图一视同仁。
+- 各视图的成员关系语义防线：看板移卡重写唯一成员边（生成是「首条分组
+  边生效」）；时序目标下拉排除源（自消息无导入语法）；git 合并来源只
+  读 `mergeFrom` 边 roleData（生成器唯一消费者）。
+
+**测试**：board/sheet/outline 纯函数单测 31 用例；每族 e2e 规格
+（visualEditorBoard/Sheet/Outline/Sequence/Git + AllKinds 改写）覆盖
+增删改、排序、类型切换与代码断言。

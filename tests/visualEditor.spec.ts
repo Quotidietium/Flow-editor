@@ -163,9 +163,11 @@ test('visual editor imports and edits sequence diagrams', async ({ page }) => {
   await expect(codeOut).toContainText('Alice->>Bob: Hello');
   await expect(codeOut).toContainText('Bob-->>Alice: Hi');
 
-  // The add-node button is kind-aware (参与者); the new node keeps its minted
-  // id with the typed name as the display label.
-  await page.getByTestId('visual-add-node').click();
+  // Sequence edits on the sequence editor: adding a participant keeps the
+  // minted id with the typed name as the display label.
+  const editor = page.getByTestId('visual-sequence');
+  await expect(editor).toBeVisible();
+  await editor.getByTestId('visual-sequence-add-participant').click();
   await page.keyboard.type('Carol');
   await page.keyboard.press('Enter');
   await expect(codeOut).toContainText('participant N3 as Carol');

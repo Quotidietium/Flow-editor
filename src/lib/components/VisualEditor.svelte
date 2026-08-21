@@ -13,7 +13,6 @@
     alignmentGuides,
     autoConnect,
     distributeSelection,
-    layoutGroupedGrid,
     nodesInRect,
     remintIds,
     snapshotGraph
@@ -768,16 +767,6 @@
 
   // Visio AutoConnect arrows: connect the nearest unconnected node in the
   // direction, or spawn a fresh connected node there (draw.io drop-on-arrow).
-  const GROUP_ROLES = new Set(['column', 'domain', 'period', 'section']);
-  const isGroupNode = (node: VNode): boolean => Boolean(node.role && GROUP_ROLES.has(node.role));
-  const GROUP_ROLE_BY_KIND: Partial<Record<string, string>> = {
-    cynefin: 'domain',
-    gantt: 'section',
-    journey: 'section',
-    kanban: 'column',
-    timeline: 'period'
-  };
-
   const autoConnectAction = (source: VNode, direction: Direction): void => {
     const { existingId, spawn } = autoConnect(graph.nodes, graph.edges, source, direction);
     if (existingId) {
@@ -828,24 +817,6 @@
       graph.edges.push(newEdge(source.id, node.id));
     }
     selected = [{ id: node.id, kind: 'node' }];
-    syncCode();
-  };
-
-  const groupedLayout = (): void => {
-    const role = GROUP_ROLE_BY_KIND[graph.kind ?? 'flowchart'];
-    if (!role) {
-      autoLayout();
-      return;
-    }
-    pushUndo();
-    const moves = layoutGroupedGrid(graph, role);
-    for (const node of graph.nodes) {
-      const move = moves[node.id];
-      if (move) {
-        node.x = move.x;
-        node.y = move.y;
-      }
-    }
     syncCode();
   };
 
@@ -1899,9 +1870,8 @@
                 y={marqueeRect.y}></rect>
             {/if}
 
-            {#each [...graph.nodes].sort((a, b) => (isGroupNode(b) ? 1 : 0) - (isGroupNode(a) ? 1 : 0)) as node (node.id)}
+            {#each graph.nodes as node (node.id)}
               {@const isSelected = selectedNodeIds.has(node.id)}
-              {@const container = isGroupNode(node) && !node.special}
               {@const size = nodeSize(node)}
               <g
                 role="button"
@@ -1951,18 +1921,6 @@
                     fill="var(--background)"
                     stroke={isSelected ? 'var(--primary)' : 'var(--border)'}
                     stroke-width={isSelected ? 2.5 : 1.5}></polygon>
-                {:else if container}
-                  <rect
-                    fill="var(--primary)"
-                    fill-opacity={isSelected ? 0.12 : 0.06}
-                    height={size.h}
-                    rx={10}
-                    stroke={isSelected ? 'var(--primary)' : 'var(--border)'}
-                    stroke-dasharray="8 5"
-                    stroke-width={isSelected ? 2.5 : 1.5}
-                    width={size.w}
-                    x={node.x}
-                    y={node.y}></rect>
                 {:else}
                   <rect
                     height={size.h}
@@ -1987,12 +1945,11 @@
                     </text>
                   {/if}
                   <text
-                    x={container ? node.x + 12 : node.x + size.w / 2}
-                    y={container ? node.y + 18 : node.y + NODE_H / 2 + 4}
-                    fill={container ? 'var(--primary)' : 'var(--foreground)'}
+                    x={node.x + size.w / 2}
+                    y={node.y + NODE_H / 2 + 4}
+                    fill="var(--foreground)"
                     font-size="12"
-                    font-weight={container ? '600' : undefined}
-                    text-anchor={container ? 'start' : 'middle'}
+                    text-anchor="middle"
                     style="pointer-events: none;">
                     {displayLabel(node.label || node.id)}
                   </text>
@@ -2185,16 +2142,6 @@
         }}>
         自动分层
       </button>
-      {#if GROUP_ROLE_BY_KIND[graph.kind ?? 'flowchart']}
-        <button
-          class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
-          onclick={() => {
-            layoutMenuOpen = false;
-            groupedLayout();
-          }}>
-          分组排布
-        </button>
-      {/if}
       <button
         class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
         onclick={() => {
