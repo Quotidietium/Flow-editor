@@ -3,6 +3,7 @@
   import { Toggle } from '$/components/ui/toggle';
   import BoardEditor from '$/components/visual/BoardEditor.svelte';
   import OutlineEditor from '$/components/visual/OutlineEditor.svelte';
+  import SequenceEditor from '$/components/visual/SequenceEditor.svelte';
   import SheetEditor from '$/components/visual/SheetEditor.svelte';
   import { TID } from '$/constants';
   import { notify } from '$/util/notify';
@@ -1678,14 +1679,16 @@
     </span>
   </div>
 
-  {#if kindSpec.view === 'board' || kindSpec.view === 'sheet' || kindSpec.view === 'outline'}
+  {#if kindSpec.view && kindSpec.view !== 'git'}
     <div class="relative flex min-h-0 flex-1 flex-col">
       {#if kindSpec.view === 'board'}
         <BoardEditor {commit} {graph} kind={graph.kind ?? 'flowchart'} />
       {:else if kindSpec.view === 'sheet'}
         <SheetEditor {commit} {graph} kind={graph.kind ?? 'flowchart'} />
-      {:else}
+      {:else if kindSpec.view === 'outline'}
         <OutlineEditor {commit} {graph} kind={graph.kind ?? 'flowchart'} />
+      {:else if kindSpec.view === 'sequence'}
+        <SequenceEditor {commit} {graph} kind={graph.kind ?? 'flowchart'} />
       {/if}
       {@render metaDialog()}
     </div>

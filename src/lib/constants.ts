@@ -37,6 +37,7 @@ export const TID = {
   visualPreview: 'visual-preview',
   visualPreviewToggle: 'visual-preview-toggle',
   visualRedo: 'visual-redo',
+  visualSequence: 'visual-sequence',
   visualSheet: 'visual-sheet',
   visualTab: 'visual-tab',
   visualUndo: 'visual-undo'

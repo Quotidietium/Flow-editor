@@ -514,7 +514,8 @@ export const KIND_SPECS: Record<DiagramKind, KindSpec> = {
     ],
     newNode: '参与者',
     shapes: ['rect', 'round'],
-    startEnd: false
+    startEnd: false,
+    view: 'sequence'
   },
   state: {
     detail: true,
@@ -634,7 +635,8 @@ export const KIND_SPECS: Record<DiagramKind, KindSpec> = {
     ],
     newNode: '参与者',
     shapes: ['rect', 'round'],
-    startEnd: false
+    startEnd: false,
+    view: 'sequence'
   }
 };
 
