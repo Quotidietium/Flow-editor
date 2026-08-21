@@ -1973,67 +1973,68 @@
             </text>
           {/if}
         </svg>
+      </div>
+      {#if editing}
+        <!-- Overlays live OUTSIDE the scale() layer: inside it their font
+               size and geometry would track the canvas zoom (unusable at
+               0.4x, enormous at 2.5x). Position = world coords × zoom. -->
+        <input
+          type="text"
+          class="absolute z-10 w-44 rounded border bg-background px-1 py-0.5 text-xs text-foreground"
+          style="left: {editing.x * view.k - 88}px; top: {editing.y * view.k - 12}px;"
+          bind:value={editing.label}
+          use:focusEditor
+          onkeydown={(e) => {
+            e.stopPropagation();
+            if (e.key === 'Enter') commitEdit();
+            if (e.key === 'Escape') editing = undefined;
+          }}
+          onblur={commitEdit} />
+      {/if}
 
-        {#if editing}
-          <input
-            type="text"
-            class="absolute z-10 w-44 rounded border bg-background px-1 py-0.5 text-xs text-foreground"
-            style="left: {editing.x - 88}px; top: {editing.y - 12}px;"
-            bind:value={editing.label}
-            use:focusEditor
+      {#if editingMeta}
+        <div class="absolute top-2 left-2 z-10 w-64 rounded border bg-background p-2 shadow">
+          <div class="mb-1 text-xs text-muted-foreground">图表属性</div>
+          {#if kindSpec.hasTitle}
+            <label class="mb-1 block text-xs" for="ve-meta-title">标题</label>
+            <input
+              id="ve-meta-title"
+              class="mb-2 w-full rounded border border-input bg-background p-1 text-xs text-foreground"
+              bind:value={metaTitleDraft} />
+          {/if}
+          {#each kindSpec.metaKeys ?? [] as metaKey (metaKey.key)}
+            <label class="mb-1 block text-xs" for="ve-meta-{metaKey.key}">{metaKey.label}</label>
+            <input
+              id="ve-meta-{metaKey.key}"
+              class="mb-2 w-full rounded border border-input bg-background p-1 text-xs text-foreground"
+              bind:value={metaDrafts[metaKey.key]} />
+          {/each}
+          <div class="mt-1 flex justify-end gap-1">
+            <Button size="sm" variant="ghost" onclick={() => (editingMeta = false)}>取消</Button>
+            <Button size="sm" onclick={commitMeta}>保存</Button>
+          </div>
+        </div>
+      {/if}
+
+      {#if editingDetail && selectedNode}
+        <div class="absolute top-2 left-2 z-10 w-64 rounded border bg-background p-2 shadow">
+          <div class="mb-1 text-xs text-muted-foreground">
+            编辑「{displayLabel(selectedNode.label || selectedNode.id)}」的内容（每行一条）
+          </div>
+          <textarea
+            data-testid={TID.visualDetailEditor}
+            bind:value={detailDraft}
+            class="h-24 w-full rounded border border-input bg-background p-1 font-mono text-xs text-foreground"
             onkeydown={(e) => {
               e.stopPropagation();
-              if (e.key === 'Enter') commitEdit();
-              if (e.key === 'Escape') editing = undefined;
-            }}
-            onblur={commitEdit} />
-        {/if}
-
-        {#if editingMeta}
-          <div class="absolute top-2 left-2 z-10 w-64 rounded border bg-background p-2 shadow">
-            <div class="mb-1 text-xs text-muted-foreground">图表属性</div>
-            {#if kindSpec.hasTitle}
-              <label class="mb-1 block text-xs" for="ve-meta-title">标题</label>
-              <input
-                id="ve-meta-title"
-                class="mb-2 w-full rounded border border-input bg-background p-1 text-xs text-foreground"
-                bind:value={metaTitleDraft} />
-            {/if}
-            {#each kindSpec.metaKeys ?? [] as metaKey (metaKey.key)}
-              <label class="mb-1 block text-xs" for="ve-meta-{metaKey.key}">{metaKey.label}</label>
-              <input
-                id="ve-meta-{metaKey.key}"
-                class="mb-2 w-full rounded border border-input bg-background p-1 text-xs text-foreground"
-                bind:value={metaDrafts[metaKey.key]} />
-            {/each}
-            <div class="mt-1 flex justify-end gap-1">
-              <Button size="sm" variant="ghost" onclick={() => (editingMeta = false)}>取消</Button>
-              <Button size="sm" onclick={commitMeta}>保存</Button>
-            </div>
+              if (e.key === 'Escape') editingDetail = false;
+            }}></textarea>
+          <div class="mt-1 flex justify-end gap-1">
+            <Button size="sm" variant="ghost" onclick={() => (editingDetail = false)}>取消</Button>
+            <Button size="sm" onclick={commitDetail}>保存</Button>
           </div>
-        {/if}
-
-        {#if editingDetail && selectedNode}
-          <div class="absolute top-2 left-2 z-10 w-64 rounded border bg-background p-2 shadow">
-            <div class="mb-1 text-xs text-muted-foreground">
-              编辑「{displayLabel(selectedNode.label || selectedNode.id)}」的内容（每行一条）
-            </div>
-            <textarea
-              data-testid={TID.visualDetailEditor}
-              bind:value={detailDraft}
-              class="h-24 w-full rounded border border-input bg-background p-1 font-mono text-xs text-foreground"
-              onkeydown={(e) => {
-                e.stopPropagation();
-                if (e.key === 'Escape') editingDetail = false;
-              }}></textarea>
-            <div class="mt-1 flex justify-end gap-1">
-              <Button size="sm" variant="ghost" onclick={() => (editingDetail = false)}
-                >取消</Button>
-              <Button size="sm" onclick={commitDetail}>保存</Button>
-            </div>
-          </div>
-        {/if}
-      </div>
+        </div>
+      {/if}
     </div>
   </div>
 

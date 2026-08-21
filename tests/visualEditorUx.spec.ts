@@ -416,3 +416,39 @@ test('group nodes render as dashed containers', async ({ page }) => {
   await expect(group).toBeVisible();
   await expect(group.locator('rect')).toHaveAttribute('stroke-dasharray', '8 5');
 });
+
+test('inline label editor keeps its size at any canvas zoom', async ({ page }) => {
+  await openEditor(page);
+  await enterVisual(page);
+  await page.getByTestId('visual-clear').click();
+
+  const box = await canvasBox(page);
+  await addNode(page, box.x + 260, box.y + 200, 'ZoomEdit');
+
+  const node = page.locator('[data-node-id="N1"]');
+  const nb = await node.boundingBox();
+  if (!nb) {
+    throw new Error('node missing');
+  }
+
+  const fontAt = async (): Promise<string> => {
+    await page.mouse.dblclick(nb.x + nb.width / 2, nb.y + 20);
+    const input = page.locator('input[type="text"].absolute');
+    const font = await input.evaluate((el) => getComputedStyle(el).fontSize);
+    await page.keyboard.press('Escape');
+    return font;
+  };
+
+  const before = await fontAt();
+
+  // Zoom out twice (0.4x region) — the editor must not shrink with the canvas.
+  await page.mouse.move(box.x + 300, box.y + 200);
+  await page.keyboard.down('Control');
+  await page.mouse.wheel(0, 120);
+  await page.mouse.wheel(0, 120);
+  await page.keyboard.up('Control');
+  await page.waitForTimeout(300);
+
+  const after = await fontAt();
+  expect(after).toBe(before);
+});
