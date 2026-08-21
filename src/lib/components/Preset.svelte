@@ -88,9 +88,16 @@
   // moment it arrives — from HTTP cache on every visit after the first.
   let samples = $state<Record<string, SampleExample[]>>({ ...extras });
   $effect(() => {
-    void getSampleDiagrams().then((loaded) => {
-      samples = { ...loaded, ...extras };
-    });
+    // Chunk-load failure (offline first run, flaky cache) must not become an
+    // unhandled rejection — the card simply keeps the built-in extras.
+    void getSampleDiagrams().then(
+      (loaded) => {
+        samples = { ...loaded, ...extras };
+      },
+      (error) => {
+        console.warn('示例目录加载失败，仅显示内置示例', error);
+      }
+    );
   });
 
   const loadSampleDiagram = (diagramType: string, example: SampleExample): void => {
