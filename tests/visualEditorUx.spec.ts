@@ -452,3 +452,42 @@ test('inline label editor keeps its size at any canvas zoom', async ({ page }) =
   const after = await fontAt();
   expect(after).toBe(before);
 });
+
+test('history restore reloads the visual canvas and resets undo', async ({ page }) => {
+  await openEditor(page);
+  const codeOut = await enterVisual(page);
+  await page.getByTestId('visual-clear').click();
+
+  // Diagram A: two nodes, connected.
+  const box = await canvasBox(page);
+  await addNode(page, box.x + 200, box.y + 200, 'Alpha');
+  await addNode(page, box.x + 500, box.y + 200, 'Beta');
+  await expect(codeOut).toContainText('N2[Beta]');
+
+  // Open the history pane first — the save button lives inside it.
+  await page.getByTitle('历史记录').click();
+  await page.getByTitle('保存当前状态').waitFor({ state: 'visible' });
+  await page.getByTitle('保存当前状态').click();
+  await page.waitForTimeout(300);
+
+  // Diagram B replaces A in the editor (visual mode never left — the
+  // history pane opens beside it, the toggle stays pressed).
+  await page.getByTestId('visual-clear').click();
+  await addNode(page, box.x + 300, box.y + 300, 'Gamma');
+  await expect(codeOut).toContainText('N1[Gamma]');
+  await expect(codeOut).not.toContainText('N2[Beta]');
+
+  // Restore diagram A from the history panel (external state change).
+  await page.getByTitle('恢复此版本').first().click();
+  await page.waitForTimeout(500);
+
+  // The canvas must show the RESTORED diagram (visual mode never left —
+  // the external code change reloads it through the state gateway)…
+  await expect(codeOut).toContainText('N2[Beta]');
+  await expect(codeOut).not.toContainText('Gamma');
+  await expect(page.locator('[data-node-id="N2"]')).toBeVisible();
+
+  // …and the undo stack must have been cleared by the external replacement
+  // (undoing across a history restore is undefined history).
+  await expect(page.getByTestId('visual-undo')).toBeDisabled();
+});
