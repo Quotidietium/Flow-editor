@@ -74,6 +74,9 @@
           rough: state.rough,
           viewId: uniqueID('graph-')
         });
+        if (disposed) {
+          return;
+        }
         if (graphDiv && state.panZoom) {
           handlePanZoom(state, graphDiv);
         }
@@ -94,12 +97,21 @@
     });
   };
 
+  // Set while the awaited render below is still in flight and the component
+  // unmounts: calling updateElement then would resurrect a pan-zoom instance
+  // (window listeners + ResizeObserver) on an already-detached SVG — the
+  // leak destroy() just cleaned up.
+  let disposed = false;
+
   onMount(() => {
     setupPanZoomObserver();
     // Release the pan-zoom wrapper (svg-pan-zoom window listeners and the
     // ResizeObserver) when the View unmounts — e.g. every Visual↔preview
     // toggle. Pan/zoom values survive inside the wrapper for the next mount.
-    return () => panZoomState.destroy();
+    return () => {
+      disposed = true;
+      panZoomState.destroy();
+    };
   });
 
   // Queue state changes to avoid race condition

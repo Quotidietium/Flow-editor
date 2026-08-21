@@ -135,11 +135,15 @@
       }
     }
 
-    // Display/clear errors — only when they (or their model) changed.
-    if (model !== lastMarkersModel || errorMarkers !== lastMarkers) {
+    // Display/clear errors — only when they (or their model) changed. The
+    // markers carry positions in the mermaid CODE document; on the config
+    // tab they must not be transplanted onto the JSON (config errors are
+    // surfaced by Monaco's own json validation).
+    const markers = model === mermaidModel ? errorMarkers : [];
+    if (model !== lastMarkersModel || markers !== lastMarkers) {
       lastMarkersModel = model;
-      lastMarkers = errorMarkers;
-      monaco.editor.setModelMarkers(model, 'mermaid', errorMarkers);
+      lastMarkers = markers;
+      monaco.editor.setModelMarkers(model, 'mermaid', markers);
     }
   });
 </script>
