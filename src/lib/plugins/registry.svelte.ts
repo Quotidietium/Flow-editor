@@ -249,6 +249,13 @@ const applyAllThemes = (): void => {
 
 // --- hook dispatchers used by the app ---
 
+// The transform pipeline feeds straight into the state gateway's synchronous
+// stringify + localStorage write: an oversized output (a malformed or hostile
+// plugin transform returning megabytes) would freeze the main thread and can
+// exhaust the storage quota. Bridge/URL inputs are capped on entry (round
+// 2.0.113 / the URL-length limit); the pipeline output gets the same bound.
+const MAX_TRANSFORMED_LENGTH = 5_000_000;
+
 export const runInputTransforms = (code: string, source: 'bridge' | 'file' | 'url'): string => {
   let current = code;
   for (const plugin of activePlugins()) {
@@ -258,6 +265,12 @@ export const runInputTransforms = (code: string, source: 'bridge' | 'file' | 'ur
     }
     const next = guarded(plugin.id, () => hook.transform(current, source), undefined);
     if (typeof next === 'string') {
+      if (next.length > MAX_TRANSFORMED_LENGTH) {
+        console.error(
+          `[plugin:${plugin.id}] transform output over ${MAX_TRANSFORMED_LENGTH} chars — keeping input`
+        );
+        continue; // keep the pre-transform value rather than the oversized output
+      }
       current = next;
     }
   }

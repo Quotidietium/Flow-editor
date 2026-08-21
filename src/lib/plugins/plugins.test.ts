@@ -61,6 +61,32 @@ describe('plugin hook dispatch', () => {
     expect(runInputTransforms('X', 'file')).toBe('X!');
   });
 
+  // The gateway synchronously stringifies and persists every incoming code:
+  // a transform returning megabytes would freeze the main thread and can
+  // exhaust the storage quota. Oversized outputs are dropped (the
+  // pre-transform value is kept), never flowed through.
+  it('drops oversized transform outputs instead of feeding them downstream', () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    registerPluginInstance(
+      basePlugin({
+        id: 'huge',
+        inputTransform: { name: 'huge', transform: () => 'x'.repeat(5_000_001) }
+      })
+    );
+    registerPluginInstance(
+      basePlugin({
+        id: 'next',
+        inputTransform: { name: 'next', transform: (c) => `${c}-next` }
+      })
+    );
+    // The oversized output never reaches the next plugin either.
+    expect(runInputTransforms('X', 'file')).toBe('X-next');
+    expect(consoleError).toHaveBeenCalledWith(
+      expect.stringContaining('[plugin:huge] transform output over 5000000 chars')
+    );
+    consoleError.mockRestore();
+  });
+
   it('dispatches file imports by extension', () => {
     registerPluginInstance(
       basePlugin({
