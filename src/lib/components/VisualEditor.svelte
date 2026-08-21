@@ -1576,6 +1576,7 @@
     <Toggle
       pressed={compareOpen}
       size="sm"
+      class="hidden sm:inline-flex"
       data-testid={TID.visualPreviewToggle}
       title="对比模式：代码 | 可视化 | Mermaid 预览 三栏对照"
       aria-label="对比模式"

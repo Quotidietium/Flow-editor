@@ -245,9 +245,12 @@ Bob-->Alice: fine
 
 describe('all extra kinds round-trip and generate valid mermaid', () => {
   for (const [kind, code] of Object.entries(FIXTURES)) {
+    // parse() lazy-loads the kind's mermaid diagram module; under a fully
+    // parallel vitest run a starved worker can exceed the 5s default
+    // (isolated runs finish in well under a second).
     it(`${kind}: fixed point + valid output`, async () => {
       await roundTripKind(kind, code);
-    });
+    }, 20_000);
   }
 });
 
@@ -408,7 +411,7 @@ describe('edited graphs still generate valid mermaid', () => {
     const generated = generateCode(graph);
     await assertParses(generated);
     expect(generated).toContain('落单任务');
-  });
+  }, 20_000);
 
   it('git tolerates a deleted merge edge by degrading to a plain commit', async () => {
     const parsed = parseCode(FIXTURES.git as string);
@@ -421,7 +424,7 @@ describe('edited graphs still generate valid mermaid', () => {
     const generated = generateCode(graph);
     expect(generated).not.toContain('merge');
     await assertParses(generated);
-  });
+  }, 20_000);
 
   it('pie values are editable and default to 1', async () => {
     const parsed = parseCode(FIXTURES.pie as string);
@@ -434,7 +437,7 @@ describe('edited graphs still generate valid mermaid', () => {
     const generated = generateCode(graph);
     expect(generated).toContain('"新切片": 1');
     await assertParses(generated);
-  });
+  }, 20_000);
 });
 
 describe('untrusted-input hardening for extra kinds', () => {

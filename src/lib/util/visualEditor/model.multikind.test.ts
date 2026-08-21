@@ -35,7 +35,9 @@ const roundTrip = (code: string): string => {
 };
 
 // Every generated artifact must stay valid Mermaid — this is the contract
-// that makes visual editing of these kinds usable at all.
+// that makes visual editing of these kinds usable at all. parse() lazy-loads
+// diagram modules, so these tests carry an explicit 20s timeout: under a
+// fully parallel vitest run a starved worker can exceed the 5s default.
 const assertParses = async (code: string): Promise<void> => {
   await expect(parse(code)).resolves.toBeTruthy();
 };
@@ -94,7 +96,7 @@ describe('sequence', () => {
     expect(generated).toContain('actor Bob');
     expect(generated).toContain('Alice->>Bob: Hello');
     await assertParses(generated);
-  });
+  }, 20_000);
 
   it('keeps message order as edges are appended', () => {
     const parsed = parseCode(code);
@@ -167,7 +169,7 @@ describe('class', () => {
     expect(generated).toContain('+bar() void');
     expect(generated).toContain('Bar "1" *-- "many" Baz');
     await assertParses(generated);
-  });
+  }, 20_000);
 
   it('distinguishes aggregation o-- from a cardinality-free association', () => {
     const parsed = parseCode('classDiagram\n    A o-- B\n    C --> D : x\n');
@@ -224,7 +226,7 @@ describe('state', () => {
     expect(generated).toContain('Busy : working hard');
     expect(generated).toContain('Busy --> [*]');
     await assertParses(generated);
-  });
+  }, 20_000);
 
   it('skips composite state bodies and notes with a count', () => {
     const parsed = parseCode(`stateDiagram-v2
@@ -283,7 +285,7 @@ describe('er', () => {
     expect(generated).toContain('ORDER {');
     expect(generated).toContain('string id');
     await assertParses(generated);
-  });
+  }, 20_000);
 
   it('emits cardinality presets and drops entities without attributes or edges', async () => {
     const parsed = parseCode(code);
@@ -303,7 +305,7 @@ describe('er', () => {
     expect(generated).toContain('CUSTOMER }o--o{ ORDER : places');
     expect(generated).not.toContain('LONELY');
     await assertParses(generated);
-  });
+  }, 20_000);
 });
 
 describe('mindmap', () => {
@@ -339,7 +341,7 @@ describe('mindmap', () => {
     expect(generated).toContain('    (Origins)');
     expect(generated).toContain('        (Long history)');
     await assertParses(generated);
-  });
+  }, 20_000);
 
   it('regenerates the tree from edited edges', () => {
     const parsed = parseCode(code);

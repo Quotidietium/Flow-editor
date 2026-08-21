@@ -161,7 +161,7 @@ export const toggleMode = (settings: EmbedSettings): EmbedSettings => {
 };
 
 /** Build a shareable State from the current settings (for the footer links). */
-const buildEditState = (settings: EmbedSettings): State => {
+export const buildEditState = (settings: EmbedSettings): State => {
   return {
     ...defaultState,
     code: settings.code,

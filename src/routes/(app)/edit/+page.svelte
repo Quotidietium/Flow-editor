@@ -136,7 +136,7 @@
     <Share />
   </Navbar>
 
-  <div class="flex flex-1 flex-col overflow-hidden" bind:clientWidth={width}>
+  <div class="relative flex flex-1 flex-col overflow-hidden" bind:clientWidth={width}>
     <div
       class={[
         'size-full',
@@ -190,7 +190,7 @@
             {@render viewPane()}
           {/if}
         </Resizable.Pane>
-        {#if isHistoryOpen}
+        {#if isHistoryOpen && !isMobile}
           <Resizable.Handle class="ml-1 hidden opacity-0 sm:block" />
           <Resizable.Pane minSize={15} defaultSize={30} class="hidden h-full grow flex-col sm:flex">
             <History />
@@ -198,6 +198,14 @@
         {/if}
       </Resizable.PaneGroup>
     </div>
+    {#if isHistoryOpen && isMobile}
+      <!-- The swipe layout has no room for a third column; below sm the pane
+           used to mount invisibly (hidden sm:flex) while its toggle showed
+           pressed — the panel now takes over the workspace instead. -->
+      <div class="absolute inset-0 z-30 flex flex-col bg-background p-2">
+        <History />
+      </div>
+    {/if}
   </div>
 
   {#if pluginFrontend}
