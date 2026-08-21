@@ -23,6 +23,14 @@ describe('Serde tests', () => {
     );
   });
 
+  it('reads legacy no-prefix base64 share links (red line 2)', () => {
+    // Pre-pako links carried a bare base64 payload with no type prefix —
+    // the backward-compat promise requires them to stay readable forever.
+    const legacy = serializeState(defaultState, 'base64').slice('base64:'.length);
+    expect(legacy.includes(':')).toBe(false);
+    expect(deserializeState(legacy)).toEqual(defaultState);
+  });
+
   it('should serialize and deserialize with pako serde', () => {
     expect(verifySerde(defaultState, 'pako')).toMatchInlineSnapshot(
       `"pako:eJyrVkrOT0lVslJKy8kvT85ILCpRCHGJyVMAAsfop3MWv1g_70VXU6yCrq5dzbPu_U87Njzt6366qfHlpI01Ck4aT_t2v9iy9nnnSk2IHieQQgXn6hfrVj7rmPiseTMQ1UKknMFmPNnRUKPgEv18zZQX6zY8m7Pm-ZStL1omxqIo2dVTo-AanRmQkZ-Xiiqzo7NGwS362bQNL_YuA8so6SilF2WmKFmVFJWm6ijlphblJoK4StUg2RilkozU3NQYJSsgMyU1LbE0pyRGKSavFqitIDEvKj8_F6azKL80PUPJKi0xpxjIKy1ISSxJdclMTC9KhCqpBQCBtXnh"`

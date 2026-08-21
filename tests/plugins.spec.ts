@@ -156,3 +156,35 @@ test('plugin frontend replaces the UI and drives the editor via the bridge', asy
   await expect(page.locator('iframe[title="插件前端"]')).toHaveCount(0);
   await expect(page.locator('.monaco-editor')).toBeVisible();
 });
+
+test('theme plugin overrides CSS variables and disabling restores them', async ({
+  editPage,
+  page
+}) => {
+  await editPage.view.waitFor({ state: 'visible' });
+  const before = await page.evaluate(() =>
+    getComputedStyle(document.documentElement).getPropertyValue('--primary').trim()
+  );
+
+  await page.getByTestId('plugin-manager-open').click();
+  const chooserPromise = page.waitForEvent('filechooser');
+  await page.getByTestId('plugin-install').click();
+  const chooser = await chooserPromise;
+  await chooser.setFiles(join(EXAMPLES, 'theme-purple.mjs'));
+  await page.getByTestId('plugin-card-demo.theme-purple').waitFor({ timeout: 10_000 });
+
+  // The theme applies immediately (no frontend toggle needed).
+  const themed = await page.evaluate(() =>
+    getComputedStyle(document.documentElement).getPropertyValue('--primary').trim()
+  );
+  expect(themed).toBe('hsl(280 40% 55%)');
+  expect(themed).not.toBe(before);
+
+  // Disabling removes the injected style — the original value returns.
+  await page.getByTestId('plugin-disable-demo.theme-purple').click();
+  await page.waitForTimeout(300);
+  const restored = await page.evaluate(() =>
+    getComputedStyle(document.documentElement).getPropertyValue('--primary').trim()
+  );
+  expect(restored).toBe(before);
+});

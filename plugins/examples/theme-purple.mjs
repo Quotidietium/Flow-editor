@@ -9,9 +9,11 @@ export default {
   permissions: ['ui:theme'],
   theme: {
     variables: {
-      '--primary': '0.8 0.4 0.9',
-      '--ring': '0.8 0.4 0.9',
-      '--border': '0.6 0.3 0.7'
+      // Full color functions, matching how app.css defines them — bare
+      // OKLCH component triplets are invalid values here.
+      '--primary': 'hsl(280 40% 55%)',
+      '--ring': 'hsl(280 40% 55%)',
+      '--border': 'hsl(280 25% 65%)'
     }
   }
 };
