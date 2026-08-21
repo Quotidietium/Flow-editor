@@ -5,7 +5,7 @@
  */
 
 import { runInputTransforms } from './registry.svelte';
-import { updateCode, updateCodeStore, validatedState } from '$/util/state.svelte';
+import { sanitizeConfig, updateCode, updateCodeStore, validatedState } from '$/util/state.svelte';
 
 export interface EditorApi {
   getState(): { code: string; mermaid: string; rough: boolean };
@@ -77,7 +77,11 @@ export const installEditorApi = (): void => {
     setCode: (code) => updateCode(runInputTransforms(code, 'bridge'), { updateDiagram: true }),
     setState: (state) =>
       updateCodeStore({
-        ...(state.mermaid !== undefined ? { mermaid: state.mermaid } : {}),
+        // Bridge callers are untrusted (any embedding origin can postMessage):
+        // config goes through the same confirm-and-strip gate as share links.
+        ...(state.mermaid !== undefined
+          ? { mermaid: sanitizeConfig(state.mermaid) }
+          : {}),
         code: runInputTransforms(state.code, 'bridge'),
         updateDiagram: true
       })

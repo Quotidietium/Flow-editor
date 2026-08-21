@@ -21,7 +21,13 @@
     runInputTransforms,
     runPluginExport
   } from '$/plugins/registry.svelte';
-  import { inputState, updateCode, updateCodeStore, validatedState } from '$lib/util/state.svelte';
+  import {
+  inputState,
+  sanitizeConfig,
+  updateCode,
+  updateCodeStore,
+  validatedState
+} from '$lib/util/state.svelte';
   import dayjs from 'dayjs';
   import { toBase64 } from 'js-base64';
   import DownloadIcon from '~icons/material-symbols/download';
@@ -351,7 +357,9 @@ ${svgString}`);
     }
     const code = runInputTransforms(parsed.code, 'file');
     if (parsed.mermaid !== undefined) {
-      updateCodeStore({ code, mermaid: parsed.mermaid });
+      // Opened state files (and plugin-imported configs) are untrusted input
+      // like share links — same confirm-and-strip gate.
+      updateCodeStore({ code, mermaid: sanitizeConfig(parsed.mermaid) });
     } else {
       updateCode(code, { updateDiagram: true });
     }
