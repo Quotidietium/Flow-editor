@@ -35,6 +35,25 @@ const err = (id: number | string | undefined, code: number, message: string) => 
 
 const api = () => window.__FLOW_EDITOR_API__;
 
+// postMessage is an untrusted channel with no natural size bound: URL-borne
+// input is capped by the browser's URL length limit, but a bridge set_code
+// string of any size would flow straight into the state gateway (synchronous
+// JSON.stringify + localStorage write on the main thread). Same order as the
+// upload caps.
+export const MAX_BRIDGE_TEXT_LENGTH = 5_000_000;
+
+const bridgeText = (value: unknown, field: string):
+  | { error: { code: number; message: string } }
+  | { text: string } => {
+  if (typeof value !== 'string') {
+    return { error: { code: -32602, message: `${field} must be a string` } };
+  }
+  if (value.length > MAX_BRIDGE_TEXT_LENGTH) {
+    return { error: { code: -32602, message: `${field} too large (max 5MB)` } };
+  }
+  return { text: value };
+};
+
 /** MCP tool descriptors the editor exposes. */
 export const bridgeTools = [
   {
@@ -95,25 +114,30 @@ const callTool = async (
       return { content: [{ text: a.getState().code, type: 'text' }] };
     }
     case 'set_code': {
-      const code = params?.code;
-      if (typeof code !== 'string') {
-        return { error: { code: -32602, message: 'code must be a string' } };
+      const checked = bridgeText(params?.code, 'code');
+      if ('error' in checked) {
+        return checked;
       }
-      a.setCode(code);
+      a.setCode(checked.text);
       return { content: [{ text: 'ok', type: 'text' }] };
     }
     case 'get_state': {
       return { content: [{ text: JSON.stringify(a.getState()), type: 'text' }] };
     }
     case 'set_state': {
-      const code = params?.code;
-      if (typeof code !== 'string') {
-        return { error: { code: -32602, message: 'code must be a string' } };
+      const checked = bridgeText(params?.code, 'code');
+      if ('error' in checked) {
+        return checked;
       }
-      a.setState({
-        code,
-        mermaid: typeof params?.mermaid === 'string' ? params.mermaid : undefined
-      });
+      let mermaidText: string | undefined;
+      if (typeof params?.mermaid !== 'undefined') {
+        const mermaid = bridgeText(params.mermaid, 'mermaid');
+        if ('error' in mermaid) {
+          return mermaid;
+        }
+        mermaidText = mermaid.text;
+      }
+      a.setState({ code: checked.text, mermaid: mermaidText });
       return { content: [{ text: 'ok', type: 'text' }] };
     }
     case 'render_svg': {
