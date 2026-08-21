@@ -123,21 +123,25 @@ export const openTextFile = (accept: string): Promise<{ name: string; text: stri
     input.type = 'file';
     input.accept = accept;
     input.style.display = 'none';
+    const finish = (value: { name: string; text: string } | undefined): void => {
+      resolve(value);
+      input.remove();
+    };
     input.addEventListener('change', () => {
       const file = input.files?.[0];
       if (!file) {
-        resolve(undefined);
+        finish(undefined);
         return;
       }
-      void file.text().then((text) => {
-        resolve({ name: file.name, text });
-        input.remove();
-      });
+      // A failed read (file deleted/locked after selection) must resolve —
+      // an eternally pending promise would leave the caller awaiting forever
+      // with no feedback, and the hidden input stranded in the DOM.
+      void file
+        .text()
+        .then((text) => finish({ name: file.name, text }))
+        .catch(() => finish(undefined));
     });
-    input.addEventListener('cancel', () => {
-      resolve(undefined);
-      input.remove();
-    });
+    input.addEventListener('cancel', () => finish(undefined));
     document.body.append(input);
     input.click();
   });

@@ -91,3 +91,27 @@ describe('buildEmbedCode', () => {
     expect(url).toMatch(/^https:\/\/mermaid\.live\/embed#/);
   });
 });
+
+describe('EMBED_IFRAME_SANDBOX completeness', () => {
+  it('grants exactly the capabilities the widget needs and no more', () => {
+    const { iframe } = buildEmbedCode({ code, host });
+    const sandbox = /sandbox="([^"]+)"/.exec(iframe)?.[1] ?? '';
+    const grants = new Set(sandbox.split(/\s+/).filter(Boolean));
+    // Required for the SvelteKit /embed app to boot and for the edit link
+    // to open in a new tab.
+    for (const needed of ['allow-scripts', 'allow-same-origin', 'allow-popups']) {
+      expect(grants.has(needed), needed).toBe(true);
+    }
+    // Everything beyond the required set must be a deliberate, reviewed
+    // addition — forms/top-navigation/modals would widen the attack surface
+    // of same-origin embeds.
+    expect([...grants].sort()).toEqual(
+      [
+        'allow-popups',
+        'allow-popups-to-escape-sandbox',
+        'allow-same-origin',
+        'allow-scripts'
+      ].sort()
+    );
+  });
+});

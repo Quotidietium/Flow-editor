@@ -7,6 +7,7 @@ import {
   diagramFileName,
   exportCanvasSize,
   markdownOf,
+  openTextFile,
   parseOpenedFile,
   stateFileOf
 } from './fileIO';
@@ -83,5 +84,34 @@ describe('exportCanvasSize / clampImageSize', () => {
 
   it('auto mode doubles the (collapsed) content size', () => {
     expect(exportCanvasSize('auto', 1e9, 300, 200)).toEqual({ height: 400, width: 600 });
+  });
+});
+
+describe('openTextFile lifecycle', () => {
+  it('removes the hidden input when the change event carries no file', async () => {
+    const pending = openTextFile('.mmd');
+    const inputsBefore = document.querySelectorAll('input[type=file]').length;
+    const input = document.querySelector<HTMLInputElement>('input[type=file]:last-of-type');
+    input?.dispatchEvent(new Event('change'));
+    await expect(pending).resolves.toBeUndefined();
+    // The no-file branch used to resolve without removing the input.
+    expect(document.querySelectorAll('input[type=file]').length).toBe(inputsBefore - 1);
+  });
+
+  it('resolves undefined instead of hanging when the read fails', async () => {
+    const pending = openTextFile('.mmd');
+    const input = document.querySelector<HTMLInputElement>('input[type=file]:last-of-type');
+    Object.defineProperty(input, 'files', {
+      value: [
+        {
+          name: 'broken.mmd',
+          text: () => Promise.reject(new Error('read failed'))
+        }
+      ]
+    });
+    input?.dispatchEvent(new Event('change'));
+    // A rejected file.text() used to leave the promise pending forever.
+    await expect(pending).resolves.toBeUndefined();
+    expect(document.querySelector('input[type=file]')).toBeNull();
   });
 });
