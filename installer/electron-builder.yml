@@ -15,6 +15,8 @@ files:
   - package.json
   - main.cjs
   - server.cjs
+  - mcp-server.cjs
+  - preload.cjs
   - site/**
 
 win:
@@ -34,6 +36,6 @@ nsis:
   shortcutName: Flow 编辑器
   uninstallDisplayName: Flow 编辑器
   # 2052 = 简体中文安装界面
-  language: "2052"
+  language: '2052'
   # 卸载不删除用户数据（图表草稿在 localStorage，位于应用数据目录）
   deleteAppDataOnUninstall: false

@@ -58,6 +58,48 @@ function httpGet(port, pathname) {
   });
 }
 
+function httpPost(port, body, contentType = 'application/json') {
+  return new Promise((resolve) => {
+    const req = http.request(
+      {
+        headers: { 'Content-Type': contentType },
+        host: '127.0.0.1',
+        method: 'POST',
+        path: '/',
+        port,
+        timeout: 8000
+      },
+      (res) => {
+        const chunks = [];
+        res.on('data', (chunk) => chunks.push(chunk));
+        res.on('end', () =>
+          resolve({ body: Buffer.concat(chunks).toString('utf8'), status: res.statusCode })
+        );
+      }
+    );
+    req.on('error', () => resolve(null));
+    req.on('timeout', () => {
+      req.destroy();
+      resolve(null);
+    });
+    req.end(body);
+  });
+}
+
+// MCP 冒烟配置：预写 userData/mcp-config.json 让应用启动即开启 HTTP 服务，
+// 结束后还原现场（卸载默认保留用户数据，不能污染）。
+const MCP_SMOKE_PORT = 38655;
+const mcpConfigDir = path.join(process.env.APPDATA ?? '', 'Flow 编辑器');
+const mcpConfigFile = path.join(mcpConfigDir, 'mcp-config.json');
+let mcpConfigBackup = null;
+try {
+  fs.mkdirSync(mcpConfigDir, { recursive: true });
+  mcpConfigBackup = fs.existsSync(mcpConfigFile) ? fs.readFileSync(mcpConfigFile) : null;
+  fs.writeFileSync(mcpConfigFile, JSON.stringify({ enabled: true, port: MCP_SMOKE_PORT }), 'utf8');
+} catch (error) {
+  console.log(`WARN: cannot seed mcp config (${error.message}) — MCP checks will fail`);
+}
+
 // 1. 找最新安装包
 const distDir = path.join(installerRoot, 'dist');
 const setups = fs
@@ -111,13 +153,10 @@ if (installedExe) {
 
 // 4. HTTP 探测
 if (port) {
-  const edit = await waitFor(
-    async () => {
-      const res = await httpGet(port, '/edit');
-      return res && res.status === 200 ? res : null;
-    },
-    30_000
-  );
+  const edit = await waitFor(async () => {
+    const res = await httpGet(port, '/edit');
+    return res && res.status === 200 ? res : null;
+  }, 30_000);
   check(
     'GET /edit -> 200 text/html',
     !!edit && String(edit.headers['content-type'] ?? '').includes('text/html')
@@ -152,6 +191,66 @@ if (port) {
   check('path traversal blocked', !!traversal && traversal.status !== 200);
 }
 
+// 4b. MCP HTTP 服务探测（配置已在启动前预写：enabled + MCP_SMOKE_PORT）
+{
+  const init = await waitFor(async () => {
+    const res = await httpPost(
+      MCP_SMOKE_PORT,
+      JSON.stringify({ id: 1, jsonrpc: '2.0', method: 'initialize' })
+    );
+    if (!res || res.status !== 200) return null;
+    try {
+      const parsed = JSON.parse(res.body);
+      return parsed.result?.serverInfo?.name === 'flow-editor' ? parsed : null;
+    } catch {
+      return null;
+    }
+  }, 30_000);
+  check('MCP POST initialize -> serverInfo flow-editor', init !== null);
+
+  const tools = await httpPost(
+    MCP_SMOKE_PORT,
+    JSON.stringify({ id: 2, jsonrpc: '2.0', method: 'tools/list' })
+  );
+  check(
+    'MCP POST tools/list -> 6 tools',
+    (() => {
+      try {
+        return JSON.parse(tools?.body ?? '{}').result?.tools?.length === 6;
+      } catch {
+        return false;
+      }
+    })()
+  );
+
+  // get_code 走页面桥（executeJavaScript），顺带验证端到端链路
+  const code = await httpPost(
+    MCP_SMOKE_PORT,
+    JSON.stringify({
+      id: 3,
+      jsonrpc: '2.0',
+      method: 'tools/call',
+      params: { arguments: {}, name: 'get_code' }
+    })
+  );
+  check(
+    'MCP tools/call get_code -> diagram source',
+    (() => {
+      try {
+        return JSON.parse(code?.body ?? '{}').result?.content?.[0]?.text?.includes('flowchart');
+      } catch {
+        return false;
+      }
+    })()
+  );
+
+  const get405 = await httpGet(MCP_SMOKE_PORT, '/');
+  check('MCP GET -> 405', !!get405 && get405.status === 405);
+
+  const plain = await httpPost(MCP_SMOKE_PORT, '{}', 'text/plain');
+  check('MCP wrong Content-Type -> 415', !!plain && plain.status === 415);
+}
+
 // 5. 杀进程
 if (appProcess && appProcess.pid) {
   try {
@@ -171,10 +270,7 @@ if (installedExe) {
       child.on('error', resolve);
       child.on('exit', resolve);
     });
-    const removed = await waitFor(
-      () => !fs.existsSync(path.join(installDir, PRODUCT_EXE)),
-      60_000
-    );
+    const removed = await waitFor(() => !fs.existsSync(path.join(installDir, PRODUCT_EXE)), 60_000);
     check('silent uninstall removes app', removed === true);
   } else {
     check('uninstaller present', false, uninstallExe);
@@ -183,6 +279,15 @@ if (installedExe) {
 
 // 清理
 fs.rmSync(smokeDir, { force: true, recursive: true });
+try {
+  if (mcpConfigBackup === null) {
+    fs.rmSync(mcpConfigFile, { force: true });
+  } else {
+    fs.writeFileSync(mcpConfigFile, mcpConfigBackup);
+  }
+} catch {
+  // 配置还原失败不影响结论
+}
 
 const failed = results.filter((r) => !r.ok);
 console.log(

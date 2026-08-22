@@ -8,10 +8,11 @@
  * 端口变了用户草稿（codeStore / 历史时间线）就「丢」了。
  */
 
-const { app, BrowserWindow, dialog } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const { createStaticServer } = require('./server.cjs');
+const { createMcpServer } = require('./mcp-server.cjs');
 
 const PORT_BASE = 38527;
 const PORT_TRIES = 16;
@@ -71,6 +72,108 @@ function baseUrl() {
   return `http://127.0.0.1:${serverPort}`;
 }
 
+// ---------- MCP HTTP 服务（页面内 postMessage 桥的回环 HTTP 门面） ----------
+
+const MCP_PORT_MIN = 1024;
+const MCP_PORT_MAX = 65535;
+const MCP_PORT_DEFAULT = 38528; // 紧随站点端口段（38527+最多16次顺延）
+const MCP_EXECUTOR_TIMEOUT_MS = 15_000;
+
+function mcpConfigPath() {
+  return path.join(app.getPath('userData'), 'mcp-config.json');
+}
+
+/** 与页面侧 mcpConfig.ts 同一套校验（渲染进程不可信，主进程必须复核）。 */
+function normalizeMcpConfig(value) {
+  const record = value && typeof value === 'object' ? value : {};
+  const port = Number(record.port);
+  return {
+    enabled: record.enabled === true,
+    port:
+      Number.isInteger(port) && port >= MCP_PORT_MIN && port <= MCP_PORT_MAX
+        ? port
+        : MCP_PORT_DEFAULT
+  };
+}
+
+function loadMcpConfig() {
+  try {
+    return normalizeMcpConfig(JSON.parse(fs.readFileSync(mcpConfigPath(), 'utf8')));
+  } catch {
+    return normalizeMcpConfig(undefined);
+  }
+}
+
+function saveMcpConfigFile(config) {
+  try {
+    fs.writeFileSync(mcpConfigPath(), JSON.stringify(config, null, 2), 'utf8');
+  } catch (error) {
+    logLine(`mcp config save failed: ${error.message}`);
+  }
+}
+
+/**
+ * 把请求送进页面桥。payload 双重 JSON 编码：外层编码产生的是合法 JS 字符
+ * 串字面量，请求内容永远以数据身份进入页面（页面端 JSON.parse 还原），
+ * 任何字节都不可能逃逸成被执行的代码。
+ */
+async function executeMcpRequest(request) {
+  const id = request && typeof request === 'object' ? (request.id ?? null) : null;
+  if (!mainWindow) {
+    return { error: { code: -32002, message: 'editor window not ready' }, id, jsonrpc: '2.0' };
+  }
+  const payload = JSON.stringify(JSON.stringify(request));
+  let timeout;
+  try {
+    const response = await Promise.race([
+      mainWindow.webContents.executeJavaScript(
+        `window.__FLOW_EDITOR_BRIDGE_CALL__ ? window.__FLOW_EDITOR_BRIDGE_CALL__(${payload}) : null`
+      ),
+      new Promise((_, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error('bridge call timed out')),
+          MCP_EXECUTOR_TIMEOUT_MS
+        );
+      })
+    ]);
+    return (
+      response ?? {
+        error: { code: -32002, message: 'editor bridge not installed (page still loading)' },
+        id,
+        jsonrpc: '2.0'
+      }
+    );
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+const mcpServer = createMcpServer({ executor: executeMcpRequest });
+let mcpConfig = normalizeMcpConfig(undefined);
+
+async function applyMcpConfig() {
+  await mcpServer.stop();
+  if (!mcpConfig.enabled) return;
+  try {
+    await mcpServer.start(mcpConfig.port);
+    logLine(`mcp http server listening on 127.0.0.1:${mcpConfig.port}`);
+  } catch (error) {
+    logLine(`mcp http server failed: ${error.message}`);
+  }
+}
+
+function installMcpIpc() {
+  ipcMain.handle('flow:mcp:get-config', () => mcpConfig);
+  ipcMain.handle('flow:mcp:get-status', () => mcpServer.status());
+  ipcMain.handle('flow:mcp:set-config', async (_event, raw) => {
+    mcpConfig = normalizeMcpConfig(raw);
+    saveMcpConfigFile(mcpConfig);
+    await applyMcpConfig();
+    const status = mcpServer.status();
+    return status.error ? { error: status.error, ok: false } : { ok: true };
+  });
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     autoHideMenuBar: true,
@@ -82,6 +185,7 @@ function createWindow() {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      preload: path.join(__dirname, 'preload.cjs'),
       sandbox: true,
       spellcheck: false
     },
@@ -126,6 +230,11 @@ if (!gotLock) {
     }
     logLine(`serving ${path.join(__dirname, 'site')} at ${baseUrl()}`);
 
+    // MCP HTTP 服务：读取持久配置（默认关闭），按需在回环端口启动
+    mcpConfig = loadMcpConfig();
+    installMcpIpc();
+    await applyMcpConfig();
+
     // 冒烟测试钩子：写入端口供外部探测；可定时自动退出
     if (process.env.FLOW_EDITOR_PORT_FILE) {
       try {
@@ -146,6 +255,7 @@ if (!gotLock) {
   });
 
   app.on('window-all-closed', () => {
+    void mcpServer.stop();
     if (server) server.close();
     app.quit();
   });

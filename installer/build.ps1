@@ -111,6 +111,13 @@ try {
   if ($LASTEXITCODE -ne 0) { throw "build-icon 退出码 $LASTEXITCODE" }
 } finally { Pop-Location }
 
+Write-Step 'MCP 服务器单元探测（协议面与安全防线）'
+Push-Location $InstallerRoot
+try {
+  node scripts\test-mcp.mjs
+  if ($LASTEXITCODE -ne 0) { throw "test-mcp 退出码 $LASTEXITCODE" }
+} finally { Pop-Location }
+
 Write-Step '拉取 Electron 运行时（缓存于 installer/.cache/electron-dist）'
 Push-Location $InstallerRoot
 try {
