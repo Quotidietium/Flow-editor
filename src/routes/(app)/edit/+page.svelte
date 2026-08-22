@@ -112,30 +112,34 @@
     </div>
   {/snippet}
 
-  <Navbar mobileToggle={isMobile ? mobileToggle : undefined}>
-    <Toggle bind:pressed={isHistoryOpen} size="sm" title="历史记录" aria-label="历史记录">
-      <HistoryIcon />
-    </Toggle>
-    <Toggle
-      bind:pressed={visualMode}
-      size="sm"
-      data-testid={TID.visualTab}
-      title="可视化编辑"
-      aria-label="可视化编辑">
-      <EditIcon />
-      可视化
-    </Toggle>
-    <Button
-      size="sm"
-      variant="outline"
-      data-testid={TID.pluginManagerOpen}
-      title="插件管理"
-      onclick={() => (pluginManagerOpen = true)}>
-      <PluginIcon />
-      插件
-    </Button>
-    <Share />
-  </Navbar>
+  {#if !pluginFrontend}
+    <!-- 插件前端激活时导航栏必须卸载：它是根 flex 容器的 flex item，z-50 直接
+         生效，会压在全屏前端覆盖层（z-40）之上拦截顶部条带的点击。 -->
+    <Navbar mobileToggle={isMobile ? mobileToggle : undefined}>
+      <Toggle bind:pressed={isHistoryOpen} size="sm" title="历史记录" aria-label="历史记录">
+        <HistoryIcon />
+      </Toggle>
+      <Toggle
+        bind:pressed={visualMode}
+        size="sm"
+        data-testid={TID.visualTab}
+        title="可视化编辑"
+        aria-label="可视化编辑">
+        <EditIcon />
+        可视化
+      </Toggle>
+      <Button
+        size="sm"
+        variant="outline"
+        data-testid={TID.pluginManagerOpen}
+        title="插件管理"
+        onclick={() => (pluginManagerOpen = true)}>
+        <PluginIcon />
+        插件
+      </Button>
+      <Share />
+    </Navbar>
+  {/if}
 
   <div class="relative flex flex-1 flex-col overflow-hidden" bind:clientWidth={width}>
     <div
