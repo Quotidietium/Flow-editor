@@ -74,7 +74,7 @@
 
   let isHistoryOpen = $state(false);
   let pluginManagerOpen = $state(false);
-  let pluginFrontend = $state<undefined | { id: string; url: string }>(undefined);
+  let pluginFrontend = $state<undefined | { id: string; sandbox?: string; url: string }>(undefined);
 
   // Plugins load before init so the URL-share input pipeline (source 'url')
   // and bridge handlers see installed plugins on first entry.
@@ -216,7 +216,8 @@
         title="插件前端"
         src={pluginFrontend.url}
         class="h-full w-full border-0"
-        sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+        sandbox={pluginFrontend.sandbox ??
+          'allow-scripts allow-same-origin allow-forms allow-popups'}></iframe>
     </div>
     <Button
       size="sm"
