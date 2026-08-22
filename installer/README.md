@@ -38,12 +38,15 @@ Electron 主进程（main.cjs + server.cjs）───────────�
 | `package.json`               | 打包工程自身依赖（electron / electron-builder / sharp，精确锁版） |
 | `electron-builder.yml`       | NSIS 安装包配置（辅助向导、per-user 免管理员、简体中文界面）      |
 | `app/package.json`           | 应用清单（版本号由 build.ps1 从根 package.json 同步）             |
-| `app/main.cjs`               | Electron 主进程：内嵌服务器 + 窗口生命周期 + 单实例锁             |
+| `app/main.cjs`               | Electron 主进程：内嵌服务器 + 窗口生命周期 + 单实例锁 + MCP IPC   |
 | `app/server.cjs`             | 静态文件服务器（MIME / SPA 兜底 / 目录穿越防护）                  |
+| `app/mcp-server.cjs`         | MCP HTTP 服务器（回环 JSON-RPC 门面，默认关闭）                   |
+| `app/preload.cjs`            | contextBridge 预加载：仅暴露 `__FLOW_DESKTOP__.mcp` 三个方法      |
 | `app/site/`                  | 站点产物（`robocopy /MIR` 自 `docs/`，不入库）                    |
 | `scripts/build-icon.mjs`     | `static/favicon.png` → `resources/icon.ico`（多尺寸）             |
 | `scripts/fetch-electron.mjs` | Electron 运行时 zip 拉取到 `.cache/electron-dist/`                |
-| `scripts/smoke.mjs`          | 冒烟测试：静默安装 → 启动探测 → 卸载                              |
+| `scripts/smoke.mjs`          | 冒烟测试：静默安装 → 启动探测（站点 + MCP）→ 卸载                 |
+| `scripts/test-mcp.mjs`       | MCP 服务器 Node 级探测（协议面与安全防线，打包前必跑）            |
 | `resources/icon.ico`         | 安装包/快捷方式图标（入库，可由脚本再生成）                       |
 | `dist/`                      | 最终产物（不入库）                                                |
 | `.cache/`                    | Electron / electron-builder 二进制缓存（不入库，自包含）          |
@@ -90,7 +93,25 @@ Electron 主进程（main.cjs + server.cjs）───────────�
 3. HTTP 探测：`/edit` 200 + `text/html`、HTML 内引用的 immutable JS 资产
    200 + `text/javascript`、`/service-worker.js` 200 + `Service-Worker-Allowed`
    头、未知路由 404（SPA 兜底页）、目录穿越请求被拒；
-4. 结束应用进程；静默卸载并确认安装目录移除。
+4. MCP 探测（2.0.128 起）：启动前向 `%AppData%\Flow 编辑器\mcp-config.json`
+   预写 `{enabled:true, port:38655}`（已有配置先备份、测后还原），随后验证
+   `initialize`/`tools/list`/`tools/call get_code` 端到端链路、GET 405、
+   错误 Content-Type 415；
+5. 结束应用进程；静默卸载并确认安装目录移除。
+
+## MCP HTTP 服务（2.0.128 起）
+
+桌面版内置 MCP（Model Context Protocol）HTTP 门面：把页面内的 MCP
+postMessage 桥（频道 `flow-editor`）暴露为 `http://127.0.0.1:<port>/`，
+供本地 AI 客户端直连编辑器（读改代码/配置、取渲染 SVG、导出）。
+
+- **默认关闭**；在编辑器「插件 → MCP 服务」标签页启用并配置端口
+  （默认 38528，1024–65535，保存即生效无需重启）。
+- 配置持久化于 `%AppData%\Flow 编辑器\mcp-config.json`（主进程二次校验）。
+- 安全面：仅回环绑定；仅 POST 且强制 `Content-Type: application/json`
+  （浏览器跨域简单请求无法构造，无 CORS 头）；请求体 6MB 上限；batch 拒绝；
+  请求经双重 JSON 编码送入页面桥，永不作为代码求值。
+- 接入示例（ curl 与 stdio 转发）见管理器内的一键复制片段。
 
 ## 常见问题
 
