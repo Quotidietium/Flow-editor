@@ -27,11 +27,29 @@ export interface McpStatus {
   running: boolean;
 }
 
+/** MC 插件离线编译（桌面版主进程能力）的请求/结果。 */
+export interface McBuildRequest {
+  files: { path: string; text: string }[];
+  filename?: string;
+}
+
+export interface McBuildResult {
+  error?: { code: string; detail?: string; message: string };
+  filename?: string;
+  jarBase64?: string;
+  jdkVersion?: string;
+  ok: boolean;
+}
+
 export interface DesktopBridge {
   mcp: {
     getConfig(): Promise<McpConfig>;
     getStatus(): Promise<McpStatus>;
     setConfig(config: McpConfig): Promise<{ error?: string; ok: boolean }>;
+  };
+  /** 离线编译 MC 成就插件（用户须自装 JDK 21+；应用不捆绑 Java）。 */
+  mcBuild?: {
+    build(request: McBuildRequest): Promise<McBuildResult>;
   };
 }
 

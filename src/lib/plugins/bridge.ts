@@ -97,6 +97,22 @@ export const bridgeTools = [
       properties: { format: { type: 'string', enum: ['svg', 'png-dataurl', 'code'] } }
     },
     name: 'export'
+  },
+  {
+    description:
+      '（仅桌面版）离线编译 MC 成就插件源码为可安装的 .jar——内置 Paper 编译工具链，需要用户本机自装 JDK 21+',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        files: {
+          description: 'Maven 布局源文件 [{path, text}]',
+          type: 'array'
+        },
+        filename: { description: '输出 jar 文件名', type: 'string' }
+      },
+      required: ['files']
+    },
+    name: 'mc_build'
   }
 ] as const;
 
@@ -163,6 +179,52 @@ const callTool = async (
       }
       return { content: [{ text: a.getState().code, type: 'text' }] };
     }
+    case 'mc_build': {
+      // 桌面版独占能力：页面把请求转给 preload IPC（主进程严格校验 + javac）。
+      // 网页版没有该桥——提示走「导出 zip + mvn package」路径。
+      const mcBuild = window.__FLOW_DESKTOP__?.mcBuild;
+      if (!mcBuild) {
+        return {
+          error: {
+            code: -32003,
+            message: '离线编译仅在桌面版可用；网页版请导出 Maven 工程 zip 后用本机 mvn package 构建'
+          }
+        };
+      }
+      const files = params?.files;
+      if (
+        !Array.isArray(files) ||
+        files.length === 0 ||
+        files.some(
+          (f) =>
+            typeof f !== 'object' ||
+            f === null ||
+            typeof (f as { path?: unknown }).path !== 'string' ||
+            typeof (f as { text?: unknown }).text !== 'string'
+        )
+      ) {
+        return { error: { code: -32602, message: 'files must be an array of {path, text}' } };
+      }
+      const result = await mcBuild.build({
+        files: files as { path: string; text: string }[],
+        filename: typeof params?.filename === 'string' ? params.filename : undefined
+      });
+      if (!result.ok) {
+        return { error: { code: -32010, message: result.error?.message ?? '构建失败' } };
+      }
+      return {
+        content: [
+          {
+            text: JSON.stringify({
+              filename: result.filename,
+              jarBase64: result.jarBase64,
+              jdkVersion: result.jdkVersion
+            }),
+            type: 'text'
+          }
+        ]
+      };
+    }
     default: {
       return { error: { code: -32601, message: `unknown tool: ${name}` } };
     }
@@ -176,7 +238,13 @@ export const handleBridgeRequest = async (
   switch (method) {
     case 'initialize': {
       return ok(id, {
-        capabilities: { tools: {} },
+        capabilities: {
+          experimental: {
+            // 插件前端据此决定是否展示「编译导出 jar」入口
+            'flow-editor/mcBuild': Boolean(window.__FLOW_DESKTOP__?.mcBuild)
+          },
+          tools: {}
+        },
         protocolVersion: '2024-11-05',
         serverInfo: { name: 'flow-editor', version: '1.0.0' }
       });
