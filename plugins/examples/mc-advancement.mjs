@@ -331,7 +331,8 @@ const coreFactory = function () {
     packageName: '',
     plugin: 'MyAchievements',
     sound: true,
-    tabs: {}
+    tabs: {},
+    version: '1.0.0'
   });
 
   // ------------------------------------------------------------- 标识符规范
@@ -2056,7 +2057,7 @@ ${statBlock}
 
     <groupId>${a.meta.packageName}</groupId>
     <artifactId>${a.meta.namespace}</artifactId>
-    <version>1.0.0</version>
+    <version>${a.meta.version || '1.0.0'}</version>
     <packaging>jar</packaging>
 
     <name>${a.meta.plugin}</name>
@@ -2358,6 +2359,35 @@ ${rows.join('\n')}
     };
   };
 
+  /**
+   * 桌面版离线编译请求：只取 javac/jar 所需的 java 源与资源文件，
+   * 并把 paper-plugin.yml 的 Maven 占位符 ${project.version} 置换为实际版本
+   * （直接 javac 没有 Maven 资源过滤这一步）。
+   */
+  const buildJarRequest = (code) => {
+    const a = analyze(code);
+    if (!a.ok) {
+      return { analysis: a, errors: a.errors, ok: false };
+    }
+    const files = generateFiles(a)
+      .filter(
+        (f) => f.path.startsWith('src/main/java/') || f.path.startsWith('src/main/resources/')
+      )
+      .map((f) => ({
+        path: f.path,
+        text:
+          f.path === 'src/main/resources/paper-plugin.yml'
+            ? f.text.replaceAll('${project.version}', a.meta.version || '1.0.0')
+            : f.text
+      }));
+    return {
+      analysis: a,
+      filename: `${a.meta.plugin}-${a.meta.version || '1.0.0'}.jar`,
+      files,
+      ok: true
+    };
+  };
+
   /** 空图/非成就图的入门模板（前端「初始化示例」按钮）。 */
   const starterCode = () => {
     const meta = defaultMeta();
@@ -2407,6 +2437,7 @@ ${rows.join('\n')}
     analyze,
     buildCode,
     buildZip,
+    buildJarRequest,
     completionistId,
     defaultMeta,
     exportZip,
@@ -2480,6 +2511,7 @@ const FRONTEND_HTML = `<!doctype html>
       <button id="btnReload">重新读取</button>
       <button id="btnSave" class="primary">写回编辑器</button>
       <button id="btnExport" class="primary">导出插件 zip</button>
+      <button id="btnJar" class="primary" style="display:none">编译导出 jar</button>
       <button id="btnStarter">初始化示例</button>
       <span id="status"></span>
     </header>
@@ -2519,7 +2551,7 @@ const FRONTEND_HTML = `<!doctype html>
         });
       };
 
-      var S = { analysis: null, code: '', sel: null, settings: false };
+      var S = { analysis: null, code: '', mcBuild: false, sel: null, settings: false };
 
       var $ = function (id) { return document.getElementById(id); };
       var esc = function (s) {
@@ -2898,10 +2930,13 @@ const FRONTEND_HTML = `<!doctype html>
           + '</div>';
         html += '<div class="row">'
           + inputHtml('author', '作者', m.author, 'text')
-          + inputHtml('packFormat', '数据包格式版本（1.21.11 = 94）', String(m.packFormat), 'number')
+          + inputHtml('version', '插件版本号', m.version || '1.0.0', 'text')
           + '</div>';
         html += '<div class="row">'
+          + inputHtml('packFormat', '数据包格式版本（1.21.11 = 94）', String(m.packFormat), 'number')
           + inputHtml('autosaveSeconds', '计数自动保存间隔（秒）', String(m.autosaveSeconds), 'number', ' min="30"')
+          + '</div>';
+        html += '<div class="row">'
           + inputHtml('announceFormat', '播报格式（%player%/%name%，留空不播报）', m.announceFormat, 'text')
           + '</div>';
         html += '<div class="checks"><label><input type="checkbox" data-k="sound"' + (m.sound !== false ? ' checked' : '') + '/>达成时播放升级音效</label></div>';
@@ -2955,9 +2990,46 @@ const FRONTEND_HTML = `<!doctype html>
         });
       }
 
+      function b64ToBytes(b64) {
+        var bin = atob(b64);
+        var out = new Uint8Array(bin.length);
+        for (var i = 0; i < bin.length; i++) { out[i] = bin.charCodeAt(i); }
+        return out;
+      }
+
+      function exportJarFile() {
+        setStatus('正在编译（调用本机 JDK）…');
+        save().then(function () {
+          var request = CORE.buildJarRequest(S.code);
+          if (!request.ok) {
+            setStatus('无法编译：' + (request.errors[0] ? request.errors[0].msg : '未知错误'));
+            return;
+          }
+          tool('mc_build', { filename: request.filename, files: request.files }).then(function (text) {
+            var payload = JSON.parse(text);
+            var blob = new Blob([b64ToBytes(payload.jarBase64)], { type: 'application/java-archive' });
+            var url = URL.createObjectURL(blob);
+            var link = document.createElement('a');
+            link.href = url;
+            link.download = payload.filename;
+            link.click();
+            setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+            setStatus('已编译并导出 ' + payload.filename + '（' + (payload.jdkVersion || '') + '）——直接放入服务器 plugins/ 即可');
+          }).catch(function (error) {
+            var msg = String(error && error.message ? error.message : error);
+            if (/JDK|Java|javac/i.test(msg)) {
+              setStatus(msg + ' ［提示：编译功能要求您自行安装 JDK 21+（如 Eclipse Temurin），本应用不捆绑 Java］');
+            } else {
+              setStatus('编译失败：' + msg);
+            }
+          });
+        });
+      }
+
       $('btnReload').onclick = load;
       $('btnSave').onclick = save;
       $('btnExport').onclick = exportZipFile;
+      $('btnJar').onclick = exportJarFile;
       $('btnStarter').onclick = function () {
         if (!confirm('用示例成就图替换当前图表内容？')) { return; }
         tool('set_code', { code: CORE.starterCode() }).then(load);
@@ -2972,7 +3044,16 @@ const FRONTEND_HTML = `<!doctype html>
       // 图标 datalist
       $('icons').innerHTML = CORE.ICON_SUGGESTIONS.map(function (i) { return '<option value="' + i + '"></option>'; }).join('');
 
-      call('initialize', {}).then(load);
+      call('initialize', {}).then(function (info) {
+        // 桌面版（capabilities.experimental['flow-editor/mcBuild']）才显示编译按钮
+        var caps = info && info.capabilities && info.capabilities.experimental;
+        if (caps && caps['flow-editor/mcBuild'] === true) {
+          S.mcBuild = true;
+          $('btnJar').style.display = '';
+          $('btnJar').title = '桌面版离线编译为可安装的 .jar（需要本机自装 JDK 21+）';
+        }
+        return load();
+      });
     </script>
   </body>
 </html>`;
@@ -2983,7 +3064,8 @@ const FRONTEND_URL = `data:text/html;charset=utf-8,${encodeURIComponent(FRONTEND
 export default {
   description:
     '把流程图变成 Paper 成就插件：节点=成就、连线=承接、形状=框架类型、连通分量=成就栏；' +
-    '元数据（触发方式/图标/奖励等）存于 frontmatter 并经前端面板编辑；一键导出完整 Maven 工程 zip。',
+    '元数据（触发方式/图标/奖励等）存于 frontmatter 并经前端面板编辑；一键导出 Maven 工程 zip；' +
+    '桌面版还可离线编译为可安装的 .jar（内置 Paper 编译工具链，需本机自装 JDK 21+，应用不捆绑 Java）。',
   export: {
     id: 'mc-plugin',
     label: 'MC 成就插件（Maven 工程 .zip）',
@@ -3013,7 +3095,7 @@ export default {
   id: 'flow.mc-advancement',
   name: 'MC 进度设计器',
   permissions: ['export:format', 'ui:frontend'],
-  version: '1.0.0'
+  version: '1.1.0'
 };
 
 // 单测钩子（不改变插件运行时行为）
