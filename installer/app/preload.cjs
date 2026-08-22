@@ -9,6 +9,10 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('__FLOW_DESKTOP__', {
+  mcBuild: {
+    // MC 成就插件离线编译（主进程校验 + javac；用户须自装 JDK 21+）
+    build: (request) => ipcRenderer.invoke('flow:mc-build', request)
+  },
   mcp: {
     getConfig: () => ipcRenderer.invoke('flow:mcp:get-config'),
     getStatus: () => ipcRenderer.invoke('flow:mcp:get-status'),

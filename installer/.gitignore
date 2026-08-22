@@ -5,3 +5,4 @@ dist/
 .smoke/
 app/site/
 .build-log.txt
+toolchain/

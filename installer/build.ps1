@@ -118,6 +118,20 @@ try {
   if ($LASTEXITCODE -ne 0) { throw "test-mcp 退出码 $LASTEXITCODE" }
 } finally { Pop-Location }
 
+Write-Step '拉取 MC 插件编译工具链（12 个 jar，优先本机 .m2）'
+Push-Location $InstallerRoot
+try {
+  node scripts\fetch-toolchain.mjs
+  if ($LASTEXITCODE -ne 0) { throw "fetch-toolchain 退出码 $LASTEXITCODE" }
+} finally { Pop-Location }
+
+Write-Step 'MC 离线编译器探测（javac/jar 链路；无 JDK 时跳过用例但保留校验用例）'
+Push-Location $InstallerRoot
+try {
+  node scripts\test-mc-build.mjs
+  if ($LASTEXITCODE -ne 0) { throw "test-mc-build 退出码 $LASTEXITCODE" }
+} finally { Pop-Location }
+
 Write-Step '拉取 Electron 运行时（缓存于 installer/.cache/electron-dist）'
 Push-Location $InstallerRoot
 try {

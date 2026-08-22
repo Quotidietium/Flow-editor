@@ -77,7 +77,8 @@ function baseUrl() {
 const MCP_PORT_MIN = 1024;
 const MCP_PORT_MAX = 65535;
 const MCP_PORT_DEFAULT = 38528; // 紧随站点端口段（38527+最多16次顺延）
-const MCP_EXECUTOR_TIMEOUT_MS = 15_000;
+// mc_build 要走完整 javac+jar 流程，慢机上可能超过 15s；60s 仍为有限兜底
+const MCP_EXECUTOR_TIMEOUT_MS = 60_000;
 
 function mcpConfigPath() {
   return path.join(app.getPath('userData'), 'mcp-config.json');
@@ -174,6 +175,28 @@ function installMcpIpc() {
   });
 }
 
+// ---------- MC 成就插件离线编译（javac 走用户自装 JDK，应用不捆绑 Java） ----------
+
+function installMcBuildIpc() {
+  const { build } = require('./mc-build.cjs');
+  // electron-builder extraResources 把 toolchain 放到 resources/ 下；
+  // 开发态（直接 node 调用 mc-build.cjs）由调用方显式传 toolchainDir。
+  const toolchainDir = path.join(process.resourcesPath, 'toolchain');
+  ipcMain.handle('flow:mc-build', async (_event, raw) => {
+    const files = raw && typeof raw === 'object' ? raw.files : undefined;
+    const filename = raw && typeof raw === 'object' ? raw.filename : undefined;
+    try {
+      return await build(files, { filename, toolchainDir });
+    } catch (error) {
+      logLine(`mc-build failed unexpectedly: ${error.stack ?? error}`);
+      return {
+        error: { code: 'INTERNAL', message: `构建过程异常：${error.message}` },
+        ok: false
+      };
+    }
+  });
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     autoHideMenuBar: true,
@@ -233,6 +256,7 @@ if (!gotLock) {
     // MCP HTTP 服务：读取持久配置（默认关闭），按需在回环端口启动
     mcpConfig = loadMcpConfig();
     installMcpIpc();
+    installMcBuildIpc();
     await applyMcpConfig();
 
     // 冒烟测试钩子：写入端口供外部探测；可定时自动退出

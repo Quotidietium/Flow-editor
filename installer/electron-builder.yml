@@ -16,8 +16,17 @@ files:
   - main.cjs
   - server.cjs
   - mcp-server.cjs
+  - mc-build.cjs
   - preload.cjs
   - site/**
+
+# MC 插件离线编译工具链（javac classpath 用的 12 个 jar + 第三方声明；
+# 由 scripts/fetch-toolchain.mjs 生成。注意：extraResources 的 from 相对
+# electron-builder 的项目目录（installer/，即 installer/package.json 所在），
+# 不是 directories.app）
+extraResources:
+  - from: toolchain
+    to: toolchain
 
 win:
   target: nsis
