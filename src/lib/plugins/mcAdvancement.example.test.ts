@@ -266,6 +266,87 @@ describe('analyze：校验与建树', () => {
     expect(a.errors.some((e) => e.msg.includes('关键词'))).toBe(true);
   });
 
+  it('reach_height 允许负 Y（below 模式）', () => {
+    const meta = CORE.readMeta(CORE.starterCode()).meta;
+    meta.nodes = { deep: { params: { mode: 'below', y: -60 }, trigger: 'reach_height' } };
+    const code = CORE.buildCode(
+      meta,
+      'TD',
+      [
+        { id: 'r', label: '根', shape: 'rect' },
+        { id: 'deep', label: '深潜', shape: 'rect' }
+      ],
+      [{ from: 'r', to: 'deep' }]
+    );
+    const a = CORE.analyze(code);
+    expect(a.errors).toEqual([]);
+    expect(a.ok).toBe(true);
+  });
+
+  it('保留命名空间报错；非法图标/非法插件名/版本号产生警告', () => {
+    const meta = CORE.readMeta(CORE.starterCode()).meta;
+    meta.namespace = 'Minecraft';
+    meta.plugin = '我的插件';
+    meta.version = '1.0 你好';
+    meta.nodes = { a: { icon: ' Iron Pickaxe!!' } };
+    const code = CORE.buildCode(
+      meta,
+      'TD',
+      [
+        { id: 'r', label: '根', shape: 'rect' },
+        { id: 'a', label: '甲', shape: 'rect' }
+      ],
+      [{ from: 'r', to: 'a' }]
+    );
+    const a = CORE.analyze(code);
+    expect(a.errors.some((e) => e.msg.includes('保留命名空间'))).toBe(true);
+    expect(a.warnings.some((w) => w.msg.includes('图标'))).toBe(true);
+    expect(a.warnings.some((w) => w.msg.includes('插件名'))).toBe(true);
+    expect(a.warnings.some((w) => w.msg.includes('版本号'))).toBe(true);
+    // 命名空间被规范为小写 minecraft 后才命中保留名单
+    expect(a.meta.namespace).toBe('minecraft');
+  });
+
+  it('Java 枚举名冲突报错（1abc 与 a_1abc 都映射 A_1ABC）', () => {
+    const code = 'flowchart TD\n r[根]\n r --> 1abc\n r --> a_1abc\n 1abc[甲]\n a_1abc[乙]\n';
+    const a = CORE.analyze(code);
+    expect(a.ok).toBe(false);
+    expect(a.errors.some((e) => e.msg.includes('同名 Java 枚举'))).toBe(true);
+  });
+
+  it('非法分量的节点保留在模型中（tab=null），前端可修复', () => {
+    const a = CORE.analyze('flowchart TD\n r[根]\n a[甲]\n b[乙]\n r --> a\n b --> a\n');
+    expect(a.ok).toBe(false); // 多根错误
+    const stray = a.nodes.find((n) => n.id === 'b');
+    expect(stray).toBeDefined();
+    expect(stray?.tab).toBeNull();
+  });
+
+  it('advancement_done 触发检查在命名空间分支之前（可指向本插件进度）', () => {
+    const meta = CORE.readMeta(CORE.starterCode()).meta;
+    meta.nodes = {
+      follow: { params: { key: 'myach:first_join' }, trigger: 'advancement_done' }
+    };
+    const nodes = [
+      { id: 'root', label: '根', shape: 'rect' },
+      { id: 'first_join', label: '先来', shape: 'rect' },
+      { id: 'follow', label: '后至', shape: 'rect' }
+    ];
+    const edges = [
+      { from: 'root', to: 'first_join' },
+      { from: 'first_join', to: 'follow' }
+    ];
+    const r = CORE.exportZip(CORE.buildCode(meta, 'TD', nodes, edges));
+    if (!r.ok) {
+      throw new Error('导出失败');
+    }
+    const listener = r.files.find((f) => f.path.endsWith('AchievementListener.java'))?.text ?? '';
+    const checkIdx = listener.indexOf('keyString.equalsIgnoreCase');
+    const branchIdx = listener.indexOf('Achievement.NAMESPACE.equals');
+    expect(checkIdx).toBeGreaterThan(-1);
+    expect(branchIdx).toBeGreaterThan(checkIdx);
+  });
+
   it('孤儿元数据与多父级产生警告', () => {
     const meta = CORE.readMeta(CORE.starterCode()).meta;
     meta.nodes = { ghost: { desc: '已删除的节点' } };
@@ -528,5 +609,26 @@ describe('插件导出钩子', () => {
   it('前端声明 allow-downloads（导出按钮在沙箱 iframe 内可下载）', () => {
     expect(plugin.frontend.sandbox).toContain('allow-downloads');
     expect(plugin.frontend.url.startsWith('data:text/html')).toBe(true);
+  });
+
+  it('前端页面内嵌脚本可编译（new Function 语法探针）且注入核心可用', () => {
+    const html = decodeURIComponent(
+      plugin.frontend.url.replace('data:text/html;charset=utf-8,', '')
+    );
+    const match = /<script>([\s\S]*?)<\/script>/.exec(html);
+    expect(match).toBeTruthy();
+    const src = match?.[1] ?? '';
+    // 编译（不执行）：拦住模板字符串层面的语法错误
+    expect(() => new Function(src)).not.toThrow();
+    expect(src).toContain('mc_build');
+    expect(src).toContain('结构异常');
+    // 注入的 coreFactory 是独立可求值的工厂函数（以随后的 var CH 为右锚点，
+    // 工厂体内部的 IIFE 不会截断）
+    const factoryMatch = /var CORE = \((function[\s\S]*)\)\(\);\s*\n\s*var CH =/.exec(src);
+    expect(factoryMatch).toBeTruthy();
+    const injected = new Function(`return (${factoryMatch?.[1]})()`)() as {
+      analyze: Core['analyze'];
+    };
+    expect(typeof injected.analyze).toBe('function');
   });
 });

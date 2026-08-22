@@ -247,6 +247,20 @@ describe('MCP bridge protocol', () => {
     expect(names).toContain('get_code');
     expect(names).toContain('set_code');
     expect(names).toContain('export');
+    expect(names).toContain('mc_build');
+  });
+
+  it('mc_build falls back with a desktop-only error on the web build', async () => {
+    const res = (await handleBridgeRequest({
+      id: 20,
+      method: 'tools/call',
+      params: {
+        arguments: { files: [{ path: 'src/main/java/A.java', text: 'class A {}' }] },
+        name: 'mc_build'
+      }
+    })) as unknown as { error?: { code: number; message: string } };
+    expect(res.error?.code).toBe(-32003);
+    expect(res.error?.message).toContain('桌面版');
   });
 
   it('tools/call round-trips code', async () => {
