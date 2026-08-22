@@ -50,7 +50,7 @@ async function startServer() {
     const port = PORT_BASE + i;
     const candidate = createStaticServer(siteRoot);
     try {
-      // eslint-disable-next-line no-await-in-loop -- 端口冲突时顺序顺延是预期行为
+      // 端口冲突时顺序顺延是预期行为（await-in-loop 有意为之）
       await listen(candidate, port);
       server = candidate;
       serverPort = port;

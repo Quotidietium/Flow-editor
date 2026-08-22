@@ -77,10 +77,10 @@ note(
 );
 
 // --- Scenario 3: export double-clicks (5 rapid pairs) ------------------------
-await page.getByText('操作', { exact: true }).click().catch(() => {});
+await page.getByText('操作', { exact: true }).click().catch(() => undefined);
 for (let i = 0; i < 5; i++) {
-  await page.getByTestId('download-PNG').click({ force: true }).catch(() => {});
-  await page.getByTestId('download-PNG').click({ force: true }).catch(() => {});
+  await page.getByTestId('download-PNG').click({ force: true }).catch(() => undefined);
+  await page.getByTestId('download-PNG').click({ force: true }).catch(() => undefined);
   await page.waitForTimeout(400);
 }
 await page.waitForTimeout(2000);

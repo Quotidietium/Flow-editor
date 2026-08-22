@@ -319,6 +319,8 @@ runPluginExport(format): payload | undefined
 pluginFrontends(): { id, name, sandbox?, url }[]
 anyPluginThemes() / reapplyThemes()
 listInstalled(): InstalledPlugin[]
+getPluginRuntime(id): { errors, hooks, loaded, summaries }  // 管理器详情页数据源
+exportPluginSource(id): { filename, text } | undefined      // 仅持久化源码可导出
 registerPluginInstance(plugin, enabled=true)     // 运行时注册（测试/嵌入宿主）
 unregisterAllPluginInstances()
 ```
@@ -327,7 +329,15 @@ unregisterAllPluginInstances()
 `flow-plugin:<id>:<key>`；主题 `<style id="flow-plugin-theme-<id>">` 注入/
 移除；持久化键 `flowPlugins`。
 
-### 7.3 命令式 API `editorApi.ts`
+### 7.3 插件模板 `templates.ts`
+
+`PLUGIN_TEMPLATES: PluginTemplate[]`——管理器「模板库」的 6 个可一键安装/
+下载的起始插件（输入清洗 / PlantUML 导入 / CSV 导出 / 海洋主题 / 仪表盘
+前端 / AI 提示词导出）。约束：源码内嵌 TS 模板字符串，**不得含反引号或
+`${`**；模板元数据与源码内 manifest 一致（`templates.test.ts` 逐一动态
+import 校验）。
+
+### 7.4 命令式 API `editorApi.ts`
 
 ```ts
 export const installEditorApi = (): void;
@@ -337,7 +347,9 @@ export const installEditorApi = (): void;
 
 `setCode/setState` 先过 `runInputTransforms(code,'bridge')` 再进网关。
 
-**测试**：`plugins.test.ts` 12 用例；e2e `tests/plugins.spec.ts` 4 用例。
+**测试**：`plugins.test.ts` 16 用例 + `templates.test.ts` 4 用例 +
+`mcpConfig.test.ts` 3 用例；e2e `tests/plugins.spec.ts` 4 用例 +
+`tests/pluginManager.spec.ts` 5 用例。
 
 ---
 
@@ -349,6 +361,7 @@ JSON-RPC 2.0 over postMessage，频道常量 `BRIDGE_CHANNEL = 'flow-editor'`。
 export const bridgeTools;  // 工具描述符：get_code/set_code/get_state/set_state/render_svg/export
 export const handleBridgeRequest(request: JsonRpcRequest);  // 纯函数（测试直接调用）
 export const startBridge = (): void;   // window message 监听（幂等）
+export const installBridgeInvoker = (): void;  // 挂载 window.__FLOW_EDITOR_BRIDGE_CALL__
 export const callEditor = async <T>(method, params?): Promise<T>;  // 插件前端侧助手（iframe 内用）
 export const bridgeNotify(message: string);
 ```
@@ -356,6 +369,27 @@ export const bridgeNotify(message: string);
 方法：`initialize` / `tools/list` / `tools/call` / `ping`；未知方法
 `-32601`。opaque origin（data:/blob: 前端，序列化 `"null"`）回复回退
 `targetOrigin: '*'`。外部 stdio MCP 客户端：宿主转发本协议即接。
+
+`__FLOW_EDITOR_BRIDGE_CALL__(raw)` 接收**字符串化**请求（页面端
+JSON.parse 还原），供桌面版主进程 `executeJavaScript` 双重编码调用——
+请求体永不以代码身份进入页面。
+
+### 8.1 MCP 服务配置 `mcpConfig.ts` + 桌面 HTTP 服务器
+
+```ts
+validateMcpPort(value): number | undefined   // 1024–65535 整数（字符串输入归一）
+normalizeMcpConfig(value): McpConfig         // 不可信输入硬化（localStorage/IPC）
+loadMcpConfig() / saveMcpConfig(cfg) / loadMcpStatus(cfg)
+isDesktop()                                  // window.__FLOW_DESKTOP__ 探测
+```
+
+桌面版（Electron）把同一 MCP 线格式暴露为
+`http://127.0.0.1:<port>/`（`installer/app/mcp-server.cjs`，默认端口
+38528、默认**关闭**）：仅回环绑定、仅 POST、强制
+`Content-Type: application/json`（跨域简单请求防线）、6MB 请求上限、
+batch 拒绝；配置持久化于 `userData/mcp-config.json`，页面经
+`window.__FLOW_DESKTOP__.mcp`（preload contextBridge，最小面 IPC）读写，
+主进程复核校验。配置 UI 在插件管理器「MCP 服务」标签页。
 
 ---
 
@@ -470,6 +504,10 @@ startAutoSave`——全部**写前重读**合并防跨标签丢更新，manual �
    网络请求（插件代码除外，其由用户安装授权且不随包分发）。
 9. **History 写前重读**——新增历史写入点必须先重读持久值再合并。
 10. **localStorage 写入尽力而为**——`writeJSON` 不抛；配额异常仅 warn。
+11. **MCP 桌面 HTTP 服务攻击面**——仅 127.0.0.1 回环、默认关闭、仅 POST +
+    强制 `application/json`、6MB 请求上限；主进程必须复核渲染进程上传的
+    配置（`normalizeMcpConfig` 双端同源校验）；preload 只暴露
+    `__FLOW_DESKTOP__.mcp` 三个方法，不得扩面。
 
 ---
 

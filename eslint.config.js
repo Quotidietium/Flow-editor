@@ -4,7 +4,7 @@ import prettier from 'eslint-config-prettier';
 import sortKeysPlugin from 'eslint-plugin-sort-keys';
 import svelte from 'eslint-plugin-svelte';
 import eslintPluginUnicorn from 'eslint-plugin-unicorn';
-import { defineConfig } from 'eslint/config';
+import { defineConfig, globalIgnores } from 'eslint/config';
 import globals from 'globals';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript-eslint';
@@ -14,6 +14,15 @@ const gitignorePath = fileURLToPath(new URL('./.gitignore', import.meta.url));
 
 export default defineConfig(
   includeIgnoreFile(gitignorePath),
+  // includeIgnoreFile only reads the ROOT .gitignore — installer/.gitignore
+  // (build outputs: app/site, dist, .cache, .smoke) must be mirrored here or
+  // local `eslint .` lints generated bundles after an installer build.
+  globalIgnores([
+    'installer/app/site/**',
+    'installer/dist/**',
+    'installer/.cache/**',
+    'installer/.smoke/**'
+  ]),
   js.configs.recommended,
   ...ts.configs.strict,
   ...ts.configs.stylistic,
@@ -69,6 +78,13 @@ export default defineConfig(
       'unicorn/prevent-abbreviations': 'off',
       'unicorn/explicit-length-check': 'off',
       'sort-keys/sort-keys-fix': 'off'
+    }
+  },
+  {
+    // .cjs is CommonJS by definition — require() is the only legal import form.
+    files: ['**/*.cjs'],
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off'
     }
   }
 );
