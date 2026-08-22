@@ -341,6 +341,75 @@ export const anyPluginThemes = (): boolean => activePlugins().some((p) => Boolea
 
 export const listInstalled = (): InstalledPlugin[] => installed;
 
+export interface PluginRuntimeInfo {
+  /** Consecutive hook failures (0–2; 3 auto-disables). */
+  errors: number;
+  /** Hook keys the loaded instance declares (empty when not loaded). */
+  hooks: (keyof FlowPlugin)[];
+  /** Whether a module instance is currently loaded in memory. */
+  loaded: boolean;
+  /** Per-hook human summary (import extensions, export label, frontend url…). */
+  summaries: Partial<Record<keyof FlowPlugin, string>>;
+}
+
+/**
+ * Runtime details for the manager's detail view. Independent from the
+ * persisted record: a disabled-but-loaded plugin still reports its hooks.
+ */
+export const getPluginRuntime = (id: string): PluginRuntimeInfo => {
+  const rt = runtimes.get(id);
+  const instance = rt?.instance;
+  const summaries: Partial<Record<keyof FlowPlugin, string>> = {};
+  if (instance?.inputTransform) {
+    summaries.inputTransform = instance.inputTransform.name;
+  }
+  if (instance?.import) {
+    summaries.import = instance.import.extensions.map((e) => `.${e}`).join(' ');
+  }
+  if (instance?.export) {
+    summaries.export = instance.export.label;
+  }
+  if (instance?.frontend) {
+    summaries.frontend = instance.frontend.url;
+  }
+  if (instance?.theme) {
+    const vars = Object.keys(instance.theme.variables ?? {}).length;
+    summaries.theme = [
+      vars > 0 ? `${vars} 个 CSS 变量` : '',
+      instance.theme.css ? '自定义 CSS' : ''
+    ]
+      .filter(Boolean)
+      .join(' + ');
+  }
+  return {
+    errors: rt?.errors ?? 0,
+    hooks: instance
+      ? (
+          [
+            'inputTransform',
+            'import',
+            'export',
+            'theme',
+            'frontend',
+            'activate',
+            'deactivate'
+          ] as const
+        ).filter((key) => Boolean(instance[key]))
+      : [],
+    loaded: Boolean(instance),
+    summaries
+  };
+};
+
+/** Downloadable copy of a persisted plugin (manager 导出 button). */
+export const exportPluginSource = (id: string): { filename: string; text: string } | undefined => {
+  const record = installed.find((p) => p.manifest.id === id);
+  if (!record?.source) {
+    return undefined;
+  }
+  return { filename: `${id}.mjs`, text: record.source };
+};
+
 /**
  * Register an already-loaded plugin instance without persisting its source
  * (used by tests and embedding hosts).

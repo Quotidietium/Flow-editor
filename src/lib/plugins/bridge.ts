@@ -42,9 +42,10 @@ const api = () => window.__FLOW_EDITOR_API__;
 // upload caps.
 export const MAX_BRIDGE_TEXT_LENGTH = 5_000_000;
 
-const bridgeText = (value: unknown, field: string):
-  | { error: { code: number; message: string } }
-  | { text: string } => {
+const bridgeText = (
+  value: unknown,
+  field: string
+): { error: { code: number; message: string } } | { text: string } => {
   if (typeof value !== 'string') {
     return { error: { code: -32602, message: `${field} must be a string` } };
   }
@@ -201,6 +202,30 @@ export const handleBridgeRequest = async (
 };
 
 let listening = false;
+
+declare global {
+  interface Window {
+    /** Double-encoded JSON entry point used by the desktop MCP HTTP server. */
+    __FLOW_EDITOR_BRIDGE_CALL__?: (raw: string) => Promise<unknown>;
+  }
+}
+
+/**
+ * Expose the request handler as a window global taking a *stringified*
+ * JSON-RPC request. The desktop (Electron) main process reaches it via
+ * webContents.executeJavaScript with a double-JSON-encoded payload — the
+ * JSON.parse here means the request body can never escape into evaluated
+ * code, no matter what bytes it contains.
+ */
+export const installBridgeInvoker = (): void => {
+  window.__FLOW_EDITOR_BRIDGE_CALL__ = async (raw: string) => {
+    try {
+      return await handleBridgeRequest(JSON.parse(raw) as JsonRpcRequest);
+    } catch {
+      return err(undefined, -32_700, 'parse error');
+    }
+  };
+};
 
 /** Start listening for bridge/MCP messages (idempotent). */
 export const startBridge = (): void => {

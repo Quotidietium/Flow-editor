@@ -7,7 +7,7 @@
   import Navbar from '$/components/Navbar.svelte';
   import PluginManager from '$/components/PluginManager.svelte';
   import { installEditorApi } from '$/plugins/editorApi';
-  import { startBridge } from '$/plugins/bridge';
+  import { installBridgeInvoker, startBridge } from '$/plugins/bridge';
   import { loadRegistry } from '$/plugins/registry.svelte';
   import PanZoomToolbar from '$/components/PanZoomToolbar.svelte';
   import Preset from '$/components/Preset.svelte';
@@ -80,6 +80,7 @@
   // and bridge handlers see installed plugins on first entry.
   onMount(() => {
     installEditorApi();
+    installBridgeInvoker();
     startBridge();
     void loadRegistry().then(() => initHandler());
   });
