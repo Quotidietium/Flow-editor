@@ -185,6 +185,40 @@ describe('plugin hook dispatch', () => {
     );
     expect(runInputTransforms('X', 'file')).toBe('X');
   });
+
+  it('getPluginRuntime reports hooks and human summaries for the detail view', async () => {
+    const { getPluginRuntime } = await import('./registry.svelte');
+    registerPluginInstance(
+      basePlugin({
+        export: { id: 'csv', label: 'CSV 导出', run: () => undefined },
+        id: 'detailled',
+        import: {
+          extensions: ['puml', 'plantuml'],
+          import: () => undefined,
+          name: 'PlantUML'
+        },
+        theme: { css: 'body{}', variables: { '--primary': 'red' } }
+      })
+    );
+    const info = getPluginRuntime('detailled');
+    expect(info.loaded).toBe(true);
+    expect(info.errors).toBe(0);
+    expect(info.hooks).toEqual(expect.arrayContaining(['import', 'export', 'theme']));
+    expect(info.summaries.import).toBe('.puml .plantuml');
+    expect(info.summaries.export).toBe('CSV 导出');
+    expect(info.summaries.theme).toBe('1 个 CSS 变量 + 自定义 CSS');
+
+    const missing = getPluginRuntime('no.such.plugin');
+    expect(missing).toEqual({ errors: 0, hooks: [], loaded: false, summaries: {} });
+  });
+
+  it('exportPluginSource only serves persisted sources', async () => {
+    const { exportPluginSource } = await import('./registry.svelte');
+    // Runtime-registered instances carry no persisted source — nothing to export.
+    registerPluginInstance(basePlugin({ id: 'runtime-only' }));
+    expect(exportPluginSource('runtime-only')).toBeUndefined();
+    expect(exportPluginSource('no.such.plugin')).toBeUndefined();
+  });
 });
 
 describe('MCP bridge protocol', () => {
