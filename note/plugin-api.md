@@ -41,7 +41,8 @@ export default {
 每个钩子调用都有错误隔离，**连续 3 次抛错的插件自动停用**，不影响编辑器运行。
 
 示例插件：[`plugins/examples/`](../plugins/examples/)（输入清洗 / MC 函数
-导出 / 紫色主题 / 内嵌前端替换 / AI 提示词导出）。
+导出 / 紫色主题 / 内嵌前端替换 / AI 提示词导出 / **MC 进度设计器**——流程图
+一键导出 Paper 成就插件 Maven 工程 zip，含内嵌前端属性面板）。
 
 **类型提示**：插件是 `.mjs`，加一行引用即可获得完整 IDE 类型：
 
@@ -120,6 +121,13 @@ frontend: {
 **退出插件前端** 按钮）。页面通过 **postMessage 桥**（见下）完全驱动编辑器
 ——读改代码/配置、取渲染 SVG、导出。示例：
 [`plugins/examples/custom-frontend.html`](../plugins/examples/custom-frontend.html)。
+
+`sandbox` 可选（2.0.129 起 edit 页实际透传）：缺省
+`allow-scripts allow-same-origin allow-forms allow-popups`。前端页面需要在
+iframe 内直接下载文件（如导出 zip）时声明追加 `allow-downloads`——示例见
+[`plugins/examples/mc-advancement.mjs`](../plugins/examples/mc-advancement.mjs)
+（MC 进度设计器：流程图 → Paper 成就插件 Maven 工程 zip，设计文档
+[mc-advancement-plugin.md](mc-advancement-plugin.md)）。
 
 ### 2.6 AI 接入：MCP 桥
 
