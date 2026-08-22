@@ -841,49 +841,125 @@ const coreFactory = function () {
 
     const byId = new Map(flow.nodes.map((n) => [n.id, n]));
     const nodes = [];
+    const buildNode = (nodeId, tabNid) => {
+      const node = byId.get(nodeId);
+      const nm = nodeMeta(meta, nodeId);
+      const parentEdge = edges.find((e) => e.to === nodeId);
+      const spec = triggerById(nm.trigger);
+      if (!TRIGGERS.some((t) => t.id === nm.trigger)) {
+        warnings.push({
+          msg: `成就「${node.label}」的触发方式「${nm.trigger}」无法识别，按「仅命令授予」处理`,
+          nodeId
+        });
+      }
+      for (const p of spec.params) {
+        if (p.type === 'int') {
+          const v = Number(nm.params[p.key] ?? p.def);
+          // min 仅在有声明时约束（reach_height 的 Y 允许负值——below 模式需要）
+          if (!Number.isFinite(v) || (p.min !== undefined && v < p.min)) {
+            errors.push({
+              msg: `成就「${node.label}」的参数「${p.label}」需要${p.min === undefined ? '是数值' : ` ≥${p.min} 的整数`}`,
+              nodeId
+            });
+          }
+        }
+        if (p.key === 'keyword' && !String(nm.params.keyword ?? '').trim()) {
+          errors.push({ msg: `成就「${node.label}」使用聊天关键词触发，但未填写关键词`, nodeId });
+        }
+        // MC 资源 ID 格式（material/item/entity/stat/key/target）；entity 另允许 hostile
+        if (['material', 'item', 'stat', 'key', 'target'].includes(p.key)) {
+          const v = String(nm.params[p.key] ?? p.def ?? '').trim();
+          if (v && !/^(minecraft:)?[a-z0-9_./-]+$/.test(v)) {
+            warnings.push({
+              msg: `成就「${node.label}」的参数「${p.label}」的值「${v}」不像合法的 MC 资源 ID，服务端可能按「任意」降级`,
+              nodeId
+            });
+          }
+        }
+        if (p.key === 'entity') {
+          const v = String(nm.params.entity ?? '').trim();
+          if (v && v !== 'hostile' && !/^(minecraft:)?[a-z0-9_.]+$/.test(v)) {
+            warnings.push({
+              msg: `成就「${node.label}」的生物类型「${v}」无法识别，服务端将按「任意」降级`,
+              nodeId
+            });
+          }
+        }
+      }
+      const icon = String(nm.icon ?? '').trim();
+      if (icon && !/^(minecraft:)?[a-z0-9_.]+$/.test(icon)) {
+        warnings.push({
+          msg: `成就「${node.label}」的图标「${icon}」不是合法物品 ID 格式`,
+          nodeId
+        });
+      }
+      nodes.push({
+        frame: SHAPE_FRAME[node.shape] ?? 'task',
+        id: nodeId,
+        label: node.label,
+        meta: nm,
+        nid: nidOf.get(nodeId) ?? null,
+        params: triggerParams(meta, nodeId),
+        parent: parentEdge ? nidOf.get(parentEdge.from) : null,
+        shape: node.shape,
+        tab: tabNid
+      });
+    };
+    const inTab = new Set();
     for (const tab of tabs) {
       for (const nodeId of tab.members) {
-        const node = byId.get(nodeId);
-        const nm = nodeMeta(meta, nodeId);
-        const parentEdge = edges.find((e) => e.to === nodeId);
-        const spec = triggerById(nm.trigger);
-        if (!TRIGGERS.some((t) => t.id === nm.trigger)) {
-          warnings.push({
-            msg: `成就「${node.label}」的触发方式「${nm.trigger}」无法识别，按「仅命令授予」处理`,
-            nodeId
-          });
-        }
-        for (const p of spec.params) {
-          if (p.type === 'int') {
-            const v = Number(nm.params[p.key] ?? p.def);
-            if (!Number.isFinite(v) || v < (p.min ?? 0)) {
-              errors.push({
-                msg: `成就「${node.label}」的参数「${p.label}」需要 ≥${p.min ?? 0} 的整数`,
-                nodeId
-              });
-            }
-          }
-          if (p.key === 'keyword' && !String(nm.params.keyword ?? '').trim()) {
-            errors.push({ msg: `成就「${node.label}」使用聊天关键词触发，但未填写关键词`, nodeId });
-          }
-        }
-        nodes.push({
-          frame: SHAPE_FRAME[node.shape] ?? 'task',
-          id: nodeId,
-          label: node.label,
-          meta: nm,
-          nid: nidOf.get(nodeId),
-          params: triggerParams(meta, nodeId),
-          parent: parentEdge ? nidOf.get(parentEdge.from) : null,
-          shape: node.shape,
-          tab: tab.rootNid
-        });
+        inTab.add(nodeId);
+        buildNode(nodeId, tab.rootNid);
+      }
+    }
+    // 非法分量（多根/纯环/id 冲突）的节点也要进模型——否则前端面板无法选中并修复它们
+    for (const node of flow.nodes) {
+      if (!inTab.has(node.id)) {
+        buildNode(node.id, null);
       }
     }
 
-    // 全局设置校验
+    // 枚举名冲突（nid 唯一但 Java 枚举常量可能同名：'1abc' 与 'a_1abc' 都映射 A_1ABC）
+    const enumOwner = new Map();
+    for (const [nodeId, nid] of nidOf) {
+      if (!nid) {
+        continue;
+      }
+      const en = enumName(nid);
+      const prev = enumOwner.get(en);
+      if (prev) {
+        errors.push({
+          msg: `节点「${prev}」与「${nodeId}」会生成同名 Java 枚举「${en}」，请改 id 区分`,
+          nodeId
+        });
+      } else {
+        enumOwner.set(en, nodeId);
+      }
+    }
+
+    // 全局设置校验（先比对再规范化，产生告警而非静默改写）
+    const rawNs = String(meta.namespace ?? '');
     meta.namespace = normNamespace(meta.namespace);
+    if (rawNs && rawNs !== meta.namespace) {
+      warnings.push({ msg: `命名空间「${rawNs}」已规范为「${meta.namespace}」` });
+    }
+    if (['bukkit', 'minecraft', 'mojang', 'paper', 'spigot'].includes(meta.namespace)) {
+      errors.push({
+        msg: `命名空间「${meta.namespace}」是保留命名空间，会与原版/服务端冲突，请换一个`
+      });
+    }
+    const rawPlugin = String(meta.plugin ?? '');
     meta.plugin = normPluginName(meta.plugin);
+    if (rawPlugin && rawPlugin !== meta.plugin) {
+      warnings.push({
+        msg: `插件名「${rawPlugin}」含非法字符，已规范为「${meta.plugin}」（仅限字母/数字/下划线）`
+      });
+    }
+    if (meta.version && !/^[A-Za-z0-9._-]+$/.test(String(meta.version))) {
+      warnings.push({
+        msg: `版本号「${meta.version}」含非法字符，将作为 jar 文件名时建议只用字母/数字/._-`
+      });
+    }
     meta.packageName = normPackage(meta.packageName, meta.namespace);
     meta.command = normCommand(meta.command, meta.namespace);
     meta.packFormat = Number.isFinite(Number(meta.packFormat)) ? Number(meta.packFormat) : 94;
@@ -1189,7 +1265,14 @@ ${body}
 
   const completionistId = (a, tab) => {
     let cid = `${tab.rootNid}_completionist`;
-    while (a.nodes.some((n) => n.nid === cid) || a.tabs.some((t) => t.rootNid === cid)) {
+    const takenEnum = new Set(
+      [...a.nodes.map((n) => n.nid), ...a.tabs.map((t) => t.rootNid)].filter(Boolean).map(enumName)
+    );
+    while (
+      a.nodes.some((n) => n.nid === cid) ||
+      a.tabs.some((t) => t.rootNid === cid) ||
+      takenEnum.has(enumName(cid))
+    ) {
       cid = `${cid}_`;
     }
     return cid;
@@ -1659,6 +1742,8 @@ ${perNode(
         Key key = event.getAdvancement().getKey();
         Player player = event.getPlayer();
         String keyString = key.namespace() + ":" + key.value();
+        // 「完成其他进度」触发先判定——目标进度可以属于任意命名空间（含本插件）
+${advDoneChecks || '        // 无「完成其他进度」类成就'}
         if (Achievement.NAMESPACE.equals(key.namespace())) {
             Achievement achievement = Achievement.byId(key.value());
             if (achievement != null && achievement.listed()) {
@@ -1681,9 +1766,7 @@ ${perNode(
             if (config.getBoolean("sound", true)) {
                 player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.0f);
             }
-            return;
         }
-${advDoneChecks || '        // 无「完成其他进度」类成就'}
     }`);
 
     const helpers = [];
@@ -2527,13 +2610,13 @@ const FRONTEND_HTML = `<!doctype html>
       var CORE = (${coreFactory.toString()})();
       var CH = 'flow-editor';
       var msgId = 0;
-      var call = function (method, params) {
+      var call = function (method, params, timeoutMs) {
         return new Promise(function (resolve, reject) {
           var mid = ++msgId;
           var timer = setTimeout(function () {
             window.removeEventListener('message', onMsg);
             reject(new Error('bridge timeout'));
-          }, 5000);
+          }, timeoutMs || 5000);
           var onMsg = function (e) {
             if (e.data && e.data.channel === CH && e.data.id === mid) {
               clearTimeout(timer);
@@ -2545,8 +2628,8 @@ const FRONTEND_HTML = `<!doctype html>
           parent.postMessage({ channel: CH, id: mid, jsonrpc: '2.0', method: method, params: params }, '*');
         });
       };
-      var tool = function (name, args) {
-        return call('tools/call', { name: name, arguments: args || {} }).then(function (r) {
+      var tool = function (name, args, timeoutMs) {
+        return call('tools/call', { name: name, arguments: args || {} }, timeoutMs).then(function (r) {
           return r && r.content && r.content[0] ? r.content[0].text : '';
         });
       };
@@ -2621,6 +2704,17 @@ const FRONTEND_HTML = `<!doctype html>
           });
           html += '</div>';
         });
+        // 结构异常（多根/纯环/id 冲突）的节点：单独成组，可选中后改挂父级修复
+        var orphans = a.nodes.filter(function (n) { return n.tab === null; });
+        if (orphans.length > 0) {
+          html += '<div class="tab-block"><div class="tab-head" style="color:#f08c8c">⚠ 结构异常（未入栏，需修复后才能导出）</div>';
+          orphans.forEach(function (n) {
+            var sel = S.sel && S.sel.type === 'node' && S.sel.id === n.id;
+            html += '<div class="node-row' + (sel ? ' sel' : '') + '" data-node="' + esc(n.id) + '">'
+              + esc(n.label) + '<span class="frame">' + esc(n.id) + '</span></div>';
+          });
+          html += '</div>';
+        }
         html += '<div style="margin-top:10px"><button id="btnAddTab">+ 新增成就栏</button></div>';
         $('tree').innerHTML = html;
         Array.prototype.forEach.call(document.querySelectorAll('[data-tab]'), function (el) {
@@ -2651,6 +2745,29 @@ const FRONTEND_HTML = `<!doctype html>
       function renderNodeForm(id) {
         var n = findNode(id);
         if (!n) { S.sel = null; renderPanel(); return; }
+        // 栏根节点（成就栏本身）：承接/触发/框架等均不适用，只编辑名称与 id
+        if (n.tab !== null && n.parent === null) {
+          var rhtml = '<fieldset><legend>栏根节点</legend>';
+          rhtml += '<div class="row">'
+            + inputHtml('label', '成就栏名称（= 画布根节点标签）', n.label, 'text')
+            + inputHtml('id', '根节点 id', n.id, 'text')
+            + '</div>';
+          rhtml += '<p class="hint">该节点是成就栏的标签页本身，由服务端自动授予（tick）；'
+            + '触发方式、框架类型、父级承接、隐藏/播报等只作用于普通成就，对栏根不适用。'
+            + '栏图标、背景纹理、大满贯汇总成就请在左侧点击栏名进入「成就栏设置」编辑。</p>';
+          rhtml += '</fieldset>';
+          $('panel').innerHTML = rhtml;
+          Array.prototype.forEach.call($('panel').querySelectorAll('[data-k]'), function (el) {
+            el.onchange = function () {
+              var k = el.getAttribute('data-k');
+              if (k === 'label') { n.label = el.value; }
+              if (k === 'id') { renameNode(n, el.value); return; }
+              rebuildCode();
+              render();
+            };
+          });
+          return;
+        }
         var spec = CORE.triggerById(n.meta.trigger);
         var parentEdge = S.analysis.edges.find(function (e) { return e.to === id; });
         var html = '<fieldset><legend>成就属性</legend>';
@@ -2721,12 +2838,13 @@ const FRONTEND_HTML = `<!doctype html>
         }
         var out = [];
         S.analysis.tabs.forEach(function (tab) {
-          if (tab.rootNid === n.tab && !descendants[tab.rootId]) {
+          // 孤儿节点（tab 为 null）可挂到任意栏根；栏内节点限本栏
+          if ((n.tab === null || tab.rootNid === n.tab) && !descendants[tab.rootId]) {
             out.push('<option value="' + esc(tab.rootId) + '"' + (currentParent === tab.rootId ? ' selected' : '') + '>' + esc(tab.name) + '（栏根）</option>');
           }
         });
         S.analysis.nodes.forEach(function (other) {
-          if (other.tab === n.tab && !descendants[other.id] && other.parent !== null) {
+          if ((n.tab === null || other.tab === n.tab) && !descendants[other.id] && other.parent !== null) {
             out.push('<option value="' + esc(other.id) + '"' + (currentParent === other.id ? ' selected' : '') + '>' + esc(other.label) + '</option>');
           }
         });
@@ -2826,7 +2944,7 @@ const FRONTEND_HTML = `<!doctype html>
 
       function deleteNode(n) {
         var a = S.analysis;
-        if (n.parent === null) {
+        if (n.tab !== null && n.parent === null) {
           setStatus('根节点代表成就栏本身，请在栏设置里用「删除整个成就栏」');
           return;
         }
@@ -3005,7 +3123,7 @@ const FRONTEND_HTML = `<!doctype html>
             setStatus('无法编译：' + (request.errors[0] ? request.errors[0].msg : '未知错误'));
             return;
           }
-          tool('mc_build', { filename: request.filename, files: request.files }).then(function (text) {
+          tool('mc_build', { filename: request.filename, files: request.files }, 90000).then(function (text) {
             var payload = JSON.parse(text);
             var blob = new Blob([b64ToBytes(payload.jarBase64)], { type: 'application/java-archive' });
             var url = URL.createObjectURL(blob);
@@ -3089,7 +3207,8 @@ export default {
     }
   },
   frontend: {
-    sandbox: 'allow-scripts allow-same-origin allow-forms allow-popups allow-downloads',
+    sandbox:
+      'allow-scripts allow-same-origin allow-forms allow-popups allow-downloads allow-modals',
     url: FRONTEND_URL
   },
   id: 'flow.mc-advancement',
