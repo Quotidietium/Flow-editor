@@ -213,10 +213,10 @@ if (port) {
     JSON.stringify({ id: 2, jsonrpc: '2.0', method: 'tools/list' })
   );
   check(
-    'MCP POST tools/list -> 6 tools',
+    'MCP POST tools/list -> 7 tools',
     (() => {
       try {
-        return JSON.parse(tools?.body ?? '{}').result?.tools?.length === 6;
+        return JSON.parse(tools?.body ?? '{}').result?.tools?.length === 7;
       } catch {
         return false;
       }
@@ -249,6 +249,50 @@ if (port) {
 
   const plain = await httpPost(MCP_SMOKE_PORT, '{}', 'text/plain');
   check('MCP wrong Content-Type -> 415', !!plain && plain.status === 415);
+
+  // mc_build 端到端：HTTP → 页面桥 → preload IPC → 主进程 javac（需本机 JDK 21+）
+  {
+    const pluginSource = fs.readFileSync(
+      path.join(installerRoot, '..', 'plugins', 'examples', 'mc-advancement.mjs'),
+      'utf8'
+    );
+    const mod = await import(
+      'data:text/javascript;base64,' + Buffer.from(pluginSource, 'utf8').toString('base64')
+    );
+    const request = mod._core.buildJarRequest(mod._core.starterCode());
+    const built = await httpPost(
+      MCP_SMOKE_PORT,
+      JSON.stringify({
+        id: 4,
+        jsonrpc: '2.0',
+        method: 'tools/call',
+        params: {
+          arguments: { filename: request.filename, files: request.files },
+          name: 'mc_build'
+        }
+      })
+    );
+    const parsed = (() => {
+      try {
+        return JSON.parse(built?.body ?? '{}');
+      } catch {
+        return null;
+      }
+    })();
+    const text = parsed?.result?.content?.[0]?.text;
+    const errMsg = parsed?.error?.message ?? '';
+    if (text) {
+      const jar = Buffer.from(JSON.parse(text).jarBase64 ?? '', 'base64');
+      check(
+        'mc_build 端到端编译 -> jar（PK 头）',
+        jar.length > 1000 && jar[0] === 0x50 && jar[1] === 0x4b,
+        `${jar.length} bytes`
+      );
+    } else {
+      // 无 JDK 21+ 的机器上允许跳过（提示文案必须出现 JDK 引导）
+      check('mc_build 端到端编译（无 JDK，按引导跳过）', /JDK/.test(errMsg), errMsg.slice(0, 60));
+    }
+  }
 }
 
 // 5. 杀进程
@@ -277,8 +321,18 @@ if (installedExe) {
   }
 }
 
-// 清理
-fs.rmSync(smokeDir, { force: true, recursive: true });
+// 清理（Windows 上被 taskkill 的进程句柄释放有延迟，rm 可能撞 EPERM——
+// 重试若干次；最终失败只告警，不改变已由探测得出的结论）
+try {
+  fs.rmSync(smokeDir, {
+    force: true,
+    maxRetries: 10,
+    recursive: true,
+    retryDelay: 500
+  });
+} catch (error) {
+  console.log(`WARN: .smoke 清理失败（${error.code ?? error.message}），可手动删除`);
+}
 try {
   if (mcpConfigBackup === null) {
     fs.rmSync(mcpConfigFile, { force: true });
