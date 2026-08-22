@@ -1,8 +1,10 @@
 # MC 进度设计器插件（mc-advancement）设计文档
 
 > 版本：2.0.129 引入｜插件文件：[`plugins/examples/mc-advancement.mjs`](../plugins/examples/mc-advancement.mjs)
+> 2.0.130：桌面版内置离线编译链（导出即 `.jar`，无需 Maven）；JDK 21+ 由用户自装（版权红线）
 > 目标：在 Flow 编辑器里**画一张流程图，就能一键导出一个完整可编译的 Paper 成就插件**
-> （Maven 工程 zip，含内置数据包 + 事件监听器 + 进度持久化 + 命令）。
+> （Maven 工程 zip，含内置数据包 + 事件监听器 + 进度持久化 + 命令）；
+> 桌面版更进一步：**一键产出可直接装入服务器的 .jar**（见 §9）。
 > 参照工程：[`REF/Minecraft-Achievement-plugin`](../REF/Minecraft-Achievement-plugin/)
 > （Java 21 + Paper 1.21.11，paper-plugin.yml + bootstrapper 注册内置数据包）。
 
@@ -265,3 +267,60 @@ MyAchievements/
 - 服务端侧本地化文件（成就名硬编码中文，与 REF 一致）。
 - Spigot 兼容（paper-plugin.yml 为 Paper 专属，与 REF 取舍一致）。
 - 导入既有数据包 zip 逆向成图（解析 zip + advancement JSON 逆向，后续方向）。
+
+## 9. 桌面版离线编译链（2.0.130）
+
+**目标**：导出即「可装入服务器的 .jar」，全程离线——不需要 Maven、不需要
+联网拉依赖。网页版仍保留「导出 Maven 工程 zip + 自行 mvn package」路径。
+
+### 9.1 链路
+
+```
+插件前端「编译导出 jar」
+  → CORE.buildJarRequest(code)     # 只取 src/main/java + src/main/resources，
+                                    # 并把 paper-plugin.yml 的 ${project.version}
+                                    # 置换为实际版本（javac 路径没有 Maven 资源过滤）
+  → 桥 tools/call mc_build          # bridge.ts；网页版返回「仅桌面版可用」
+  → window.__FLOW_DESKTOP__.mcBuild # preload.cjs（contextBridge，仅此一个方法）
+  → 主进程 mc-build.cjs：
+      校验（路径白名单 ^src/main/(java|resources)/…，禁 .. 与绝对路径；
+            条目数/单文件 1MB/总量 8MB 上限）
+      → 定位 JDK（JAVA_HOME → Program Files 常见根（含 latest/jdk-XX 嵌套）
+                  → scoop → PATH；要求 javac 与 jar 同目录配对的完整 JDK，
+                    版本 ≥ 21；Oracle javapath shim 无 jar.exe 会被跳过）
+      → javac -encoding UTF-8 --release 21 -cp toolchain/lib/*（@argfile）
+      → 资源 staging 进 classes/ → jar --create 打包
+      → base64 回传页面 → 前端 Blob 下载 <插件名>-<版本>.jar
+```
+
+### 9.2 工具链（installer/toolchain/，随安装包分发）
+
+javac 实测得出的**最小 compile classpath** 共 12 个 jar（约 6.6MB）：
+paper-api 2.7MB + guava 3MB + brigadier / bungeecord-chat / slf4j-api /
+adventure-api·key·serializer-plain·logger-slf4j / examination-api·string /
+jetbrains-annotations。由 `installer/scripts/fetch-toolchain.mjs` 拉取
+（优先本机 ~/.m2 复制——构建机离线可用；缺失回退 repo.papermc.io），
+`THIRD_PARTY_NOTICES.txt` 随包分发（许可证经各项目官方仓库/pom 原文核实：
+GPL-3.0 / MIT / Apache-2.0 / BSD-3-Clause）。**不含任何 Mojang 代码或资产**
+（paper-api 为纯 API 面）；**不含 JDK/JRE**。
+
+### 9.3 版权红线：JDK 由用户自行安装
+
+- 应用**不捆绑、不自动下载**任何 JDK/JRE（避免 Oracle/OpenJDK 发行版的
+  再分发争议）；检测不到 JDK ≥ 21 时返回结构化错误
+  （JDK_NOT_FOUND / JDK_TOO_OLD），前端展示引导文案
+  「请您自行安装 JDK 21 或更高版本（如 Eclipse Temurin）」。
+- 生成的插件 jar 以 `--release 21` 产出 Java 21 字节码（高版本 JDK 编译
+  也保持 21 目标），与 REF 工程的 maven.compiler.release=21 一致。
+
+### 9.4 安全面
+
+- `mc_build` 也经 MCP HTTP 服务暴露（回环、默认关闭，与既有信任模型一致）。
+- 渲染进程传入的一切仅作**数据**落盘（javac argfile + 源文件），永不以
+  代码身份求值；spawn 全部参数数组、无 shell；工作目录为系统临时目录
+  mkdtemp，用完即删。
+- MCP 执行器超时从 15s 放宽到 60s（javac 冷编译在慢盘上可能超 15s）。
+- 冒烟：`installer/scripts/test-mc-build.mjs`（Node 级：校验面 6 项 +
+  真实编译 + jar 结构/版本置换断言，build.ps1 打包前必跑）；
+  `smoke.mjs` 新增 mc_build 端到端探针（HTTP→页面桥→IPC→javac，无 JDK
+  机器按引导文案跳过）。

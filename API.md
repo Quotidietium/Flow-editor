@@ -358,7 +358,7 @@ export const installEditorApi = (): void;
 JSON-RPC 2.0 over postMessage，频道常量 `BRIDGE_CHANNEL = 'flow-editor'`。
 
 ```ts
-export const bridgeTools;  // 工具描述符：get_code/set_code/get_state/set_state/render_svg/export
+export const bridgeTools;  // 工具描述符：get_code/set_code/get_state/set_state/render_svg/export/mc_build(桌面版)
 export const handleBridgeRequest(request: JsonRpcRequest);  // 纯函数（测试直接调用）
 export const startBridge = (): void;   // window message 监听（幂等）
 export const installBridgeInvoker = (): void;  // 挂载 window.__FLOW_EDITOR_BRIDGE_CALL__
@@ -369,6 +369,16 @@ export const bridgeNotify(message: string);
 方法：`initialize` / `tools/list` / `tools/call` / `ping`；未知方法
 `-32601`。opaque origin（data:/blob: 前端，序列化 `"null"`）回复回退
 `targetOrigin: '*'`。外部 stdio MCP 客户端：宿主转发本协议即接。
+`initialize` 的 `capabilities.experimental['flow-editor/mcBuild']` 声明
+桌面版离线编译能力（2.0.130）是否可用。
+
+`mc_build`（桌面版独占）：入参 `{files: [{path, text}], filename}`——
+Maven 布局源文件，主进程 `installer/app/mc-build.cjs` 严格校验
+（路径白名单 `src/main/(java|resources)/…`、条目数/单文件 1MB/总量 8MB）、
+定位用户自装 JDK ≥21（不捆绑不下载 Java），以内置工具链
+（`installer/toolchain/lib/*.jar`，见 THIRD_PARTY_NOTICES.txt）执行
+javac `--release 21` + jar 打包，返回 `{filename, jarBase64, jdkVersion}`；
+网页版固定返回 -32003。
 
 `__FLOW_EDITOR_BRIDGE_CALL__(raw)` 接收**字符串化**请求（页面端
 JSON.parse 还原），供桌面版主进程 `executeJavaScript` 双重编码调用——
@@ -507,7 +517,11 @@ startAutoSave`——全部**写前重读**合并防跨标签丢更新，manual �
 11. **MCP 桌面 HTTP 服务攻击面**——仅 127.0.0.1 回环、默认关闭、仅 POST +
     强制 `application/json`、6MB 请求上限；主进程必须复核渲染进程上传的
     配置（`normalizeMcpConfig` 双端同源校验）；preload 只暴露
-    `__FLOW_DESKTOP__.mcp` 三个方法，不得扩面。
+    `__FLOW_DESKTOP__.mcp` 三个方法与 `mcBuild.build` 一个构建入口，不得扩面。
+12. **MC 离线编译不捆绑 Java**——`mc-build.cjs` 只探测用户自装 JDK（≥21，
+    javac 与 jar 必须同目录配对），永不自动下载/安装 JDK；渲染进程上传的
+    源文件按白名单校验（`src/main/(java|resources)/…`、禁 `..`），仅作数据
+    落盘、spawn 无 shell；工具链仅编译期 classpath（不含 Mojang 资产）。
 
 ---
 

@@ -149,12 +149,13 @@ parent.postMessage(
 
 方法：`initialize` / `tools/list` / `tools/call` / `ping`。工具集：
 
-| 工具                      | 说明                                          |
-| ------------------------- | --------------------------------------------- |
-| `get_code` / `set_code`   | 读写 Mermaid 源码（经状态网关，自动校验渲染） |
-| `get_state` / `set_state` | 读写完整状态（源码 + 配置 JSON）              |
-| `render_svg`              | 当前渲染 SVG 字符串                           |
-| `export`                  | `svg` / `png-dataurl` / `code` 三种格式       |
+| 工具                      | 说明                                                                                                                     |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `get_code` / `set_code`   | 读写 Mermaid 源码（经状态网关，自动校验渲染）                                                                            |
+| `get_state` / `set_state` | 读写完整状态（源码 + 配置 JSON）                                                                                         |
+| `render_svg`              | 当前渲染 SVG 字符串                                                                                                      |
+| `export`                  | `svg` / `png-dataurl` / `code` 三种格式                                                                                  |
+| `mc_build`（2.0.130）     | **仅桌面版**：离线编译 MC 成就插件为 .jar——入参 `{files:[{path,text}], filename}`（Maven 布局源文件，只取 `src/main/java | resources`），返回 `{filename, jarBase64, jdkVersion}`。内置 Paper 编译工具链（installer/toolchain/），**需用户本机自装 JDK 21+（应用不捆绑 Java）**；网页版调用返回「仅桌面版可用」错误。`initialize`的`capabilities.experimental['flow-editor/mcBuild']` 标识能力可用性 |
 
 外部 stdio MCP 客户端接入方式：用 Electron/Puppeteer 等宿主加载本页面，
 把 stdio JSON-RPC 与该 postMessage 协议互转即可（线格式即 MCP）。
