@@ -32,6 +32,11 @@ interface Analysis {
 interface Core {
   analyze(code: string): Analysis;
   buildCode(meta: unknown, direction: string, nodes: unknown[], edges: unknown[]): string;
+  buildJarRequest(
+    code: string
+  ):
+    | { analysis: Analysis; filename: string; files: { path: string; text: string }[]; ok: true }
+    | { errors: Issue[]; ok: false };
   buildZip(files: { path: string; text: string }[]): Uint8Array;
   exportZip(code: string):
     | {
@@ -461,6 +466,41 @@ describe('与可视化编辑器模型互操作', () => {
     ]);
     // 画布编辑（生成）后再导出仍应成功
     expect(CORE.exportZip(regenerated).ok).toBe(true);
+  });
+});
+
+describe('buildJarRequest：桌面版离线编译请求', () => {
+  it('只含 java 源与资源；paper-plugin.yml 版本占位符已置换', () => {
+    const meta = CORE.readMeta(CORE.starterCode()).meta;
+    meta.version = '2.3.4';
+    const nodes = [
+      { id: 'root', label: '根', shape: 'rect' },
+      { id: 'a', label: '甲', shape: 'rect' }
+    ];
+    const edges = [{ from: 'root', to: 'a' }];
+    const r = CORE.buildJarRequest(CORE.buildCode(meta, 'TD', nodes, edges));
+    if (!r.ok) {
+      throw new Error('buildJarRequest 失败');
+    }
+    expect(r.filename).toBe('MyAchievements-2.3.4.jar');
+    expect(r.files.some((f) => f.path === 'pom.xml')).toBe(false);
+    expect(r.files.some((f) => f.path === 'README.md')).toBe(false);
+    expect(r.files.every((f) => /^src\/main\/(java|resources)\//.test(f.path))).toBe(true);
+    const yml = r.files.find((f) => f.path === 'src/main/resources/paper-plugin.yml')?.text ?? '';
+    expect(yml).toContain("version: '2.3.4'");
+    expect(yml).not.toContain('${project.version}');
+    // pom.xml 虽未随编译请求下发，导出 zip 的 pom 也用同一版本号
+    const full = CORE.exportZip(CORE.buildCode(meta, 'TD', nodes, edges));
+    if (!full.ok) {
+      throw new Error('exportZip 失败');
+    }
+    expect(full.files.find((f) => f.path === 'pom.xml')?.text).toContain(
+      '<version>2.3.4</version>'
+    );
+  });
+
+  it('校验失败时返回错误而非请求', () => {
+    expect(CORE.buildJarRequest('pie title x\n  "a": 1\n').ok).toBe(false);
   });
 });
 
