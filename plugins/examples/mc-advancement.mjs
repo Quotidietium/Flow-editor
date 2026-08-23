@@ -137,11 +137,20 @@ const coreFactory = function () {
     },
     {
       counted: true,
-      desc: '累计与村民交易指定次数',
+      desc: '累计与村民交易指定次数（可限职业）',
       event: 'trade',
       id: 'trade',
       name: '村民交易',
-      params: [{ def: 10, key: 'amount', label: '累计次数', min: 1, type: 'int' }]
+      params: [
+        { def: 10, key: 'amount', label: '累计次数', min: 1, type: 'int' },
+        {
+          def: '',
+          key: 'profession',
+          label: '村民职业（留空=任意，如 FARMER/TOOLSMITH）',
+          ph: 'FARMER',
+          type: 'text'
+        }
+      ]
     },
     {
       counted: true,
@@ -315,11 +324,20 @@ const coreFactory = function () {
     },
     {
       counted: true,
-      desc: '弹射物累计命中生物（射箭/雪球/三叉戟等）',
+      desc: '弹射物累计命中生物（可限弹射物类型）',
       event: 'projectile',
       id: 'projectile_hit',
       name: '弹射物命中',
-      params: [{ def: 30, key: 'amount', label: '累计命中数', min: 1, type: 'int' }]
+      params: [
+        { def: 30, key: 'amount', label: '累计命中数', min: 1, type: 'int' },
+        {
+          def: '',
+          key: 'projectile',
+          label: '弹射物类型（留空=任意，如 ARROW/SNOWBALL/TRIDENT）',
+          ph: 'ARROW',
+          type: 'text'
+        }
+      ]
     },
     {
       counted: false,
@@ -1222,6 +1240,16 @@ const coreFactory = function () {
           if (v && v !== 'hostile' && !/^(minecraft:)?[a-z0-9_.]+$/.test(v)) {
             warnings.push({
               msg: `成就「${node.label}」的生物类型「${v}」无法识别，服务端将按「任意」降级`,
+              nodeId
+            });
+          }
+        }
+        // 枚举大写名（villager 职业 / 弹射物 EntityType）
+        if (p.key === 'profession' || p.key === 'projectile') {
+          const v = String(nm.params[p.key] ?? '').trim();
+          if (v && !/^[A-Z][A-Z0-9_]*$/.test(v)) {
+            warnings.push({
+              msg: `成就「${node.label}」的参数「${p.label}」的值「${v}」应为枚举名（大写，如 FARMER/ARROW），服务端将按「任意」降级`,
               nodeId
             });
           }
@@ -2201,7 +2229,19 @@ ${perNode('enchant', (n) => `        countUp(player, §N§, 1, ${Number(n.params
       blocks.push(`    @EventHandler(ignoreCancelled = true)
     public void onTrade(PlayerTradeEvent event) {
         Player player = event.getPlayer();
-${perNode('trade', (n) => `        countUp(player, §N§, 1, ${Number(n.params.amount) || 10});`)}
+${perNode(
+  'trade',
+  (n) => `        {
+            // 职业仅 Villager 有（AbstractVillager 无 getProfession）——收窄后取
+            String prof = param(§N§, "profession");
+            if (prof.isEmpty()
+                    || (event.getVillager() instanceof org.bukkit.entity.Villager villager
+                        && villager.getProfession() != null
+                        && prof.equalsIgnoreCase(villager.getProfession().name()))) {
+                countUp(player, §N§, 1, ${Number(n.params.amount) || 10});
+            }
+        }`
+)}
     }`);
     }
     if (has('tame')) {
@@ -2349,9 +2389,15 @@ ${perNode(
         if (!(event.getEntity().getShooter() instanceof Player player)) {
             return;
         }
+        String projType = event.getEntity().getType().name();
 ${perNode(
   'projectile_hit',
-  (n) => `        countUp(player, §N§, 1, ${Number(n.params.amount) || 30});`
+  (n) => `        {
+            String want = param(§N§, "projectile");
+            if (want.isEmpty() || want.equalsIgnoreCase(projType)) {
+                countUp(player, §N§, 1, ${Number(n.params.amount) || 30});
+            }
+        }`
 )}
     }`);
     }

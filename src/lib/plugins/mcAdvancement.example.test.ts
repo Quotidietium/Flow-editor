@@ -935,6 +935,59 @@ describe('subgraph 成就栏（循环 11）', () => {
   });
 });
 
+describe('循环 46', () => {
+  it('trade 职业过滤 + projectile 类型过滤（参数/分支/枚举校验）', () => {
+    const meta = CORE.readMeta(CORE.starterCode()).meta;
+    meta.nodes = {
+      t: { params: { amount: 5, profession: 'FARMER' }, trigger: 'trade' },
+      p: { params: { amount: 3, projectile: 'ARROW' }, trigger: 'projectile_hit' }
+    };
+    const r = CORE.exportZip(
+      CORE.buildCode(
+        meta,
+        'TD',
+        [
+          { id: 'root', label: '根', shape: 'rect' },
+          { id: 't', label: '商', shape: 'rect' },
+          { id: 'p', label: '猎', shape: 'rect' }
+        ],
+        [
+          { from: 'root', to: 't' },
+          { from: 'root', to: 'p' }
+        ]
+      )
+    );
+    if (!r.ok) {
+      throw new Error(r.errors.map((e) => e.msg).join('; '));
+    }
+    const listener = r.files.find((f) => f.path.endsWith('AchievementListener.java'))?.text ?? '';
+    expect(listener).toContain('instanceof org.bukkit.entity.Villager villager');
+    expect(listener).toContain('prof.equalsIgnoreCase(villager.getProfession().name())');
+    expect(listener).toContain('String projType = event.getEntity().getType().name()');
+    expect(listener).toContain('want.equalsIgnoreCase(projType)');
+    const config = r.files.find((f) => f.path.endsWith('config.yml'))?.text ?? '';
+    expect(config).toContain('profession: "FARMER"');
+    expect(config).toContain('projectile: "ARROW"');
+    // 枚举格式校验：小写值给警告
+    const bad = CORE.analyze(
+      CORE.buildCode(
+        (() => {
+          const m = CORE.readMeta(CORE.starterCode()).meta;
+          m.nodes = { t: { params: { amount: 1, profession: 'farmer' }, trigger: 'trade' } };
+          return m;
+        })(),
+        'TD',
+        [
+          { id: 'root', label: '根', shape: 'rect' },
+          { id: 't', label: '商', shape: 'rect' }
+        ],
+        [{ from: 'root', to: 't' }]
+      )
+    );
+    expect(bad.warnings.some((w) => w.msg.includes('应为枚举名'))).toBe(true);
+  });
+});
+
 describe('循环 43-45 补测（此前 anchor 失配未落盘）', () => {
   it('43：完成度汇总 + 树行 title tooltip', () => {
     const r = CORE.exportZip(CORE.starterCode());
