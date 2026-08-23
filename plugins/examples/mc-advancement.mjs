@@ -993,6 +993,7 @@ const coreFactory = function () {
     }
     const indegree = new Map();
     const children = new Map();
+    const labeledEdges = [];
     for (const e of edges) {
       if (!nidOf.has(e.from) || !nidOf.has(e.to)) {
         continue;
@@ -1009,10 +1010,14 @@ const coreFactory = function () {
       }
       children.get(e.from).push(e.to);
       if (e.label) {
-        warnings.push({
-          msg: `连线「${e.from} → ${e.to}」上的文字「${e.label}」在 MC 进度中无对应语义，导出时忽略`
-        });
+        labeledEdges.push({ from: e.from, label: e.label, to: e.to });
       }
+    }
+    if (labeledEdges.length > 0) {
+      const first = labeledEdges[0];
+      warnings.push({
+        msg: `${labeledEdges.length} 条连线上的文字（如「${first.label}」）在 MC 进度中无对应语义，导出时忽略`
+      });
     }
 
     // 环检测（DFS 三色）
@@ -1334,11 +1339,12 @@ const coreFactory = function () {
     meta.command = normCommand(meta.command, meta.namespace);
     meta.packFormat = Number.isFinite(Number(meta.packFormat)) ? Number(meta.packFormat) : 94;
 
-    // 孤儿元数据
-    for (const key of Object.keys(meta.nodes)) {
-      if (!nidOf.has(key)) {
-        warnings.push({ msg: `frontmatter 中存在已删除节点「${key}」的元数据，导出时忽略` });
-      }
+    // 孤儿元数据：汇总为单条（病态输入可达数万键，逐条警告会灌爆面板）
+    const orphanKeys = Object.keys(meta.nodes).filter((key) => !nidOf.has(key));
+    if (orphanKeys.length > 0) {
+      warnings.push({
+        msg: `frontmatter 中存在 ${orphanKeys.length} 个已删除节点的元数据（如「${orphanKeys[0]}」），导出时忽略`
+      });
     }
     // 成就名称可用性：空名在游戏进度界面显示为空白；同名成就玩家无法区分
     const seenLabels = new Map();
@@ -1368,16 +1374,42 @@ const coreFactory = function () {
       }
     }
 
+    // 消息护栏：相同文案合并计数、总量截断——病态输入（数万孤儿元数据键、
+    // 千级重复结构警告）曾产生数万条消息灌爆面板渲染与内存
+    const capMessages = (list, kind) => {
+      const byMsg = new Map();
+      for (const item of list) {
+        const entry = byMsg.get(item.msg);
+        if (entry) {
+          entry.count++;
+        } else {
+          byMsg.set(item.msg, { ...item, count: 1 });
+        }
+      }
+      const LIMIT = 100;
+      const merged = [...byMsg.values()].map((item) =>
+        item.count > 1 ? { ...item, msg: `${item.msg}（×${item.count}）` } : item
+      );
+      if (merged.length <= LIMIT) {
+        return merged;
+      }
+      const omitted = merged.length - LIMIT + 1;
+      return [
+        ...merged.slice(0, LIMIT - 1),
+        { msg: `另有 ${omitted} 种${kind}已省略（同类问题请先处理已列出的）` }
+      ];
+    };
+
     return {
       direction: flow.direction,
       edges,
-      errors,
+      errors: capMessages(errors, '错误'),
       meta,
       nodes,
       ok: errors.length === 0,
       skipped: flow.skipped,
       tabs,
-      warnings
+      warnings: capMessages(warnings, '警告')
     };
   };
 

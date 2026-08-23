@@ -890,6 +890,80 @@ describe('subgraph 成就栏（循环 11）', () => {
   });
 });
 
+describe('模糊输入健壮性（循环 19）', () => {
+  it('极端样本零异常且警告/错误有界', () => {
+    const samples: [string, string][] = [
+      ['超长标签 1MB', `flowchart TD\n r["${'A'.repeat(1024 * 1024)}"]\n r --> a[x]\n`],
+      ['超长行（10 万链段）', `flowchart TD\n ${'a[x] --> '.repeat(100_000)}z\n`],
+      [
+        'subgraph 未闭合 ×1000',
+        `flowchart TD\n${'    subgraph g["栏"]\n'.repeat(1000)}        a[x]\n`
+      ],
+      ['end 不配对 ×5000', `flowchart TD\n${'end\n'.repeat(5000)} a[x]\n`],
+      ['畸形 style 行', 'flowchart TD\n r[x]\n style\n style r\n style r fill:\n'],
+      ['frontmatter 半截 JSON', '---\n{"mcadv": {"plugin":\n---\nflowchart TD\n a[x]\n'],
+      [
+        'frontmatter 深嵌套',
+        `---\n{"a":${'['.repeat(50_000)}${']'.repeat(50_000)}}\n---\nflowchart TD\n a[x]\n`
+      ]
+    ];
+    for (const [name, code] of samples) {
+      let a: Analysis | undefined;
+      expect(() => {
+        a = CORE.analyze(code);
+      }, name).not.toThrow();
+      expect(a?.warnings.length, `${name} 警告有界`).toBeLessThanOrEqual(100);
+      expect(a?.errors.length, `${name} 错误有界`).toBeLessThanOrEqual(100);
+    }
+  });
+
+  it('病态孤儿元数据（5 万键）警告合并 + 截断 + 耗时有界', () => {
+    const orphans = Array.from(
+      { length: 50_000 },
+      (_, i) => `"ghost${i}":{"trigger":"manual"}`
+    ).join(',');
+    const meta = CORE.readMeta(CORE.starterCode()).meta;
+    meta.nodes = JSON.parse(`{${orphans}}`);
+    const code = CORE.buildCode(
+      meta,
+      'TD',
+      [
+        { id: 'root', label: '根', shape: 'rect' },
+        { id: 'a', label: '甲', shape: 'rect' }
+      ],
+      [{ from: 'root', to: 'a' }]
+    );
+    const t0 = performance.now();
+    const a = CORE.analyze(code);
+    const ms = performance.now() - t0;
+    expect(a.ok).toBe(true);
+    const orphanWarn = a.warnings.find((w) => w.msg.includes('已删除节点'));
+    expect(orphanWarn?.msg).toContain('50000 个'); // 汇总为单条计数
+    expect(a.warnings.length).toBeLessThanOrEqual(100);
+    expect(ms).toBeLessThan(2000);
+  });
+
+  it('重复连线文字警告合并计数（1000 条同类 → 1 条 ×N）', () => {
+    const lines = Array.from({ length: 1000 }, (_, i) => `    root -->|t${i}| n${i}[甲${i}]`).join(
+      '\n'
+    );
+    const code = `flowchart TD\n    root[根]\n${lines}\n`;
+    const a = CORE.analyze(code);
+    expect(a.ok).toBe(true);
+    const labeled = a.warnings.filter((w) => w.msg.includes('无对应语义'));
+    expect(labeled).toHaveLength(1);
+    expect(labeled[0].msg).toContain('1000 条'); // 汇总计数
+  });
+
+  it('毒 zip（EOCD 假 count）安全拒绝', async () => {
+    const bad = new Uint8Array(100);
+    bad.set([0x50, 0x4b, 0x05, 0x06], 78); // EOCD 签名
+    bad[90] = 0xff;
+    bad[91] = 0xff; // count=65535 但无内容
+    await expect(CORE.importDatapackZip(bad)).resolves.toBeUndefined();
+  });
+});
+
 describe('本地化 lang（循环 17）', () => {
   const locCode = () => {
     const meta = CORE.readMeta(CORE.starterCode()).meta;
