@@ -2929,9 +2929,14 @@ const FRONTEND_HTML = `<!doctype html>
       };
       var setStatus = function (text) { $('status').textContent = text; };
 
+      // 上次与编辑器同步的代码基线：用于检测「面板打开期间主界面/URL 的外部改动」，
+      // 避免写回时静默覆盖（面板自身的 rebuildCode 漂移不算外部变化）
+      var lastSynced = '';
+
       function load() {
         return tool('get_code').then(function (code) {
           S.code = code;
+          lastSynced = code;
           S.analysis = CORE.analyze(code);
           render();
           if (S.analysis.errors.length > 0) {
@@ -2943,9 +2948,24 @@ const FRONTEND_HTML = `<!doctype html>
       }
 
       function save() {
-        rebuildCode();
-        return tool('set_code', { code: S.code }).then(function () {
-          setStatus('已写回编辑器 ' + new Date().toLocaleTimeString());
+        // 先确认编辑器侧没有外部修改（画布编辑/粘贴分享链接），有则让用户选择
+        return tool('get_code').then(function (editorCode) {
+          if (editorCode !== lastSynced) {
+            var overwrite = confirm(
+              '编辑器中的图表在面板打开期间被外部修改（如主界面画布编辑）。\\n' +
+                '「确定」= 用面板内容覆盖外部修改；「取消」= 放弃面板未写回的修改并重新读取外部版本。'
+            );
+            if (!overwrite) {
+              return load().then(function () {
+                setStatus('已重新读取编辑器版本（面板未写回的修改已放弃）');
+              });
+            }
+          }
+          rebuildCode();
+          return tool('set_code', { code: S.code }).then(function () {
+            lastSynced = S.code;
+            setStatus('已写回编辑器 ' + new Date().toLocaleTimeString());
+          });
         });
       }
 

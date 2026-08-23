@@ -91,6 +91,41 @@ test('MC 设计器识别多成就栏图（两个连通分量 = 两个标签页�
   await expect(frame.locator('select[data-k="trigger"]')).toHaveCount(0);
 });
 
+test('MC 设计器：面板打开期间的外部修改受冲突保护', async ({ editPage, page }) => {
+  await editPage.view.waitFor({ state: 'visible' });
+  await installDesigner(page);
+  // 单一 dialog 处理器：记录后接受（多处理器重复 accept 会抛 already handled）
+  const dialogs: string[] = [];
+  page.on('dialog', (dialog) => {
+    dialogs.push(dialog.message());
+    void dialog.accept();
+  });
+
+  await page.getByRole('button', { name: /打开 MC 进度设计器/ }).click();
+  await expect(page.getByTestId('plugin-manager')).toHaveCount(0, { timeout: 10_000 });
+  const frame = page.frameLocator('iframe[title="插件前端"]');
+  await frame.getByRole('button', { name: '初始化示例' }).click();
+  await frame.getByText('🏆 示例成就').waitFor({ timeout: 10_000 });
+  await frame.getByRole('button', { name: '写回编辑器' }).click();
+  await expect
+    .poll(() => page.evaluate(() => window.__FLOW_EDITOR_STATE__?.().code ?? ''))
+    .toContain('示例成就');
+  dialogs.length = 0; // 之前的初始化/同步确认不计入
+
+  // 面板未关闭时主界面侧改了图表（画布编辑/粘贴链接同路径）
+  await page.evaluate(async () => {
+    await window.__FLOW_EDITOR_API__?.setCode('flowchart TD\n    ext[外部修改的新图]\n');
+  });
+
+  // 写回必须先弹出冲突确认（而非静默覆盖）
+  await frame.getByRole('button', { name: '写回编辑器' }).click();
+  await expect.poll(() => dialogs.length, { timeout: 10_000 }).toBeGreaterThan(0);
+  expect(dialogs[0]).toContain('外部修改');
+  await expect
+    .poll(() => page.evaluate(() => window.__FLOW_EDITOR_STATE__?.().code ?? ''))
+    .toContain('示例成就');
+});
+
 test('MC 插件 zip 经导出菜单一键下载', async ({ editPage, page }) => {
   await editPage.view.waitFor({ state: 'visible' });
   await installDesigner(page);
