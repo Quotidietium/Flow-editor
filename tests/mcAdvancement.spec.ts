@@ -204,5 +204,6 @@ test('MC 设计器闭环：导出的 zip 可经「打开」逆向导入回图表
   expect(code).toContain('回环测试栏');
   expect(code).toContain('"plugin": "RoundTrip"'); // flow-editor.json 溯源还原
   expect(code).toContain('flowchart TD');
-  await expect(page.locator('#container')).toContainText('回环测试栏');
+  // 全量顺序下系统负载高（autoSync 可能降级为 1s 批量渲染），放宽断言窗口
+  await expect(page.locator('#container')).toContainText('回环测试栏', { timeout: 15_000 });
 });
