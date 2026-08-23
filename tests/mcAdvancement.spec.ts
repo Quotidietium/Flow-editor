@@ -154,6 +154,13 @@ test('MC 设计器识别多成就栏图（两个连通分量 = 两个标签页�
   await frame.getByText('🏆 生活栏').waitFor({ timeout: 10_000 });
   await expect(frame.locator('.badge', { hasText: '1 成就' })).toBeVisible();
   await expect(frame.getByText('✓ 校验通过，可以导出')).toBeVisible();
+
+  // 过滤激活态下添加下级：过滤被清除、新节点立即可见
+  await frame.locator('#treeSearch').fill('mine');
+  await expect(frame.locator('.node-row')).toHaveCount(1);
+  await frame.locator('.node-row').first().click();
+  await frame.getByRole('button', { name: '+ 添加下级成就' }).click();
+  await frame.getByText('新成就').first().waitFor({ timeout: 5000 });
 });
 
 test('MC 设计器：面板打开期间的外部修改受冲突保护', async ({ editPage, page }) => {

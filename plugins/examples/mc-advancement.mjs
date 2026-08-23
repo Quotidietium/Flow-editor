@@ -4248,6 +4248,7 @@ const FRONTEND_HTML = `<!doctype html>
           hostTab.members.push(id);
         }
         S.sel = { id: id, type: 'node' };
+        treeFilter = ''; // 结构操作后清过滤——新节点默认标签不匹配旧词会被隐藏
         rebuildCode();
         render();
       }
@@ -4288,6 +4289,7 @@ const FRONTEND_HTML = `<!doctype html>
           nid: nid, params: {}, parent: null, shape: 'rect', tab: nid
         });
         S.sel = { id: id, type: 'tab' };
+        treeFilter = ''; // 同上：新栏需立即可见
         rebuildCode();
         render();
       }
