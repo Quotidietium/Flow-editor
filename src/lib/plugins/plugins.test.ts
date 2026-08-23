@@ -138,7 +138,7 @@ describe('plugin hook dispatch', () => {
     await expect(runImportHandler('a.mmd', 'A')).resolves.toBeUndefined();
   });
 
-  it('registers and runs custom export formats', () => {
+  it('registers and runs custom export formats (legacy single export)', async () => {
     registerPluginInstance(
       basePlugin({
         export: {
@@ -160,9 +160,42 @@ describe('plugin hook dispatch', () => {
       throw new Error('format missing');
     }
     expect(format.label).toBe('MC 函数');
-    const payload = runPluginExport(format);
+    expect(format.pluginId).toBe('exporter');
+    const payload = await runPluginExport(format);
     expect(payload?.filename).toBe('out.mcfunction');
     expect(payload?.text).toContain('lines');
+  });
+
+  it('exports[] registers multiple menu items and takes precedence over legacy export', async () => {
+    registerPluginInstance(
+      basePlugin({
+        export: { id: 'legacy', label: '旧单项', run: () => undefined },
+        exports: [
+          {
+            id: 'fmt-a',
+            label: '格式 A',
+            run: () => ({ filename: 'a.txt', mime: 'text/plain', text: 'A' })
+          },
+          {
+            id: 'fmt-b',
+            label: '格式 B（异步）',
+            run: async () => {
+              await new Promise((resolve) => setTimeout(resolve, 0));
+              return { filename: 'b.txt', mime: 'text/plain', text: 'B' };
+            }
+          }
+        ],
+        id: 'multi'
+      })
+    );
+    const formats = pluginExportFormats().filter((f) => f.pluginId === 'multi');
+    expect(formats.map((f) => f.id)).toEqual(['fmt-a', 'fmt-b']); // 旧 export 不重复出现
+    const formatB = formats.find((f) => f.id === 'fmt-b');
+    if (!formatB) {
+      throw new Error('format-b missing');
+    }
+    const payloadB = await runPluginExport(formatB);
+    expect(payloadB?.text).toBe('B'); // 异步 run 经 guardedAsync 正常产出
   });
 
   it('theme.css injects arbitrary CSS (layout/stickers) into a style tag', () => {

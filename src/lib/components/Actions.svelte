@@ -361,22 +361,28 @@ ${svgString}`);
 
   // Plugin-registered export formats run fully inside the plugin and hand
   // back a payload we just download (text or blob, private formats welcome).
-  const runPluginFormat = (formatId: string) => {
+  // run may be async — e.g. the MC designer's JAR export awaits desktop IPC.
+  const runPluginFormat = async (formatId: string) => {
     const format = pluginExportFormats().find((f: { id: string }) => f.id === formatId);
     if (!format) {
       return;
     }
-    const payload = runPluginExport(format);
-    if (!payload) {
-      notify(`导出失败：插件 ${format.pluginId} 未产出内容`);
-      return;
-    }
-    if (payload.blob) {
-      const url = URL.createObjectURL(payload.blob);
-      simulateDownload(payload.filename, url);
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
-    } else if (payload.text !== undefined) {
-      downloadTextFile(payload.filename, payload.text, payload.mime);
+    try {
+      const payload = await runPluginExport(format);
+      if (!payload) {
+        notify(`导出失败：插件 ${format.pluginId} 未产出内容`);
+        return;
+      }
+      if (payload.blob) {
+        const url = URL.createObjectURL(payload.blob);
+        simulateDownload(payload.filename, url);
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+      } else if (payload.text !== undefined) {
+        downloadTextFile(payload.filename, payload.text, payload.mime);
+      }
+    } catch {
+      // guardedAsync 已隔离并记录插件异常；此处兜底提示（不吞静默失败）
+      notify(`导出失败：插件 ${format.pluginId} 执行出错`);
     }
   };
 

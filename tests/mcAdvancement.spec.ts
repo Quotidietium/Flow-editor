@@ -412,3 +412,37 @@ test('MC 设计器：节点 id 非法字符被闸门拦截（循环 67）', asyn
     .poll(() => page.evaluate(() => window.__FLOW_EDITOR_STATE__?.().code ?? ''))
     .toContain('yugong');
 });
+
+test('MC 插件 JAR 导出项：菜单可见，网页版点击给出桌面版引导（2.0.137）', async ({
+  editPage,
+  page
+}) => {
+  await editPage.view.waitFor({ state: 'visible' });
+  await installDesigner(page);
+  page.on('dialog', (dialog) => void dialog.accept());
+
+  // 准备一张合法成就图（经设计器初始化示例并写回）
+  await page.getByRole('button', { name: /打开 MC 进度设计器/ }).click();
+  await expect(page.getByTestId('plugin-manager')).toHaveCount(0, { timeout: 10_000 });
+  const frame = page.frameLocator('iframe[title="插件前端"]');
+  await frame.getByRole('button', { name: '初始化示例' }).click();
+  await frame.getByText('🏆 示例成就').waitFor({ timeout: 10_000 });
+  await frame.getByRole('button', { name: '写回编辑器' }).click();
+  await expect
+    .poll(() => page.evaluate(() => window.__FLOW_EDITOR_STATE__?.().code ?? ''))
+    .toContain('mcadv');
+  await page.getByTestId('plugin-frontend-exit').click();
+
+  // 导出菜单出现两个插件导出项（zip 在前保持原 testid，jar 新增）
+  await editPage.ensureActionsOpen();
+  await page.getByTestId('export-menu').click();
+  await expect(page.getByTestId('plugin-export-mc-plugin')).toBeVisible();
+  const jarItem = page.getByTestId('plugin-export-mc-plugin-jar');
+  await expect(jarItem).toBeVisible();
+  await expect(jarItem).toContainText('编译 .jar');
+
+  // 网页版（Playwright 环境）没有桌面桥：点击 → 引导提示（不下载、不崩溃）
+  await jarItem.click();
+  await expect(page.getByText('仅在桌面版可用').first()).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText(/mvn package/).first()).toBeVisible();
+});

@@ -336,26 +336,29 @@ export const runImportHandler = async (
 };
 
 export const pluginExportFormats = (): (ExportFormat & { pluginId: string })[] =>
-  activePlugins()
-    .filter((p) => p.export)
-    .map((p) => ({ ...(p.export as ExportFormat), pluginId: p.id }));
+  activePlugins().flatMap((p) => {
+    const formats = p.exports ?? (p.export ? [p.export] : []);
+    return formats.map((format) => ({ ...(format as ExportFormat), pluginId: p.id }));
+  });
 
-export const runPluginExport = (
+export const runPluginExport = async (
   format: ExportFormat & { pluginId: string }
-): { blob?: Blob; filename: string; mime: string; text?: string } | undefined =>
-  guarded(
+): Promise<{ blob?: Blob; filename: string; mime: string; text?: string } | undefined> => {
+  const ctx = makeContext(format.pluginId);
+  return guardedAsync(
     format.pluginId,
     () =>
       format.run(
         {
-          code: makeContext(format.pluginId).getState().code,
-          config: makeContext(format.pluginId).getState().mermaid,
-          svg: makeContext(format.pluginId).getSvg()
+          code: ctx.getState().code,
+          config: ctx.getState().mermaid,
+          svg: ctx.getSvg()
         },
-        makeContext(format.pluginId)
+        ctx
       ),
     undefined
   );
+};
 
 export const pluginFrontends = (): { id: string; name: string; sandbox?: string; url: string }[] =>
   activePlugins()

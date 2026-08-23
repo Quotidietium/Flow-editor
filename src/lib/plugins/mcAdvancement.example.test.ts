@@ -107,19 +107,29 @@ interface Core {
   };
   starterCode(): string;
 }
+interface ExportCtx {
+  notify(msg: string): void;
+}
+interface ExportPayload {
+  blob?: Blob;
+  filename: string;
+}
 interface PluginModule {
   _core: Core;
   default: {
-    export: {
+    exports?: {
+      id: string;
+      label: string;
       run(
         input: { code: string },
-        ctx: { notify(msg: string): void }
-      ): { blob?: Blob; filename: string } | undefined;
-    };
+        ctx: ExportCtx
+      ): ExportPayload | undefined | Promise<ExportPayload | undefined>;
+    }[];
     frontend: { sandbox?: string; url: string };
     id: string;
     name: string;
     permissions: string[];
+    version: string;
   };
 }
 
@@ -1922,7 +1932,7 @@ describe('插件导出钩子', () => {
 
   it('合法图返回 zip blob', () => {
     const c = ctx();
-    const out = plugin.export.run({ code: CORE.starterCode() }, c);
+    const out = plugin.exports?.[0]?.run({ code: CORE.starterCode() }, c);
     expect(out?.filename).toBe('MyAchievements.zip');
     expect(out?.blob).toBeInstanceOf(Blob);
     expect(c.messages[0]).toContain('MyAchievements.zip');
@@ -1930,7 +1940,7 @@ describe('插件导出钩子', () => {
 
   it('非法图返回 undefined 并提示首个错误', () => {
     const c = ctx();
-    const out = plugin.export.run({ code: 'pie title x\n  "a": 1\n' }, c);
+    const out = plugin.exports?.[0]?.run({ code: 'pie title x\n  "a": 1\n' }, c);
     expect(out).toBeUndefined();
     expect(c.messages[0]).toContain('无法导出 MC 插件');
   });
@@ -2254,13 +2264,13 @@ describe('循环 57：栏图标与大满贯图标格式校验（此前零校验�
 });
 
 describe('循环 58：issue 行键盘可达（与树行同模式）+ 插件版本 1.9.0', () => {
-  it('可定位 issue 带 role/tabindex 与 Enter/Space 处理；插件版本升至 1.9.0', () => {
+  it('可定位 issue 带 role/tabindex 与 Enter/Space 处理；插件版本在册', () => {
     const html = decodeURIComponent(
       plugin.frontend.url.replace('data:text/html;charset=utf-8,', '')
     );
     expect(html).toContain('\' role="button" tabindex="0"'); // issueRow 输出
     expect(html).toContain("ev.key === 'Enter' || ev.key === ' '");
-    expect(plugin.version).toBe('1.9.0');
+    expect(plugin.version).toBe('1.10.0');
   });
 });
 
@@ -2425,5 +2435,77 @@ describe('循环 70：config 逐键注释对新参数自动覆盖（核验入测
     expect(cfg).toContain('# 弹射物类型');
     expect(cfg).toContain('cause: "melee"');
     expect(cfg).toContain('projectile: "ARROW"');
+  });
+});
+
+describe('JAR 一键导出（exports[1]，桌面直调编译链）', () => {
+  const ctx = () => {
+    const messages: string[] = [];
+    return { messages, notify: (m: string) => messages.push(m) };
+  };
+  const jarRun = () => {
+    const run = plugin.exports?.[1]?.run;
+    if (!run) {
+      throw new Error('jar export missing');
+    }
+    return run;
+  };
+  const setDesktop = (build: unknown) => {
+    (window as unknown as { __FLOW_DESKTOP__?: unknown }).__FLOW_DESKTOP__ = build
+      ? { mcBuild: { build } }
+      : undefined;
+  };
+
+  it('manifest：exports 两项（zip 首位保持原 id，jar 第二），无旧单 export 字段', () => {
+    expect(plugin.exports?.map((f) => f.id)).toEqual(['mc-plugin', 'mc-plugin-jar']);
+    expect(plugin.exports?.[1]?.label).toContain('编译 .jar');
+    expect((plugin as unknown as { export?: unknown }).export).toBeUndefined();
+  });
+
+  it('网页版（无桌面桥）：undefined + 引导提示（不抛错、不触发三振）', async () => {
+    setDesktop(undefined);
+    const c = ctx();
+    const out = await jarRun()({ code: CORE.starterCode() }, c);
+    expect(out).toBeUndefined();
+    expect(c.messages[0]).toContain('仅在桌面版可用');
+    expect(c.messages[0]).toContain('mvn package');
+  });
+
+  it('桌面无 JDK：结构化错误文案透传（主进程引导文案直达用户）', async () => {
+    setDesktop(async () => ({
+      error: { message: '未检测到 JDK 21+，请您自行安装（如 Eclipse Temurin）后重试' },
+      ok: false
+    }));
+    const c = ctx();
+    const out = await jarRun()({ code: CORE.starterCode() }, c);
+    expect(out).toBeUndefined();
+    expect(c.messages[0]).toContain('未检测到 JDK 21+');
+  });
+
+  it('桌面编译成功：base64 → Blob 下载载荷 + 成功提示含 JDK 版本', async () => {
+    // mock 后端（真实 javac 链路由 installer/scripts/test-mc-build.mjs 15 项覆盖）
+    setDesktop(async (request: { filename?: string }) => ({
+      filename: request.filename ?? 'MyAchievements-1.0.0.jar',
+      jarBase64: Buffer.from('PK-fake-jar-bytes').toString('base64'),
+      jdkVersion: '21.0.5',
+      ok: true
+    }));
+    const c = ctx();
+    const out = await jarRun()({ code: CORE.starterCode() }, c);
+    expect(out?.filename).toBe('MyAchievements-1.0.0.jar');
+    expect(out?.blob).toBeInstanceOf(Blob);
+    expect(out?.blob && (await out.blob.text())).toBe('PK-fake-jar-bytes');
+    expect(c.messages[0]).toContain('已编译');
+    expect(c.messages[0]).toContain('21.0.5');
+    setDesktop(undefined);
+  });
+
+  it('非法图（非 flowchart）：编译前拦截并提示首个错误', async () => {
+    setDesktop(async () => ({ ok: true })); // 即使桌面在也不应走到编译
+    const c = ctx();
+    const out = await jarRun()({ code: 'pie title x\n  "a": 1\n' }, c);
+    expect(out).toBeUndefined();
+    expect(c.messages[0]).toContain('无法编译');
+    setDesktop(undefined);
   });
 });

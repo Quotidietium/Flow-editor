@@ -207,6 +207,12 @@ REF 已验证此模式。触发器表同时驱动：前端下拉（**六类 optg
 产物以**插件名**为根目录、store 模式 zip（无压缩，零依赖 ~100 行
 CRC32+头拼接；Java 源码与 JSON 为文本，压缩无意义）：
 
+> **2.0.137 起**导出菜单另有「MC 成就插件（编译 .jar·桌面版+JDK21+）」
+> 一键项：装好 JDK 21+ 的桌面版直接产出可安装 .jar（与前端面板
+> 「编译导出 jar」同一编译链——宿主页直调 preload 的
+> `__FLOW_DESKTOP__.mcBuild.build`）；网页版/未装 JDK 时点击给出
+> 结构化引导（mvn package 自行构建路径 / JDK 安装提示）。
+
 ```
 MyAchievements/
 ├── pom.xml                          # paper-api 1.21.11-SNAPSHOT provided、release 21
