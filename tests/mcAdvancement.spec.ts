@@ -39,7 +39,7 @@ test('MC 设计器前端：初始化示例 → 编辑触发器 → 写回编辑�
   await expect(frame.locator('.node-row')).toHaveCount(2); // 你好，世界！/ 愚公移山
   await expect(frame.getByText('✓ 校验通过，可以导出')).toBeVisible();
 
-  // 选中「愚公移山」，把触发方式改为钓鱼
+  // 选中「愚公移山」，把触发方式改为钓鱼 + 加一条战利品奖励
   await frame.getByText('愚公移山').click();
   const triggerSelect = frame.locator('select[data-k="trigger"]');
   await expect(triggerSelect).toHaveValue('break_block');
@@ -47,11 +47,18 @@ test('MC 设计器前端：初始化示例 → 编辑触发器 → 写回编辑�
   // 参数表单出现「累计数量」且默认 10
   await expect(frame.locator('input[data-p="amount"]')).toHaveValue('10');
 
-  // 写回编辑器：frontmatter 应带 fish 触发器
+  await frame.getByRole('button', { name: '+ 添加物品' }).click();
+  await frame.locator('input[data-l="item"]').fill('minecraft:diamond');
+  await frame.locator('input[data-l="max"]').fill('3');
+
+  // 写回编辑器：frontmatter 应带 fish 触发器与战利品条目
   await frame.getByRole('button', { name: '写回编辑器' }).click();
   await expect
     .poll(() => page.evaluate(() => window.__FLOW_EDITOR_STATE__?.().code ?? ''))
     .toContain('"trigger": "fish"');
+  await expect
+    .poll(() => page.evaluate(() => window.__FLOW_EDITOR_STATE__?.().code ?? ''))
+    .toContain('"item": "minecraft:diamond"');
 
   // 退出前端，主界面预览渲染该流程图（frontmatter 不影响 mermaid）
   await page.getByTestId('plugin-frontend-exit').click();

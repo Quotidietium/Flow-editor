@@ -15,7 +15,7 @@ interface AnalysisNode {
   frame: string;
   id: string;
   label: string;
-  meta: { desc?: string; icon?: string; trigger?: string; xp?: number };
+  meta: { desc?: string; icon?: string; loot?: unknown[]; trigger?: string; xp?: number };
   nid: string;
   params: Record<string, unknown>;
   parent: null | string;
@@ -878,6 +878,106 @@ describe('subgraph 成就栏（循环 11）', () => {
     );
     const parsed = parseCode(rebuilt);
     expect(parsed.ok).toBe(true);
+  });
+});
+
+describe('战利品奖励（循环 13）', () => {
+  const lootCode = () => {
+    const meta = CORE.readMeta(CORE.starterCode()).meta;
+    meta.nodes = {
+      treasure: {
+        desc: '开宝箱',
+        loot: [
+          { item: 'minecraft:diamond', max: 3, min: 1 },
+          { item: 'minecraft:gold_ingot', max: 5, min: 2, weight: 2 },
+          { item: '', max: 1, min: 1 } // 空条目：导出时忽略 + 警告
+        ],
+        trigger: 'break_block',
+        xp: 10
+      }
+    };
+    return CORE.buildCode(
+      meta,
+      'TD',
+      [
+        { id: 'root', label: '根', shape: 'rect' },
+        { id: 'treasure', label: '寻宝人', shape: 'rect' }
+      ],
+      [{ from: 'root', to: 'treasure' }]
+    );
+  };
+
+  it('advJson 带 rewards.function（与经验并存）；生成 loot_table 与 mcfunction', () => {
+    const r = CORE.exportZip(lootCode());
+    if (!r.ok) {
+      throw new Error(r.errors.map((e) => e.msg).join('; '));
+    }
+    const byPath = new Map(r.files.map((f) => [f.path, f.text]));
+    const adv = JSON.parse(
+      byPath.get('src/main/resources/datapack/data/myach/advancement/treasure.json') ?? ''
+    );
+    expect(adv.rewards).toEqual({ experience: 10, function: 'myach:treasure' });
+
+    const table = JSON.parse(
+      byPath.get('src/main/resources/datapack/data/myach/loot_table/treasure.json') ?? ''
+    );
+    expect(table.type).toBe('minecraft:chest');
+    const entries = table.pools[0].entries;
+    expect(entries).toHaveLength(2); // 空条目被忽略
+    expect(entries[0]).toEqual({
+      functions: [{ count: { max: 3, min: 1 }, function: 'minecraft:set_count' }],
+      name: 'minecraft:diamond',
+      type: 'minecraft:item'
+    });
+    expect(entries[1].weight).toBe(2);
+    expect(table.pools[0].rolls).toBe(1);
+
+    const fn =
+      byPath.get('src/main/resources/datapack/data/myach/function/treasure.mcfunction') ?? '';
+    expect(fn).toContain('loot give @p loot myach:treasure');
+
+    // 空战利品条目产生警告；无 loot 的成就不受影响
+    expect(r.analysis.warnings.some((w) => w.msg.includes('未填物品的战利品条目'))).toBe(true);
+    expect(r.files.some((f) => f.path.endsWith('loot_table/root.json'))).toBe(false);
+  });
+
+  it('外部数据包逆向导入还原 loot 条目（含数量区间与权重）', async () => {
+    const r = CORE.exportZip(lootCode());
+    if (!r.ok) {
+      throw new Error('导出失败');
+    }
+    // 剥掉溯源元数据 → 走外部数据包尽力还原路径
+    const entries = await CORE.readZipEntries(r.bytes);
+    const stripped = CORE.buildZip(
+      [...entries.entries()]
+        .filter(([name]) => !name.endsWith('flow-editor.json'))
+        .map(([name, data]) => ({ path: name, text: new TextDecoder().decode(data) }))
+    );
+    const imported = await CORE.importDatapackZip(stripped);
+    expect(imported).toBeDefined();
+    const a = CORE.analyze(imported?.code ?? '');
+    expect(a.ok).toBe(true);
+    const treasure = a.nodes.find((n) => n.id === 'treasure');
+    expect(treasure?.meta.loot).toEqual([
+      { item: 'minecraft:diamond', max: 3, min: 1 },
+      { item: 'minecraft:gold_ingot', max: 5, min: 2, weight: 2 }
+    ]);
+  });
+
+  it('非物品 ID 格式的战利品条目产生警告', () => {
+    const meta = CORE.readMeta(CORE.starterCode()).meta;
+    meta.nodes = { bad: { loot: [{ item: 'Not A Valid Item!' }], trigger: 'manual' } };
+    const code = CORE.buildCode(
+      meta,
+      'TD',
+      [
+        { id: 'root', label: '根', shape: 'rect' },
+        { id: 'bad', label: '坏条目', shape: 'rect' }
+      ],
+      [{ from: 'root', to: 'bad' }]
+    );
+    const a = CORE.analyze(code);
+    expect(a.warnings.some((w) => w.msg.includes('不是合法物品 ID 格式'))).toBe(true);
   });
 });
 
