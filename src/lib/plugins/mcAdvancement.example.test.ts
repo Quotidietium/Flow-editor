@@ -2394,3 +2394,36 @@ describe('循环 69：reach_height 越界建议性警告', () => {
     expect(build(300, 'above').warnings.some((w) => w.msg.includes('高度条件'))).toBe(false);
   });
 });
+
+describe('循环 70：config 逐键注释对新参数自动覆盖（核验入测）', () => {
+  it('tool/cause/profession/projectile 四个新参数的注释自动生成（循环 45 注册表机制）', () => {
+    const meta = CORE.readMeta(CORE.starterCode()).meta;
+    meta.nodes = {
+      a: { params: { amount: 1, cause: 'melee' }, trigger: 'kill' },
+      b: { params: { amount: 1, projectile: 'ARROW' }, trigger: 'projectile_hit' }
+    };
+    const r = CORE.exportZip(
+      CORE.buildCode(
+        meta,
+        'TD',
+        [
+          { id: 'root', label: '根', shape: 'rect' },
+          { id: 'a', label: '杀', shape: 'rect' },
+          { id: 'b', label: '射', shape: 'rect' }
+        ],
+        [
+          { from: 'root', to: 'a' },
+          { from: 'root', to: 'b' }
+        ]
+      )
+    );
+    if (!r.ok) {
+      throw new Error('导出失败');
+    }
+    const cfg = r.files.find((f) => f.path.endsWith('config.yml'))?.text ?? '';
+    expect(cfg).toContain('# 伤害方式');
+    expect(cfg).toContain('# 弹射物类型');
+    expect(cfg).toContain('cause: "melee"');
+    expect(cfg).toContain('projectile: "ARROW"');
+  });
+});
