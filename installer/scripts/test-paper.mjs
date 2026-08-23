@@ -55,34 +55,39 @@ const mod = await import(
   'data:text/javascript;base64,' + Buffer.from(pluginSource, 'utf8').toString('base64')
 );
 const CORE = mod._core;
+// 全特性样本：全部 30 种触发器 + 战利品 + 双语本地化 + subgraph 单栏
+// 长链（与 test-mc-build 的 javac 样本同构，搬上真实服务器验证加载面）
 const meta = CORE.readMeta(CORE.starterCode()).meta;
 meta.plugin = 'FlowEditorTest';
 meta.namespace = 'flowtest';
 meta.command = 'flowtest';
 meta.localization = 'on';
-meta.nodes = {
-  fisher: {
-    desc: '钓上 3 条鱼',
-    en: 'Fisherman',
-    loot: [{ item: 'minecraft:cod', max: 2, min: 1 }],
-    trigger: 'fish',
-    xp: 5
-  }
+const chainNodes = [{ id: 'tab_main', label: '实测栏', shape: 'rect' }];
+const chainEdges = [];
+let prev = 'tab_main';
+for (const t of CORE.TRIGGERS) {
+  const id = 't_' + t.id;
+  chainNodes.push({
+    id,
+    label: t.name,
+    shape: t.id === 'kill' ? 'diamond' : t.id === 'join' ? 'round' : 'rect'
+  });
+  chainEdges.push({ from: prev, to: id });
+  prev = id;
+  const params = {};
+  for (const p of t.params) params[p.key] = p.def;
+  if (t.id === 'chat_keyword') params.keyword = '萌新报到';
+  meta.nodes[id] = { params, trigger: t.id };
+}
+meta.nodes.t_kill = {
+  ...meta.nodes.t_kill,
+  en: 'Monster Hunter',
+  loot: [{ item: 'minecraft:diamond', max: 3, min: 1, weight: 2 }]
 };
-const code = CORE.buildCode(
-  meta,
-  'TD',
-  [
-    { id: 'tab_main', label: '实测栏', shape: 'rect' },
-    { id: 'hello', label: '你好，世界！', shape: 'rect' },
-    { id: 'fisher', label: '钓鱼佬', shape: 'round' }
-  ],
-  [
-    { from: 'tab_main', to: 'hello' },
-    { from: 'hello', to: 'fisher' }
-  ],
-  [{ id: 'tab_main', label: '实测栏', memberIds: ['tab_main', 'hello', 'fisher'] }]
-);
+meta.nodes.t_fish = { ...meta.nodes.t_fish, loot: [{ item: 'minecraft:cod', max: 2, min: 1 }] };
+const code = CORE.buildCode(meta, 'TD', chainNodes, chainEdges, [
+  { id: 'tab_main', label: '实测栏', memberIds: chainNodes.map((n) => n.id) }
+]);
 const request = CORE.buildJarRequest(code);
 if (!request.ok) {
   console.error('样本生成失败', request.errors);
@@ -198,7 +203,7 @@ try {
     check('reload 后插件二次自检（限定插件名前缀）', selfChecks >= 2, `${selfChecks} 次`);
     check(
       'reload 后进度总数不变',
-      (reloadLog.match(/Loaded (\d+) advancements/g) ?? []).every((m) => /159\d/.test(m)),
+      (reloadLog.match(/Loaded (\d+) advancements/g) ?? []).every((m) => /16\d\d/.test(m)),
       (reloadLog.match(/Loaded (\d+) advancements/g) ?? []).join(',')
     );
   } else {
@@ -224,7 +229,7 @@ try {
       /Found new data pack FlowEditorTest\/provided/.test(full)
   );
   check(
-    '进度全部加载（vanilla 1592 + 我们的 4）',
+    '进度全部加载（vanilla 1592 + 我们的 32）',
     /Loaded \d+ advancements/.test(full),
     (full.match(/Loaded (\d+) advancements/) ?? ['', '?'])[1]
   );
