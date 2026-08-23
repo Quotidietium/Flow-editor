@@ -2679,6 +2679,20 @@ public final class ${cls}Command implements BasicCommand {
         }
         player.sendMessage(Component.text("—— ${a.meta.plugin} 成就进度 ——", NamedTextColor.GOLD, TextDecoration.BOLD));
 ${lines.join('\n')}
+        int doneCount = 0;
+        int total = 0;
+        for (Achievement achievement : Achievement.values()) {
+            if (!achievement.listed()) {
+                continue;
+            }
+            total++;
+            if (service.isDone(player, achievement)) {
+                doneCount++;
+            }
+        }
+        player.sendMessage(Component.text(
+                "完成度： " + doneCount + " / " + total + "（" + (total == 0 ? 0 : doneCount * 100 / total) + "%）",
+                NamedTextColor.YELLOW));
     }
 
     @Override
@@ -3855,7 +3869,7 @@ const FRONTEND_HTML = `<!doctype html>
               var hay = (n.label + ' ' + id + ' ' + n.meta.trigger + ' ' + paramText).toLowerCase();
               if (hay.indexOf(treeFilter.toLowerCase()) === -1) { return; }
             }
-            html += '<div class="node-row' + (sel ? ' sel' : '') + '" data-node="' + esc(id) + '" role="button" tabindex="0" aria-pressed="' + (sel ? 'true' : 'false') + '" style="padding-left:' + (22 + (depth[id] - 1) * 16) + 'px">'
+            html += '<div class="node-row' + (sel ? ' sel' : '') + '" data-node="' + esc(id) + '" role="button" tabindex="0" aria-pressed="' + (sel ? 'true' : 'false') + '" title="' + esc(n.label + '（' + id + '）') + '" style="padding-left:' + (22 + (depth[id] - 1) * 16) + 'px">'
               + esc(n.label) + '<span class="frame">' + (CORE.FRAME_NAME[n.frame] || '') + ' · ' + esc(n.meta.trigger) + '</span></div>';
           });
           html += '</div>';
@@ -3870,7 +3884,7 @@ const FRONTEND_HTML = `<!doctype html>
               var hay = (n.label + ' ' + n.id).toLowerCase();
               if (hay.indexOf(treeFilter.toLowerCase()) === -1) { return; }
             }
-            html += '<div class="node-row' + (sel ? ' sel' : '') + '" data-node="' + esc(n.id) + '" role="button" tabindex="0" aria-pressed="' + (sel ? 'true' : 'false') + '">'
+            html += '<div class="node-row' + (sel ? ' sel' : '') + '" data-node="' + esc(n.id) + '" role="button" tabindex="0" aria-pressed="' + (sel ? 'true' : 'false') + '" title="' + esc(n.label + '（' + n.id + '）') + '">'
               + esc(n.label) + '<span class="frame">' + esc(n.id) + '</span></div>';
           });
           html += '</div>';
