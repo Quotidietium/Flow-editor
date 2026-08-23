@@ -1,6 +1,6 @@
 # MC 进度设计器插件（mc-advancement）设计文档
 
-> 版本：2.0.129 引入｜插件文件：[`plugins/examples/mc-advancement.mjs`](../plugins/examples/mc-advancement.mjs)
+> 版本：2.0.129 引入（2.0.130 离线编译、2.0.131 持续优化循环）｜插件文件：[`plugins/examples/mc-advancement.mjs`](../plugins/examples/mc-advancement.mjs)
 > 2.0.130：桌面版内置离线编译链（导出即 `.jar`，无需 Maven）；JDK 21+ 由用户自装（版权红线）
 > 目标：在 Flow 编辑器里**画一张流程图，就能一键导出一个完整可编译的 Paper 成就插件**
 > （Maven 工程 zip，含内置数据包 + 事件监听器 + 进度持久化 + 命令）；
@@ -118,36 +118,45 @@ flowchart TD
 改标签、换形状）不触碰 frontmatter**——可视化编辑器逐字节保留它
 （`splitFrontmatter`，model.ts），元数据零丢失。
 
-## 3. 触发方式注册表（21 种，对照 Paper/Bukkit API）
+## 3. 触发方式注册表（30 种，对照 Paper/Bukkit API）
 
 成就 JSON 的 criteria 一律用 `minecraft:impossible`（原版永不触发），由
 导出的 Java 监听器按触发方式授予（`AdvancementProgress#awardCriteria`）——
-REF 已验证此模式。触发器表同时驱动：前端下拉与参数表单、config.yml 键、
-Java 事件方法生成（**只生成用到的触发器分支**）。
+REF 已验证此模式。触发器表同时驱动：前端下拉（**六类 optgroup 分组**）与
+参数表单、config.yml 键、Java 事件方法生成（**只生成用到的触发器分支**）。
 
-| #   | trigger id         | 名称               | 参数（config.yml 可改）                                                | Paper/Bukkit 事件                                     | 计数 |
-| --- | ------------------ | ------------------ | ---------------------------------------------------------------------- | ----------------------------------------------------- | ---- |
-| 1   | `join`             | 加入服务器         | `firstOnly`（默认 true，`!hasPlayedBefore`）                           | `PlayerJoinEvent`                                     | 否   |
-| 2   | `break_block`      | 挖掘方块           | `material`（空=任意）、`amount`                                        | `BlockBreakEvent`（ignoreCancelled）                  | 是   |
-| 3   | `place_block`      | 放置方块           | `material`、`amount`                                                   | `BlockPlaceEvent`（ignoreCancelled）                  | 是   |
-| 4   | `consume`          | 食用/饮用          | `item`（空=任意）、`amount`                                            | `PlayerItemConsumeEvent`（ignoreCancelled）           | 是   |
-| 5   | `kill`             | 击杀生物           | `entity`（空=任意，`hostile`=敌对类）、`amount`                        | `EntityDeathEvent`（killer 判空）                     | 是   |
-| 6   | `fish`             | 钓鱼               | `amount`                                                               | `PlayerFishEvent`（`State.CAUGHT_FISH`）              | 是   |
-| 7   | `reach_height`     | 到达高度           | `y`、`mode`（above/below）                                             | `PlayerMoveEvent`（节流：每玩家 5 tick 判一次）       | 否   |
-| 8   | `craft`            | 合成物品           | `item`（空=任意）、`amount`                                            | `CraftItemEvent`（ignoreCancelled，按取出数量累计）   | 是   |
-| 9   | `enchant`          | 附魔               | `amount`                                                               | `EnchantItemEvent`                                    | 是   |
-| 10  | `trade`            | 与村民交易         | `amount`                                                               | `PlayerTradeEvent`（ignoreCancelled）                 | 是   |
-| 11  | `tame`             | 驯服生物           | `entity`（空=任意）、`amount`                                          | `EntityTameEvent`（owner 为玩家）                     | 是   |
-| 12  | `breed`            | 繁殖动物           | `entity`（空=任意）、`amount`                                          | `EntityBreedEvent`（breeder 为玩家）                  | 是   |
-| 13  | `sleep`            | 入睡               | `amount`                                                               | `PlayerDeepSleepEvent`                                | 是   |
-| 14  | `death`            | 死亡               | `amount`                                                               | `PlayerDeathEvent`                                    | 是   |
-| 15  | `reach_level`      | 经验等级达标       | `level`                                                                | `PlayerLevelChangeEvent`                              | 否   |
-| 16  | `pickup`           | 拾取物品           | `item`（空=任意）、`amount`                                            | `EntityPickupItemEvent`（按堆叠数量累计）             | 是   |
-| 17  | `chat_keyword`     | 聊天含关键词       | `keyword`                                                              | `AsyncChatEvent`（PlainTextComponentSerializer 提取） | 否   |
-| 18  | `advancement_done` | 完成原版进度       | `key`（如 `minecraft:story/mine_diamond`）                             | `PlayerAdvancementDoneEvent`（key 匹配）              | 否   |
-| 19  | `playtime`         | 累计在线时长       | `minutes`                                                              | 定时轮询 `Statistic.PLAY_ONE_MINUTE`（tick/20/60）    | 统计 |
-| 20  | `statistic`        | 原版统计达标       | `stat`（如 `WALK_ONE_CM`）、`target`（可空 material/entity）、`amount` | 定时轮询 `Player#getStatistic`                        | 统计 |
-| 21  | `manual`           | 仅命令授予（默认） | —                                                                      | 无事件；`/<command> grant <玩家> <成就id>`（op 权限） | 否   |
+| #   | trigger id         | 名称               | 参数（config.yml 可改）                                                | Paper/Bukkit 事件                                            | 计数 |
+| --- | ------------------ | ------------------ | ---------------------------------------------------------------------- | ------------------------------------------------------------ | ---- |
+| 1   | `join`             | 加入服务器         | `firstOnly`（默认 true，`!hasPlayedBefore`）                           | `PlayerJoinEvent`                                            | 否   |
+| 2   | `break_block`      | 挖掘方块           | `material`（空=任意）、`amount`                                        | `BlockBreakEvent`（ignoreCancelled）                         | 是   |
+| 3   | `place_block`      | 放置方块           | `material`、`amount`                                                   | `BlockPlaceEvent`（ignoreCancelled）                         | 是   |
+| 4   | `consume`          | 食用/饮用          | `item`（空=任意）、`amount`                                            | `PlayerItemConsumeEvent`（ignoreCancelled）                  | 是   |
+| 5   | `kill`             | 击杀生物           | `entity`（空=任意，`hostile`=敌对类）、`amount`                        | `EntityDeathEvent`（killer 判空）                            | 是   |
+| 6   | `fish`             | 钓鱼               | `amount`                                                               | `PlayerFishEvent`（`State.CAUGHT_FISH`）                     | 是   |
+| 7   | `reach_height`     | 到达高度           | `y`（允许负值，below 模式）、`mode`（above/below）                     | `PlayerMoveEvent`（节流：每玩家 5 tick 判一次）              | 否   |
+| 8   | `craft`            | 合成物品           | `item`（空=任意）、`amount`                                            | `CraftItemEvent`（ignoreCancelled，按取出数量累计）          | 是   |
+| 9   | `enchant`          | 附魔               | `amount`                                                               | `EnchantItemEvent`                                           | 是   |
+| 10  | `trade`            | 与村民交易         | `amount`                                                               | `PlayerTradeEvent`（ignoreCancelled）                        | 是   |
+| 11  | `tame`             | 驯服生物           | `entity`（空=任意）、`amount`                                          | `EntityTameEvent`（owner 为玩家）                            | 是   |
+| 12  | `breed`            | 繁殖动物           | `entity`（空=任意）、`amount`                                          | `EntityBreedEvent`（breeder 为玩家）                         | 是   |
+| 13  | `sleep`            | 入睡               | `amount`                                                               | `PlayerDeepSleepEvent`                                       | 是   |
+| 14  | `death`            | 死亡               | `amount`                                                               | `PlayerDeathEvent`                                           | 是   |
+| 15  | `reach_level`      | 经验等级达标       | `level`                                                                | `PlayerLevelChangeEvent`                                     | 否   |
+| 16  | `pickup`           | 拾取物品           | `item`（空=任意）、`amount`                                            | `EntityPickupItemEvent`（按堆叠数量累计）                    | 是   |
+| 17  | `chat_keyword`     | 聊天含关键词       | `keyword`                                                              | `AsyncChatEvent`（PlainTextComponentSerializer 提取）        | 否   |
+| 18  | `advancement_done` | 完成原版进度       | `key`（任意命名空间，含本插件进度）                                    | `PlayerAdvancementDoneEvent`（key 匹配，先于本插件分支判定） | 否   |
+| 19  | `playtime`         | 累计在线时长       | `minutes`                                                              | 定时轮询 `Statistic.PLAY_ONE_MINUTE`（tick/20/60）           | 统计 |
+| 20  | `statistic`        | 原版统计达标       | `stat`（如 `walk_one_cm`）、`target`（可空 material/entity）、`amount` | 定时轮询 `Player#getStatistic`                               | 统计 |
+| 21  | `shear`            | 剪羊毛             | `entity`（空=任意）、`amount`                                          | `PlayerShearEntityEvent`（ignoreCancelled）                  | 是   |
+| 22  | `ride`             | 骑乘生物           | `entity`（空=任意）                                                    | `EntityMountEvent`（getEntity 为玩家）                       | 否   |
+| 23  | `portal`           | 进入传送门         | —                                                                      | `EntityPortalEnterEvent`                                     | 否   |
+| 24  | `damage_taken`     | 累计受伤           | `amount`                                                               | `EntityDamageEvent`（ignoreCancelled）                       | 是   |
+| 25  | `projectile_hit`   | 弹射物命中         | `amount`                                                               | `ProjectileHitEvent`（命中实体 + shooter 为玩家）            | 是   |
+| 26  | `glide`            | 开始滑翔           | —                                                                      | `EntityToggleGlideEvent`（isGliding）                        | 否   |
+| 27  | `swim`             | 开始游泳           | —                                                                      | `EntityToggleSwimEvent`（isSwimming）                        | 否   |
+| 28  | `bucket_fill`      | 装桶               | `amount`                                                               | `PlayerBucketFillEvent`（ignoreCancelled）                   | 是   |
+| 29  | `xp_gain`          | 获得经验           | `amount`（经验值总量，负变动不计）                                     | `PlayerExpChangeEvent`（getAmount>0 按量累计）               | 是   |
+| 30  | `manual`           | 仅命令授予（默认） | —                                                                      | 无事件；`/<command> grant <玩家> <成就id>`（op 权限）        | 否   |
 
 设计要点：
 
@@ -224,7 +233,7 @@ MyAchievements/
 | REF（固定示例）              | 本插件导出（生成器泛化）                            |
 | ---------------------------- | --------------------------------------------------- |
 | 单成就栏 `exampleach`        | 任意多栏（连通分量推导），命名空间可配              |
-| 6 种硬编码触发               | 21 种触发器注册表，按需生成监听器分支               |
+| 6 种硬编码触发               | 30 种触发器注册表，按需生成监听器分支               |
 | `ProgressStore` 固定计数方法 | `increment/查询` 按 key 泛化，YAML 同构             |
 | 阈值 config 固定键           | `thresholds.<成就id>.<参数>` 全量生成               |
 | `/exampleach` 仅查询         | `/<cmd>` 查询 + `/<cmd> grant`（manual 触发与补授） |
@@ -251,7 +260,7 @@ MyAchievements/
   - flowchart 解析（可视化编辑器真实输出形态 + 手写链式/分号/注释形态）；
   - frontmatter 读写往返；id 规范化与冲突；环/多根/无根校验；
   - 成就 JSON 逐字段（parent/frame/hidden/rewards/tick root/background）；
-  - 触发器→config.yml 键与 Java 监听器分支生成（21 种抽查代表性子集）；
+  - 触发器→config.yml 键与 Java 监听器分支生成（30 种全量经 test-mc-build 真实 javac 编译验证）；
   - zip 结构解析校验（EOCD/中央目录/条目数/CRC 与内容逐字节一致）；
   - **与可视化编辑器模型互操作**：`parseFlow(generateCode(graph))` 对齐
     `model.ts` 的 `parseCode` 结果（防解析方言漂移）。
