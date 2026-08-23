@@ -3589,7 +3589,7 @@ const FRONTEND_HTML = `<!doctype html>
         a.tabs.forEach(function (tab) {
           var selTab = S.sel && S.sel.type === 'tab' && S.sel.id === tab.rootId;
           html += '<div class="tab-block">';
-          html += '<div class="tab-head' + (selTab ? ' sel' : '') + '" data-tab="' + esc(tab.rootId) + '">'
+          html += '<div class="tab-head' + (selTab ? ' sel' : '') + '" data-tab="' + esc(tab.rootId) + '" role="button" tabindex="0" aria-pressed="' + (selTab ? 'true' : 'false') + '">'
             + '<span>🏆 ' + esc(tab.name) + '</span><span class="badge">' + (tab.members.length - 1) + ' 成就</span></div>';
           var depth = {};
           depth[tab.rootId] = 0;
@@ -3600,7 +3600,7 @@ const FRONTEND_HTML = `<!doctype html>
             var parentId = (S.analysis.edges.find(function (e) { return e.to === id; }) || {}).from;
             depth[id] = (depth[parentId] === undefined ? 0 : depth[parentId]) + 1;
             var sel = S.sel && S.sel.type === 'node' && S.sel.id === id;
-            html += '<div class="node-row' + (sel ? ' sel' : '') + '" data-node="' + esc(id) + '" style="padding-left:' + (22 + (depth[id] - 1) * 16) + 'px">'
+            html += '<div class="node-row' + (sel ? ' sel' : '') + '" data-node="' + esc(id) + '" role="button" tabindex="0" aria-pressed="' + (sel ? 'true' : 'false') + '" style="padding-left:' + (22 + (depth[id] - 1) * 16) + 'px">'
               + esc(n.label) + '<span class="frame">' + (CORE.FRAME_NAME[n.frame] || '') + ' · ' + esc(n.meta.trigger) + '</span></div>';
           });
           html += '</div>';
@@ -3611,18 +3611,27 @@ const FRONTEND_HTML = `<!doctype html>
           html += '<div class="tab-block"><div class="tab-head" style="color:#f08c8c">⚠ 结构异常（未入栏，需修复后才能导出）</div>';
           orphans.forEach(function (n) {
             var sel = S.sel && S.sel.type === 'node' && S.sel.id === n.id;
-            html += '<div class="node-row' + (sel ? ' sel' : '') + '" data-node="' + esc(n.id) + '">'
+            html += '<div class="node-row' + (sel ? ' sel' : '') + '" data-node="' + esc(n.id) + '" role="button" tabindex="0" aria-pressed="' + (sel ? 'true' : 'false') + '">'
               + esc(n.label) + '<span class="frame">' + esc(n.id) + '</span></div>';
           });
           html += '</div>';
         }
         html += '<div style="margin-top:10px"><button id="btnAddTab">+ 新增成就栏</button></div>';
         $('tree').innerHTML = html;
+        var activate = function (el, type) {
+          return function () { S.sel = { id: el.getAttribute('data-' + type), type: type }; render(); };
+        };
         Array.prototype.forEach.call(document.querySelectorAll('[data-tab]'), function (el) {
-          el.onclick = function () { S.sel = { id: el.getAttribute('data-tab'), type: 'tab' }; render(); };
+          el.onclick = activate(el, 'tab');
+          el.onkeydown = function (e) {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(el, 'tab')(); }
+          };
         });
         Array.prototype.forEach.call(document.querySelectorAll('[data-node]'), function (el) {
-          el.onclick = function () { S.sel = { id: el.getAttribute('data-node'), type: 'node' }; render(); };
+          el.onclick = activate(el, 'node');
+          el.onkeydown = function (e) {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(el, 'node')(); }
+          };
         });
         $('btnAddTab').onclick = addTab;
       }

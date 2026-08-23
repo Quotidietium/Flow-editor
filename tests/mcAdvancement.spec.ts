@@ -39,6 +39,13 @@ test('MC 设计器前端：初始化示例 → 编辑触发器 → 写回编辑�
   await expect(frame.locator('.node-row')).toHaveCount(2); // 你好，世界！/ 愚公移山
   await expect(frame.getByText('✓ 校验通过，可以导出')).toBeVisible();
 
+  // 无障碍：树行键盘可达（聚焦后 Enter 即选中，不依赖鼠标）
+  const firstRow = frame.locator('.node-row').first();
+  await firstRow.focus();
+  await firstRow.press('Enter');
+  await expect(frame.getByText('成就属性')).toBeVisible(); // 键盘选中打开属性表单
+  await expect(frame.locator('select[data-k="trigger"]')).toHaveValue('join');
+
   // 选中「愚公移山」，把触发方式改为钓鱼 + 加一条战利品奖励
   await frame.getByText('愚公移山').click();
   const triggerSelect = frame.locator('select[data-k="trigger"]');
