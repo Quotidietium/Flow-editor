@@ -2178,14 +2178,14 @@ ${perNode('enchant', (n) => `        countUp(player, §N§, 1, ${Number(n.params
     }`);
     }
     if (has('trade')) {
-      blocks.push(`    @EventHandler
+      blocks.push(`    @EventHandler(ignoreCancelled = true)
     public void onTrade(PlayerTradeEvent event) {
         Player player = event.getPlayer();
 ${perNode('trade', (n) => `        countUp(player, §N§, 1, ${Number(n.params.amount) || 10});`)}
     }`);
     }
     if (has('tame')) {
-      blocks.push(`    @EventHandler
+      blocks.push(`    @EventHandler(ignoreCancelled = true)
     public void onTame(EntityTameEvent event) {
         if (!(event.getOwner() instanceof Player player)) {
             return;
@@ -2199,7 +2199,7 @@ ${perNode(
     }`);
     }
     if (has('breed')) {
-      blocks.push(`    @EventHandler
+      blocks.push(`    @EventHandler(ignoreCancelled = true)
     public void onBreed(EntityBreedEvent event) {
         if (!(event.getBreeder() instanceof Player player)) {
             return;
@@ -2243,7 +2243,7 @@ ${perNode(
     }`);
     }
     if (has('chat_keyword')) {
-      blocks.push(`    @EventHandler
+      blocks.push(`    @EventHandler(ignoreCancelled = true)
     public void onChat(AsyncChatEvent event) {
         // AsyncChat 在异步线程触发：Bukkit 的进度授予 API 非线程安全——
         // 检查与授予整体调度回主线程执行

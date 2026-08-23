@@ -935,6 +935,39 @@ describe('subgraph 成就栏（循环 11）', () => {
   });
 });
 
+describe('可取消事件 ignoreCancelled（循环 31）', () => {
+  it('trade/tame/breed/chat 四个 Cancellable 事件带 ignoreCancelled', () => {
+    const mk = (trigger) => {
+      const meta = CORE.readMeta(CORE.starterCode()).meta;
+      meta.nodes = { x: { params: trigger === 'chat_keyword' ? { keyword: 'hi' } : {}, trigger } };
+      return CORE.exportZip(
+        CORE.buildCode(
+          meta,
+          'TD',
+          [
+            { id: 'root', label: '根', shape: 'rect' },
+            { id: 'x', label: '甲', shape: 'rect' }
+          ],
+          [{ from: 'root', to: 'x' }]
+        )
+      );
+    };
+    const expectIc = (trigger, method) => {
+      const r = mk(trigger);
+      if (!r.ok) {
+        throw new Error(`${trigger} 导出失败`);
+      }
+      const listener = r.files.find((f) => f.path.endsWith('AchievementListener.java'))?.text ?? '';
+      expect(listener, trigger).toContain(`@EventHandler(ignoreCancelled = true)
+    public void ${method}`);
+    };
+    expectIc('trade', 'onTrade');
+    expectIc('tame', 'onTame');
+    expectIc('breed', 'onBreed');
+    expectIc('chat_keyword', 'onChat');
+  });
+});
+
 describe('本地化关闭时英文忽略提示（循环 30）', () => {
   it('off + 含 en 字段 → 一条汇总警告；on 时无此警告', () => {
     const meta = CORE.readMeta(CORE.starterCode()).meta;
