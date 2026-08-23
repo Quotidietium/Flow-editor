@@ -89,7 +89,7 @@ const coreFactory = function () {
     },
     {
       counted: true,
-      desc: '累计击杀指定数量生物',
+      desc: '累计击杀指定数量生物（可限伤害方式）',
       event: 'kill',
       id: 'kill',
       name: '击杀生物',
@@ -100,6 +100,13 @@ const coreFactory = function () {
           label: '生物类型（hostile=敌对，留空=任意非玩家）',
           ph: 'minecraft:zombie',
           type: 'text'
+        },
+        {
+          def: 'any',
+          key: 'cause',
+          label: '伤害方式（any=任意/melee=近战/projectile=弹射物）',
+          options: ['any', 'melee', 'projectile'],
+          type: 'select'
         },
         { def: 30, key: 'amount', label: '累计数量', min: 1, type: 'int' }
       ]
@@ -2173,8 +2180,16 @@ ${perNode(
         }
 ${perNode(
   'kill',
-  (n) => `        if (!entityMiss(param(§N§, "entity"), event.getEntityType(), event.getEntity())) {
-            countUp(killer, §N§, 1, ${Number(n.params.amount) || 30});
+  (n) => `        {
+            String cause = param(§N§, "cause"); // 空串=未配置=任意
+            boolean causeOk = cause.isEmpty() || "any".equalsIgnoreCase(cause)
+                    || ("melee".equalsIgnoreCase(cause)
+                        && !(event.getDamageSource().getDirectEntity() instanceof org.bukkit.entity.Projectile))
+                    || ("projectile".equalsIgnoreCase(cause)
+                        && event.getDamageSource().getDirectEntity() instanceof org.bukkit.entity.Projectile);
+            if (causeOk && !entityMiss(param(§N§, "entity"), event.getEntityType(), event.getEntity())) {
+                countUp(killer, §N§, 1, ${Number(n.params.amount) || 30});
+            }
         }`
 )}
     }`);

@@ -935,6 +935,35 @@ describe('subgraph 成就栏（循环 11）', () => {
   });
 });
 
+describe('循环 48', () => {
+  it('kill 伤害方式过滤（cause 下拉 + DamageSource 判定）', () => {
+    const meta = CORE.readMeta(CORE.starterCode()).meta;
+    meta.nodes = {
+      hunter: { params: { amount: 5, cause: 'projectile', entity: '' }, trigger: 'kill' }
+    };
+    const r = CORE.exportZip(
+      CORE.buildCode(
+        meta,
+        'TD',
+        [
+          { id: 'root', label: '根', shape: 'rect' },
+          { id: 'hunter', label: '猎手', shape: 'rect' }
+        ],
+        [{ from: 'root', to: 'hunter' }]
+      )
+    );
+    if (!r.ok) {
+      throw new Error(r.errors.map((e) => e.msg).join('; '));
+    }
+    const listener = r.files.find((f) => f.path.endsWith('AchievementListener.java'))?.text ?? '';
+    expect(listener).toContain('event.getDamageSource().getDirectEntity()');
+    expect(listener).toContain('instanceof org.bukkit.entity.Projectile');
+    expect(listener).toContain('"melee".equalsIgnoreCase(cause)');
+    const config = r.files.find((f) => f.path.endsWith('config.yml'))?.text ?? '';
+    expect(config).toContain('cause: "projectile"');
+  });
+});
+
 describe('循环 47', () => {
   it('break_block 工具过滤（主手材质比对）+ 文档表参数同步', () => {
     const meta = CORE.readMeta(CORE.starterCode()).meta;
