@@ -32,25 +32,29 @@ Electron 主进程（main.cjs + server.cjs）───────────�
 
 ## 目录结构
 
-| 路径                         | 说明                                                              |
-| ---------------------------- | ----------------------------------------------------------------- |
-| `build.ps1`                  | 一键构建编排（见下）                                              |
-| `package.json`               | 打包工程自身依赖（electron / electron-builder / sharp，精确锁版） |
-| `electron-builder.yml`       | NSIS 安装包配置（辅助向导、per-user 免管理员、简体中文界面）      |
-| `app/package.json`           | 应用清单（版本号由 build.ps1 从根 package.json 同步）             |
-| `app/main.cjs`               | Electron 主进程：内嵌服务器 + 窗口生命周期 + 单实例锁 + MCP IPC   |
-| `app/server.cjs`             | 静态文件服务器（MIME / SPA 兜底 / 目录穿越防护）                  |
-| `app/mcp-server.cjs`         | MCP HTTP 服务器（回环 JSON-RPC 门面，默认关闭）                   |
-| `app/preload.cjs`            | contextBridge 预加载：仅暴露 `__FLOW_DESKTOP__.mcp` 三个方法      |
-| `app/site/`                  | 站点产物（`robocopy /MIR` 自 `docs/`，不入库）                    |
-| `scripts/build-icon.mjs`     | `static/favicon.png` → `resources/icon.ico`（多尺寸）             |
-| `scripts/fetch-electron.mjs` | Electron 运行时 zip 拉取到 `.cache/electron-dist/`                |
-| `scripts/smoke.mjs`          | 冒烟测试：静默安装 → 启动探测（站点 + MCP）→ 卸载                 |
-| `scripts/test-mcp.mjs`       | MCP 服务器 Node 级探测（协议面与安全防线，打包前必跑）            |
-| `resources/icon.ico`         | 安装包/快捷方式图标（入库，可由脚本再生成）                       |
-| `dist/`                      | 最终产物（不入库）                                                |
-| `.cache/`                    | Electron / electron-builder 二进制缓存（不入库，自包含）          |
-| `.smoke/`                    | 冒烟测试临时目录（不入库）                                        |
+| 路径                          | 说明                                                                  |
+| ----------------------------- | --------------------------------------------------------------------- |
+| `build.ps1`                   | 一键构建编排（见下）                                                  |
+| `package.json`                | 打包工程自身依赖（electron / electron-builder / sharp，精确锁版）     |
+| `electron-builder.yml`        | NSIS 安装包配置（辅助向导、per-user 免管理员、简体中文界面）          |
+| `app/package.json`            | 应用清单（版本号由 build.ps1 从根 package.json 同步）                 |
+| `app/main.cjs`                | Electron 主进程：内嵌服务器 + 窗口生命周期 + 单实例锁 + MCP IPC       |
+| `app/server.cjs`              | 静态文件服务器（MIME / SPA 兜底 / 目录穿越防护）                      |
+| `app/mcp-server.cjs`          | MCP HTTP 服务器（回环 JSON-RPC 门面，默认关闭）                       |
+| `app/mc-build.cjs`            | MC 成就插件离线编译（javac+jar；探测用户自装 JDK≥21，不捆绑 Java）    |
+| `app/preload.cjs`             | contextBridge 预加载：`__FLOW_DESKTOP__.mcp` 三方法 + `mcBuild.build` |
+| `app/site/`                   | 站点产物（`robocopy /MIR` 自 `docs/`，不入库）                        |
+| `scripts/build-icon.mjs`      | `static/favicon.png` → `resources/icon.ico`（多尺寸）                 |
+| `scripts/fetch-electron.mjs`  | Electron 运行时 zip 拉取到 `.cache/electron-dist/`                    |
+| `scripts/fetch-toolchain.mjs` | MC 编译工具链 12 个 jar（本机 .m 优先）→ `toolchain/` + 第三方声明    |
+| `scripts/test-mc-build.mjs`   | MC 离线编译器 Node 级探测（校验面/真实 javac/战利品文件，打包前必跑） |
+| `scripts/smoke.mjs`           | 冒烟测试：静默安装 → 启动探测（站点 + MCP + mc_build）→ 卸载          |
+| `scripts/test-mcp.mjs`        | MCP 服务器 Node 级探测（协议面与安全防线，打包前必跑）                |
+| `toolchain/`                  | MC 编译工具链（javac classpath；不入库，构建时拉取并随包分发）        |
+| `resources/icon.ico`          | 安装包/快捷方式图标（入库，可由脚本再生成）                           |
+| `dist/`                       | 最终产物（不入库）                                                    |
+| `.cache/`                     | Electron / electron-builder 二进制缓存（不入库，自包含）              |
+| `.smoke/`                     | 冒烟测试临时目录（不入库）                                            |
 
 ## 用法
 
