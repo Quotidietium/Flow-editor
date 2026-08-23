@@ -254,3 +254,26 @@ test('MC 设计器闭环：导出的 zip 可经「打开」逆向导入回图表
   // 全量顺序下系统负载高（autoSync 可能降级为 1s 批量渲染），放宽断言窗口
   await expect(page.locator('#container')).toContainText('回环测试栏', { timeout: 15_000 });
 });
+
+test.describe('窄视口', () => {
+  test.use({ viewport: { height: 800, width: 768 } }); // md 断点：640-768 灰区修复后的桌面下限
+  test('MC 设计器可用（768px 宽：树与属性面板可达）', async ({ editPage, page }) => {
+    await editPage.view.waitFor({ state: 'visible' });
+    await installDesigner(page);
+    page.on('dialog', (dialog) => void dialog.accept());
+    await page.getByRole('button', { name: /打开 MC 进度设计器/ }).click();
+    await expect(page.getByTestId('plugin-manager')).toHaveCount(0, { timeout: 10_000 });
+    const frame = page.frameLocator('iframe[title="插件前端"]');
+    await frame.getByRole('button', { name: '初始化示例' }).click();
+    await frame.getByText('🏆 示例成就').waitFor({ timeout: 10_000 });
+    // 树可见且不溢出视口；选中成就后属性表单在窄宽度下可滚动可达
+    const tree = frame.locator('#tree');
+    await expect(tree).toBeVisible();
+    const box = await tree.boundingBox();
+    expect(box?.x).toBeGreaterThanOrEqual(0);
+    expect(box?.width).toBeLessThanOrEqual(320);
+    await frame.getByText('愚公移山').click();
+    await expect(frame.getByText('成就属性')).toBeVisible();
+    await expect(frame.locator('select[data-k="trigger"]')).toBeVisible();
+  });
+});

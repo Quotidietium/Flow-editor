@@ -2438,7 +2438,9 @@ ${advDoneChecks || '        // 无「完成其他进度」类成就'}
         if (service.isDone(player, achievement)) {
             return;
         }
-        if (store.add(player, achievement.id(), delta) >= amount(achievement, "amount", def)) {
+        // 阈值下限防护：config 手填 0/负数时成就将永不可达——夹取到 ≥1
+        int target = Math.max(1, amount(achievement, "amount", def));
+        if (store.add(player, achievement.id(), delta) >= target) {
             service.award(player, achievement);
         }
     }`);
@@ -2832,6 +2834,11 @@ bootstrapper: ${a.meta.packageName}.${cls}Bootstrap
 api-version: '1.21'
 description: 通过内置数据包在原版进度界面中添加自定义成就标签页（Flow 编辑器生成）。
 authors: [${a.meta.author.replaceAll(/[[\],]/g, '') || 'Zurker'}]
+# 显式声明 grant 命令的权限（未声明的权限对权限插件不可见）
+permissions:
+  ${a.meta.namespace}.grant:
+    description: 使用 /${a.meta.command} grant 手动授予成就
+    default: op
 `;
 
   const configYml = (a) => {

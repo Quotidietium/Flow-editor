@@ -571,6 +571,10 @@ describe('generateFiles：工程文件生成', () => {
     expect(yml).toContain('main: dev.floweditor.myach.MyAchievementsPlugin');
     expect(yml).toContain('bootstrapper: dev.floweditor.myach.MyAchievementsBootstrap');
     expect(yml).toContain("api-version: '1.21'");
+    // grant 权限显式声明（default op）——未声明权限对权限插件不可见
+    expect(yml).toContain('permissions:');
+    expect(yml).toContain('myach.grant:');
+    expect(yml).toContain('default: op');
 
     const pom = byPath.get('pom.xml') ?? '';
     expect(pom).toContain('<artifactId>myach</artifactId>');
@@ -593,6 +597,8 @@ describe('generateFiles：工程文件生成', () => {
     expect(listener).toContain('awardCriterion(player, comp, achievement.id())');
     expect(listener).toContain('ENTITY_PLAYER_LEVELUP');
     expect(listener).toContain('store.add(player, achievement.id(), delta)');
+    // 阈值下限防护：config 手填 0/负数时成就将永不可达
+    expect(listener).toContain('int target = Math.max(1, amount(');
 
     const main = byPath.get(`${pkg}/MyAchievementsPlugin.java`) ?? '';
     expect(main).toContain('"myach"');
