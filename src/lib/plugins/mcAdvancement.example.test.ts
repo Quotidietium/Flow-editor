@@ -2223,3 +2223,26 @@ describe('循环 56：战利品区间/权重与负经验值——静默行为显
     expect(parsed.pools[0].entries[1].weight).toBeUndefined();
   });
 });
+
+describe('循环 57：栏图标与大满贯图标格式校验（此前零校验）', () => {
+  it('非法栏图标/大满贯图标产生警告（带 tabId 可定位），整栏加载失败风险可见', () => {
+    const meta = CORE.readMeta(CORE.starterCode()).meta;
+    meta.tabs.root.icon = 'Not Valid!!';
+    meta.tabs.root.completionistIcon = '也是错的';
+    const r = CORE.analyze(
+      CORE.buildCode(
+        meta,
+        'TD',
+        [
+          { id: 'root', label: '根', shape: 'rect' },
+          { id: 'a', label: '甲', shape: 'rect' }
+        ],
+        [{ from: 'root', to: 'a' }]
+      )
+    );
+    const tWarn = r.warnings.find((w) => w.msg.includes('的图标「Not Valid!!」'));
+    expect(tWarn?.msg).toContain('整个标签页可能无法加载');
+    expect(tWarn?.tabId).toBe('root');
+    expect(r.warnings.some((w) => w.msg.includes('大满贯图标「也是错的」'))).toBe(true);
+  });
+});

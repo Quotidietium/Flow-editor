@@ -1556,6 +1556,22 @@ const coreFactory = function () {
           tabId: tab.rootId
         });
       }
+      // 栏/大满贯图标与节点图标同格式约束：非法 id 进 root advancement
+      // 会让整栏进度加载失败（比单个成就图标失效更严重）
+      const tIcon = String(tab.meta.icon ?? '').trim();
+      if (tIcon && !/^(minecraft:)?[a-z0-9_.]+$/.test(tIcon)) {
+        warnings.push({
+          msg: `成就栏「${tab.name}」的图标「${tIcon}」不是合法物品 ID 格式，整个标签页可能无法加载`,
+          tabId: tab.rootId
+        });
+      }
+      const cIcon = String(tab.meta.completionistIcon ?? '').trim();
+      if (tab.meta.completionist && cIcon && !/^(minecraft:)?[a-z0-9_.]+$/.test(cIcon)) {
+        warnings.push({
+          msg: `成就栏「${tab.name}」的大满贯图标「${cIcon}」不是合法物品 ID 格式，大满贯成就可能无法加载`,
+          tabId: tab.rootId
+        });
+      }
     }
 
     // 无法解析的行（如非 ASCII 节点 id、畸形语句）此前静默丢弃——汇总为
