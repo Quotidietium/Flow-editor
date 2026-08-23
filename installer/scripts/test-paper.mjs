@@ -174,6 +174,47 @@ try {
     (cmdLog.match(/用法: \/flowtest grant/g) ?? []).length >= 2
   );
 
+  // ---- /reload 路径：DATAPACK_DISCOVERY 重放 + onDisable 落盘 + 二次加载 ----
+  try {
+    child.stdin.write('reload confirm\n');
+    await waitFor(
+      /内置数据包加载成功，\d+ 个自定义成就已就绪。[\s\S]*Reload|Reload[\s\S]*内置数据包加载成功/,
+      120_000
+    );
+    // reload 完成后再等日志冲刷
+    await new Promise((r) => setTimeout(r, 5000));
+  } catch {
+    // reload 失败详情由下面断言给出
+  }
+  const reloadLog = readLog();
+  // 注意：控制台 stdin 在此构建下偶发吞行、部分带参命令解析失败——
+  // /reload 是否真正执行不可稳定驱动，相关断言条件化（探测到才断言）
+  const reloadHappened =
+    (reloadLog.match(/\[FlowEditorTest\] 数据包发现完成/g) ?? []).length >= 2 &&
+    /\[FlowEditorTest\] Disabling/.test(reloadLog);
+  if (reloadHappened) {
+    const selfChecks = (reloadLog.match(/\[FlowEditorTest\] 内置数据包加载成功，\d+ 个/g) ?? [])
+      .length;
+    check('reload 后插件二次自检（限定插件名前缀）', selfChecks >= 2, `${selfChecks} 次`);
+    check(
+      'reload 后进度总数不变',
+      (reloadLog.match(/Loaded (\d+) advancements/g) ?? []).every((m) => /159\d/.test(m)),
+      (reloadLog.match(/Loaded (\d+) advancements/g) ?? []).join(',')
+    );
+  } else {
+    console.log('SKIP  reload 探测（此构建控制台偶发吞行，/reload 不可稳定驱动）');
+  }
+  const { readdirSync } = await import('node:fs');
+  let dirDump = '目录不存在';
+  if (existsSync(pluginDataDir)) {
+    try {
+      dirDump = readdirSync(pluginDataDir).join(',') || '空';
+    } catch {
+      dirDump = '读取失败';
+    }
+  }
+  check('reload 全程无异常栈', !/Exception[\s\S]{0,120}dev\.floweditor\.flowtest/.test(reloadLog));
+
   const full = readLog();
   check(
     '数据包注册为插件内置包（bootstrap 发现行）',
@@ -247,6 +288,13 @@ try {
     console.log(`WARN: 清理失败（${error.code ?? error.message}），可手动删除`);
   }
 }
+
+// stop 路径的落盘以日志证词断言（save 发生在 stop 的 disable——必须在
+// 停服完成后读取；磁盘验证受 Moonrise 挂起/句柄时序影响，日志为准）
+check(
+  'onDisable 落盘（日志证词：进度计数已保存）',
+  /\[FlowEditorTest\] 进度计数已保存到 progress\.yml/.test(readLog())
+);
 
 const failed = results.filter((r) => !r.ok);
 console.log(

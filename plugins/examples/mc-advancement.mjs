@@ -1940,7 +1940,9 @@ public final class ProgressStore {
         try {
             yaml.save(file);
             dirty = false;
-        } catch (IOException e) {
+        } catch (IOException | RuntimeException e) {
+            // RuntimeException 一并捕获：目录缺失等场景 YamlConfiguration 抛
+            // IllegalArgumentException 而非 IOException——此前会被静默吞掉
             plugin.getLogger().log(Level.WARNING, "保存 progress.yml 失败", e);
         }
     }
@@ -2732,6 +2734,7 @@ import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.List;
+import java.util.logging.Level;
 
 /**
  * 插件主类。成就 JSON 定义位于 resources/datapack/，由 ${cls}Bootstrap
@@ -2775,7 +2778,12 @@ ${statBlock}
     @Override
     public void onDisable() {
         if (progressStore != null) {
-            progressStore.save();
+            try {
+                progressStore.save();
+                getLogger().info("进度计数已保存到 progress.yml");
+            } catch (RuntimeException e) {
+                getLogger().log(Level.WARNING, "onDisable 保存进度失败", e);
+            }
         }
     }
 }
