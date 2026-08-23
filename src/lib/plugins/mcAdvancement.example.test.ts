@@ -935,6 +935,24 @@ describe('subgraph 成就栏（循环 11）', () => {
   });
 });
 
+describe('循环 40', () => {
+  it('onEnable 重建 Service/Store（/reload 无陈旧缓存引用）', () => {
+    const r = CORE.exportZip(CORE.starterCode());
+    if (!r.ok) {
+      throw new Error('导出失败');
+    }
+    const main = r.files.find((f) => f.path.endsWith('Plugin.java'))?.text ?? '';
+    // 每次 enable 新实例：Advancement 对象在 /reload 后由服务端重建，
+    // 旧缓存引用会失效——new 语句必须位于 onEnable 内
+    const enablePos = main.indexOf('public void onEnable()');
+    const servicePos = main.indexOf('new AchievementService()');
+    const storePos = main.indexOf('ProgressStore.load(this)');
+    expect(enablePos).toBeGreaterThan(-1);
+    expect(servicePos).toBeGreaterThan(enablePos);
+    expect(storePos).toBeGreaterThan(enablePos);
+  });
+});
+
 describe('循环 38 三项核验', () => {
   it('suggest 与 thresholds 同源（均用 achievement.id()）', () => {
     const r = CORE.exportZip(CORE.starterCode());
