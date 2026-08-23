@@ -15,7 +15,14 @@ interface AnalysisNode {
   frame: string;
   id: string;
   label: string;
-  meta: { desc?: string; icon?: string; loot?: unknown[]; trigger?: string; xp?: number };
+  meta: {
+    desc?: string;
+    icon?: string;
+    loot?: unknown[];
+    style?: { fill?: string; stroke?: string };
+    trigger?: string;
+    xp?: number;
+  };
   nid: string;
   params: Record<string, unknown>;
   parent: null | string;
@@ -86,6 +93,7 @@ interface Core {
     groups: { id: string; label: string }[];
     nodes: { id: string; label: string; shape: string }[];
     skipped: number;
+    styleOf: Map<string, { fill?: string; stroke?: string }>;
   };
   readMeta(code: string): {
     body: string;
@@ -257,7 +265,7 @@ describe('parseFlow：流程图解析', () => {
     expect(flow.edges[3].label).toBe('可选步骤');
   });
 
-  it('兼容手写形态（graph 头/分号/虚线/文字边/注释与指令行跳过）', () => {
+  it('兼容手写形态（graph 头/分号/虚线/文字边/注释跳过、style 解析）', () => {
     const flow = CORE.parseFlow(`graph LR
     %% 这是注释
     a[x]; b(y)
@@ -269,7 +277,8 @@ describe('parseFlow：流程图解析', () => {
     expect(flow.nodes).toHaveLength(2);
     expect(flow.edges).toHaveLength(2);
     expect(flow.edges[0].label).toBe('文字');
-    expect(flow.skipped).toBeGreaterThanOrEqual(2);
+    expect(flow.skipped).toBeGreaterThanOrEqual(1); // 注释行仍跳过
+    expect(flow.styleOf.get('a')).toEqual({ fill: '#fff' }); // style 行现被解析
   });
 });
 
@@ -878,6 +887,72 @@ describe('subgraph 成就栏（循环 11）', () => {
     );
     const parsed = parseCode(rebuilt);
     expect(parsed.ok).toBe(true);
+  });
+});
+
+describe('视觉样式 style 指令（循环 14）', () => {
+  it('buildCode 输出 style 行；parseFlow 读回；往返保持（溯源优先）', () => {
+    const nodes = [
+      { id: 'root', label: '根', shape: 'rect' },
+      { id: 'hero', label: '英雄', shape: 'round', style: { fill: '#ffcc00', stroke: '#333333' } }
+    ];
+    const meta = CORE.readMeta(CORE.starterCode()).meta;
+    meta.nodes = {};
+    const code = CORE.buildCode(meta, 'TD', nodes, [{ from: 'root', to: 'hero' }]);
+    expect(code).toContain('style hero fill:#ffcc00,stroke:#333333');
+
+    const flow = CORE.parseFlow(code);
+    expect(flow.styleOf.get('hero')).toEqual({ fill: '#ffcc00', stroke: '#333333' });
+
+    // 溯源元数据里无 style → analyze 回落到代码 style 行
+    const a = CORE.analyze(code);
+    expect(a.ok).toBe(true);
+    expect(a.nodes.find((n) => n.id === 'hero')?.meta.style).toEqual({
+      fill: '#ffcc00',
+      stroke: '#333333'
+    });
+    // 无样式的根节点没有 style 行
+    const rootNode = (a.meta.nodes as Record<string, { style?: unknown }>).root;
+    expect(rootNode?.style).toBeUndefined();
+  });
+
+  it('只含 fill 或只含 stroke 的样式；非法颜色值产生警告', () => {
+    const nodes = [
+      { id: 'root', label: '根', shape: 'rect' },
+      { id: 'a', label: '甲', shape: 'rect', style: { fill: '#abc' } },
+      { id: 'b', label: '乙', shape: 'rect', style: { fill: 'not a color!' } }
+    ];
+    const meta = CORE.readMeta(CORE.starterCode()).meta;
+    meta.nodes = {};
+    const code = CORE.buildCode(meta, 'TD', nodes, [
+      { from: 'root', to: 'a' },
+      { from: 'root', to: 'b' }
+    ]);
+    expect(code).toContain('style a fill:#abc');
+    const a = CORE.analyze(code);
+    expect(a.ok).toBe(true);
+    expect(a.warnings.some((w) => w.msg.includes('不是颜色值'))).toBe(true);
+    // 命名色（gold）合法
+    expect(a.warnings.some((w) => w.msg.includes('fill') && w.msg.includes('#abc'))).toBe(false);
+  });
+
+  it('与 subgraph 组合往返（成员样式保持）', () => {
+    const grouped =
+      'flowchart TD\n    subgraph g["栏"]\n        g["栏"]\n        a["甲"]\n    end\n    style a fill:#112233\n';
+    const a = CORE.analyze(grouped);
+    expect(a.ok).toBe(true);
+    expect(a.nodes.find((n) => n.id === 'a')?.meta.style).toEqual({ fill: '#112233' });
+    const rebuilt = CORE.buildCode(
+      a.meta,
+      'TD',
+      a.nodes.map((n) => ({ id: n.id, label: n.label, shape: n.shape, style: n.meta.style })),
+      a.edges,
+      a.tabs.map((t) => ({ id: t.rootId, label: t.name, memberIds: t.members }))
+    );
+    expect(rebuilt).toContain('subgraph g["栏"]');
+    expect(rebuilt).toContain('style a fill:#112233');
+    const second = CORE.analyze(rebuilt);
+    expect(second.nodes.find((n) => n.id === 'a')?.meta.style).toEqual({ fill: '#112233' });
   });
 });
 
