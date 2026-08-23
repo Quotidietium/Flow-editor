@@ -61,7 +61,14 @@ test('MC 设计器前端：初始化示例 → 编辑触发器 → 写回编辑�
   // 视觉样式：选一个填充色（生成 style 指令，仅影响显示）
   await frame.locator('input[data-k="styleFill"]').fill('#ffcc00');
 
-  // 写回编辑器：frontmatter 应带 fish 触发器、战利品条目与 style 行
+  // 本地化：设置开启 → 成就表单出现英文输入 → 填英文名
+  await frame.getByRole('button', { name: '插件设置' }).click();
+  await frame.locator('select[data-k="localization"]').selectOption('on');
+  await frame.getByRole('button', { name: '← 返回' }).click();
+  await frame.getByText('愚公移山').click();
+  await frame.locator('input[data-k="en"]').fill('Mountain Mover');
+
+  // 写回编辑器：frontmatter 应带 fish 触发器、战利品条目、style 行与本地化
   await frame.getByRole('button', { name: '写回编辑器' }).click();
   await expect
     .poll(() => page.evaluate(() => window.__FLOW_EDITOR_STATE__?.().code ?? ''))
@@ -72,6 +79,12 @@ test('MC 设计器前端：初始化示例 → 编辑触发器 → 写回编辑�
   await expect
     .poll(() => page.evaluate(() => window.__FLOW_EDITOR_STATE__?.().code ?? ''))
     .toContain('style block_breaker fill:#ffcc00');
+  await expect
+    .poll(() => page.evaluate(() => window.__FLOW_EDITOR_STATE__?.().code ?? ''))
+    .toContain('"localization": "on"');
+  await expect
+    .poll(() => page.evaluate(() => window.__FLOW_EDITOR_STATE__?.().code ?? ''))
+    .toContain('"en": "Mountain Mover"');
 
   // 退出前端，主界面预览渲染该流程图（frontmatter 不影响 mermaid）
   await page.getByTestId('plugin-frontend-exit').click();

@@ -890,6 +890,95 @@ describe('subgraph 成就栏（循环 11）', () => {
   });
 });
 
+describe('本地化 lang（循环 17）', () => {
+  const locCode = () => {
+    const meta = CORE.readMeta(CORE.starterCode()).meta;
+    meta.localization = 'on';
+    meta.nodes = {
+      block_breaker: {
+        desc: '累计挖掘 200 个方块',
+        en: 'Mountain Mover',
+        trigger: 'break_block'
+      }
+    };
+    meta.tabs = { root: { completionist: true, enTitle: 'Demo Tab' } };
+    return CORE.buildCode(
+      meta,
+      'TD',
+      [
+        { id: 'root', label: '示例成就', shape: 'rect' },
+        { id: 'first_join', label: '你好，世界！', shape: 'rect' },
+        { id: 'block_breaker', label: '愚公移山', shape: 'round' }
+      ],
+      [
+        { from: 'root', to: 'first_join' },
+        { from: 'first_join', to: 'block_breaker' }
+      ]
+    );
+  };
+
+  it('on：advancement 走 translate；生成 zh_cn/en_us（英文缺省回填中文）', () => {
+    const r = CORE.exportZip(locCode());
+    if (!r.ok) {
+      throw new Error(r.errors.map((e) => e.msg).join('; '));
+    }
+    const byPath = new Map(r.files.map((f) => [f.path, f.text]));
+    const adv = JSON.parse(
+      byPath.get('src/main/resources/datapack/data/myach/advancement/block_breaker.json') ?? ''
+    );
+    expect(adv.display.title).toEqual({ translate: 'myach.advancement.block_breaker.title' });
+    expect(adv.display.description).toEqual({
+      translate: 'myach.advancement.block_breaker.description'
+    });
+
+    const zh = JSON.parse(
+      byPath.get('src/main/resources/datapack/data/myach/lang/zh_cn.json') ?? '{}'
+    );
+    const en = JSON.parse(
+      byPath.get('src/main/resources/datapack/data/myach/lang/en_us.json') ?? '{}'
+    );
+    expect(zh['myach.advancement.block_breaker.title']).toBe('愚公移山');
+    expect(en['myach.advancement.block_breaker.title']).toBe('Mountain Mover'); // 显式英文
+    expect(en['myach.advancement.first_join.title']).toBe('你好，世界！'); // 缺省回填中文
+    expect(en['myach.advancement.root.title']).toBe('Demo Tab'); // 栏英文
+    expect(zh['myach.advancement.root_completionist.title']).toBe('大满贯！');
+    expect(en['myach.advancement.root_completionist.title']).toBe('大满贯！'); // 回填
+    // 键覆盖全部成就（含栏根、大满贯）
+    expect(Object.keys(zh).length).toBeGreaterThanOrEqual(8);
+  });
+
+  it('off（默认）：保持硬编码 text，不生成 lang 文件', () => {
+    const r = CORE.exportZip(CORE.starterCode());
+    if (!r.ok) {
+      throw new Error('starter 导出失败');
+    }
+    expect(r.files.some((f) => f.path.includes('/lang/'))).toBe(false);
+    const adv = JSON.parse(
+      r.files.find((f) => f.path.endsWith('advancement/first_join.json'))?.text ?? ''
+    );
+    expect(adv.display.title).toEqual({ text: '你好，世界！' });
+  });
+
+  it('外部数据包：translate 标题经 lang/zh_cn.json 还原为可读名称', async () => {
+    const r = CORE.exportZip(locCode());
+    if (!r.ok) {
+      throw new Error('导出失败');
+    }
+    const entries = await CORE.readZipEntries(r.bytes);
+    const stripped = CORE.buildZip(
+      [...entries.entries()]
+        .filter(([name]) => !name.endsWith('flow-editor.json'))
+        .map(([name, data]) => ({ path: name, text: new TextDecoder().decode(data) }))
+    );
+    const imported = await CORE.importDatapackZip(stripped);
+    expect(imported).toBeDefined();
+    const a = CORE.analyze(imported?.code ?? '');
+    expect(a.ok).toBe(true);
+    expect(a.tabs[0].name).toBe('示例成就'); // root translate → zh_cn 还原
+    expect(a.nodes.find((n) => n.id === 'block_breaker')?.label).toBe('愚公移山');
+  });
+});
+
 describe('视觉样式 style 指令（循环 14）', () => {
   it('buildCode 输出 style 行；parseFlow 读回；往返保持（溯源优先）', () => {
     const nodes = [
