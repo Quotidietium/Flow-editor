@@ -595,6 +595,35 @@ describe('generateFiles：工程文件生成', () => {
     expect(listener).not.toContain('PlayerFishEvent'); // 未用到 fish
     expect(listener).not.toContain('AsyncChatEvent');
     expect(listener).toContain('awardCriterion(player, comp, achievement.id())');
+    // 并发防线：异步事件线程与主线程并发时（循环 23）
+    expect(listener).not.toContain('EnumMap'); // Service 缓存改并发容器
+    const service = byPath.get(`${pkg}/AchievementService.java`) ?? '';
+    expect(service).toContain('new ConcurrentHashMap<>()');
+    const store = byPath.get(`${pkg}/ProgressStore.java`) ?? '';
+    expect(store).toContain('map.merge(key, delta, Integer::sum)'); // 原子累计
+    // chat 触发在异步线程：授予必须调度回主线程（Bukkit API 非线程安全）
+    const chatSample = CORE.exportZip(
+      (() => {
+        const m = CORE.readMeta(CORE.starterCode()).meta;
+        m.nodes = { c: { params: { keyword: 'hi' }, trigger: 'chat_keyword' } };
+        return CORE.buildCode(
+          m,
+          'TD',
+          [
+            { id: 'r', label: '根', shape: 'rect' },
+            { id: 'c', label: '聊', shape: 'rect' }
+          ],
+          [{ from: 'r', to: 'c' }]
+        );
+      })()
+    );
+    if (!chatSample.ok) {
+      throw new Error('chat 样本失败');
+    }
+    const chatListener = chatSample.files
+      .find((f) => f.path.endsWith('AchievementListener.java'))
+      ?.text.includes('getScheduler().runTask(plugin,');
+    expect(chatListener).toBe(true); // 异步 chat 授予调度回主线程
     expect(listener).toContain('ENTITY_PLAYER_LEVELUP');
     expect(listener).toContain('store.add(player, achievement.id(), delta)');
     // 阈值下限防护：config 手填 0/负数时成就将永不可达

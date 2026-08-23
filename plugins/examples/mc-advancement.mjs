@@ -1794,8 +1794,8 @@ import org.bukkit.entity.Player;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.EnumMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 封装对服务端 Advancement 对象的查询与授予。
@@ -1805,7 +1805,8 @@ import java.util.Map;
  */
 public final class AchievementService {
 
-    private final Map<Achievement, Advancement> advancements = new EnumMap<>(Achievement.class);
+    // ConcurrentHashMap：异步事件线程（AsyncChat）与主线程会并发查询/填充缓存
+    private final Map<Achievement, Advancement> advancements = new ConcurrentHashMap<>();
 
     private Advancement advancement(Achievement achievement) {
         return advancements.computeIfAbsent(achievement, a -> Bukkit.getAdvancement(a.key()));
@@ -1921,9 +1922,9 @@ public final class ProgressStore {
         Map<String, Integer> map =
                 counts.computeIfAbsent(player.getUniqueId(), u -> new ConcurrentHashMap<>());
         dirty = true;
-        int next = map.getOrDefault(key, 0) + delta;
-        map.put(key, next);
-        return next;
+        // merge 原子累计：异步事件线程（如 AsyncChat）与主线程并发计数时，
+        // getOrDefault+put 的读改写会丢更新
+        return map.merge(key, delta, Integer::sum);
     }
 
     public void saveIfDirty() {
@@ -2217,19 +2218,23 @@ ${perNode(
     if (has('chat_keyword')) {
       blocks.push(`    @EventHandler
     public void onChat(AsyncChatEvent event) {
-        Player player = event.getPlayer();
-        String message = PlainTextComponentSerializer.plainText().serialize(event.message());
+        // AsyncChat 在异步线程触发：Bukkit 的进度授予 API 非线程安全——
+        // 检查与授予整体调度回主线程执行
+        plugin.getServer().getScheduler().runTask(plugin, () -> {
+            Player player = event.getPlayer();
+            String message = PlainTextComponentSerializer.plainText().serialize(event.message());
 ${perNode(
   'chat_keyword',
-  () => `        {
-            String keyword = param(§N§, "keyword");
-            if (!keyword.isEmpty()
-                    && message.toLowerCase(java.util.Locale.ROOT).contains(keyword.toLowerCase(java.util.Locale.ROOT))
-                    && !service.isDone(player, §N§)) {
-                service.award(player, §N§);
-            }
-        }`
+  () => `            {
+                String keyword = param(§N§, "keyword");
+                if (!keyword.isEmpty()
+                        && message.toLowerCase(java.util.Locale.ROOT).contains(keyword.toLowerCase(java.util.Locale.ROOT))
+                        && !service.isDone(player, §N§)) {
+                    service.award(player, §N§);
+                }
+            }`
 )}
+        });
     }`);
     }
     if (has('shear')) {
@@ -2506,11 +2511,13 @@ ${compMap}    private static final java.util.Set<String> NO_ANNOUNCE = java.util
     private final AchievementService service;
     private final ProgressStore store;
     private final FileConfiguration config;
+    private final org.bukkit.plugin.java.JavaPlugin plugin;
 
     public AchievementListener(JavaPlugin plugin, AchievementService service, ProgressStore store) {
         this.service = service;
         this.store = store;
         this.config = plugin.getConfig();
+        this.plugin = plugin; // 异步事件（AsyncChat）授予时调度回主线程用
     }
 
 ${helpers.join('\n\n')}
