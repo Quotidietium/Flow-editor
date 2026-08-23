@@ -935,6 +935,30 @@ describe('subgraph 成就栏（循环 11）', () => {
   });
 });
 
+describe('循环 42', () => {
+  it('countUp 溢出语义安全（Java int 绕回为负 → 永不误授）', () => {
+    const r = CORE.exportZip(CORE.starterCode());
+    if (!r.ok) {
+      throw new Error('导出失败');
+    }
+    const listener = r.files.find((f) => f.path.endsWith('AchievementListener.java'))?.text ?? '';
+    const store = r.files.find((f) => f.path.endsWith('ProgressStore.java'))?.text ?? '';
+    // merge(key, delta, Integer::sum) 溢出绕回负值：>= target 恒 false——
+    // 最坏影响是成就不可达（安全方向），无负值误授路径
+    expect(store).toContain('map.merge(key, delta, Integer::sum)');
+    expect(listener).toContain('int target = Math.max(1, amount(');
+  });
+
+  it('非 ASCII 节点 id 的行不再静默丢弃（汇总警告提示改 id）', () => {
+    const a = CORE.analyze('flowchart TD\n r[根]\n r --> 甲[中文id甲]\n');
+    expect(a.warnings.some((w) => w.msg.includes('无法解析') && w.msg.includes('[a-z0-9_]'))).toBe(
+      true
+    );
+    // 兼容手写形态断言不回归（skipped 仍计数）
+    expect(a.skipped).toBeGreaterThanOrEqual(1);
+  });
+});
+
 describe('revoke 撤销命令（循环 41）', () => {
   it('生成的 Java 含对称 revoke 分支与 Service.revoke', () => {
     const r = CORE.exportZip(CORE.starterCode());

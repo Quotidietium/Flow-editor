@@ -1399,6 +1399,14 @@ const coreFactory = function () {
       }
     }
 
+    // 无法解析的行（如非 ASCII 节点 id、畸形语句）此前静默丢弃——汇总为
+    // 一条可见警告，用户能发现内容缺失
+    if (flow.skipped > 0) {
+      warnings.push({
+        msg: `${flow.skipped} 行图表语句无法解析（如中文/特殊字符节点 id、不支持的指令），已跳过——请改用 [a-z0-9_] 的节点 id`
+      });
+    }
+
     // 消息护栏：相同文案合并计数、总量截断——病态输入（数万孤儿元数据键、
     // 千级重复结构警告）曾产生数万条消息灌爆面板渲染与内存
     const capMessages = (list, kind) => {
