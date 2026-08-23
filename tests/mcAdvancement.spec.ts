@@ -89,6 +89,14 @@ test('MC 设计器识别多成就栏图（两个连通分量 = 两个标签页�
   await frame.getByText('🏆 生活栏').click();
   await expect(frame.getByText('栏根节点')).toBeVisible();
   await expect(frame.locator('select[data-k="trigger"]')).toHaveCount(0);
+
+  // 写回编辑器：成就栏输出为 subgraph 分组语法（2.0.133）
+  await frame.getByRole('button', { name: '写回编辑器' }).click();
+  await expect
+    .poll(() => page.evaluate(() => window.__FLOW_EDITOR_STATE__?.().code ?? ''))
+    .toContain('subgraph r1["冒险栏"]');
+  const written = await page.evaluate(() => window.__FLOW_EDITOR_STATE__?.().code ?? '');
+  expect(written).toContain('subgraph r2["生活栏"]');
 });
 
 test('MC 设计器：面板打开期间的外部修改受冲突保护', async ({ editPage, page }) => {

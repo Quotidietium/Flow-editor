@@ -365,3 +365,31 @@ zip 解析在插件内自包含实现：中央目录遍历，store 条目直读�
 
 安全：zip 条目按名白名单消费（只读 advancement/pack.mcmeta/
 flow-editor.json），重建只产生文本代码进状态网关，无任何求值面。
+
+## 11. subgraph 成就栏（2.0.133）
+
+多成就栏的第二种（推荐的）表达方式：**subgraph 即成就栏**。
+
+```mermaid
+flowchart TD
+    subgraph adv_main["冒险栏"]
+        mine["挖矿达人"]
+        mine --> fight["战斗狂人"]
+    end
+    subgraph life["生活栏"]
+        cook["干饭人"]
+    end
+```
+
+- 组 id = 栏根进度 id；组标题 = 栏名；**组内未连线的成员自动挂到根下**
+  （subgraph 已表达归属，无需画线）；跨栏连线忽略并警告（进度不能跨栏
+  承接）；未入 subgraph 的游离节点仍按连通分量成栏（与 §2.1 平铺方式
+  完全兼容，可混用）。
+- 写回/导出/逆向导入的产物自动带 subgraph 分组语法（栏根不渲染为普通
+  节点——cluster 框即栏；组 id 参与的边不输出，见下）。
+- 已知 mermaid 限制（真实浏览器踩坑）：subgraph id 同时作为内部节点或
+  边端点时 parse 通过但渲染期 dagre 抛 `Setting root as parent of root
+would create a cycle`（画布静默保留旧图）——生成侧已排除该形态；
+  手写代码遇到此报错请检查组 id 是否被当作节点/连线使用。
+- 主界面可视化画布（model.ts）对 subgraph 行按不支持跳过：画布编辑会把
+  图平铺化显示，但 tab 语义经连通分量完整保留（边都在），不丢数据。
