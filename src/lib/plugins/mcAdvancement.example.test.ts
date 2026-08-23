@@ -935,6 +935,39 @@ describe('subgraph 成就栏（循环 11）', () => {
   });
 });
 
+describe('循环 47', () => {
+  it('break_block 工具过滤（主手材质比对）+ 文档表参数同步', () => {
+    const meta = CORE.readMeta(CORE.starterCode()).meta;
+    meta.nodes = {
+      miner: {
+        params: { amount: 3, material: 'minecraft:diamond_ore', tool: 'IRON_PICKAXE' },
+        trigger: 'break_block'
+      }
+    };
+    const r = CORE.exportZip(
+      CORE.buildCode(
+        meta,
+        'TD',
+        [
+          { id: 'root', label: '根', shape: 'rect' },
+          { id: 'miner', label: '矿工', shape: 'rect' }
+        ],
+        [{ from: 'root', to: 'miner' }]
+      )
+    );
+    if (!r.ok) {
+      throw new Error(r.errors.map((e) => e.msg).join('; '));
+    }
+    const listener = r.files.find((f) => f.path.endsWith('AchievementListener.java'))?.text ?? '';
+    expect(listener).toContain(
+      'Material held = player.getInventory().getItemInMainHand().getType();'
+    );
+    expect(listener).toContain('tool.equalsIgnoreCase(held.name())');
+    const config = r.files.find((f) => f.path.endsWith('config.yml'))?.text ?? '';
+    expect(config).toContain('tool: "IRON_PICKAXE"');
+  });
+});
+
 describe('循环 46', () => {
   it('trade 职业过滤 + projectile 类型过滤（参数/分支/枚举校验）', () => {
     const meta = CORE.readMeta(CORE.starterCode()).meta;

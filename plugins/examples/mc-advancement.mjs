@@ -49,6 +49,13 @@ const coreFactory = function () {
           ph: 'minecraft:stone',
           type: 'text'
         },
+        {
+          def: '',
+          key: 'tool',
+          label: '主手工具（留空=任意，如 IRON_PICKAXE）',
+          ph: 'IRON_PICKAXE',
+          type: 'text'
+        },
         { def: 200, key: 'amount', label: '累计数量', min: 1, type: 'int' }
       ]
     },
@@ -1245,7 +1252,7 @@ const coreFactory = function () {
           }
         }
         // 枚举大写名（villager 职业 / 弹射物 EntityType）
-        if (p.key === 'profession' || p.key === 'projectile') {
+        if (p.key === 'profession' || p.key === 'projectile' || p.key === 'tool') {
           const v = String(nm.params[p.key] ?? '').trim();
           if (v && !/^[A-Z][A-Z0-9_]*$/.test(v)) {
             warnings.push({
@@ -2118,10 +2125,15 @@ ${perNode(
     public void onBlockBreak(BlockBreakEvent event) {
         Player player = event.getPlayer();
         Material type = event.getBlock().getType();
+        Material held = player.getInventory().getItemInMainHand().getType();
 ${perNode(
   'break_block',
-  (n) => `        if (!materialMiss(param(§N§, "material"), type)) {
-            countUp(player, §N§, 1, ${Number(n.params.amount) || 200});
+  (n) => `        {
+            String tool = param(§N§, "tool");
+            if (!materialMiss(param(§N§, "material"), type)
+                    && (tool.isEmpty() || tool.equalsIgnoreCase(held.name()))) {
+                countUp(player, §N§, 1, ${Number(n.params.amount) || 200});
+            }
         }`
 )}
     }`);

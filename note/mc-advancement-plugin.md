@@ -136,7 +136,7 @@ REF 已验证此模式。触发器表同时驱动：前端下拉（**六类 optg
 | 7   | `reach_height`     | 到达高度           | `y`（允许负值，below 模式）、`mode`（above/below）                     | `PlayerMoveEvent`（节流：每玩家 5 tick 判一次）              | 否   |
 | 8   | `craft`            | 合成物品           | `item`（空=任意）、`amount`                                            | `CraftItemEvent`（ignoreCancelled，按取出数量累计）          | 是   |
 | 9   | `enchant`          | 附魔               | `amount`                                                               | `EnchantItemEvent`                                           | 是   |
-| 10  | `trade`            | 与村民交易         | `amount`                                                               | `PlayerTradeEvent`（ignoreCancelled）                        | 是   |
+| 10  | `trade`            | 与村民交易         | `amount`、`profession`（空=任意，如 FARMER）                           | `PlayerTradeEvent`（ignoreCancelled，Villager 收窄取职业）   | 是   |
 | 11  | `tame`             | 驯服生物           | `entity`（空=任意）、`amount`                                          | `EntityTameEvent`（owner 为玩家）                            | 是   |
 | 12  | `breed`            | 繁殖动物           | `entity`（空=任意）、`amount`                                          | `EntityBreedEvent`（breeder 为玩家）                         | 是   |
 | 13  | `sleep`            | 入睡               | `amount`                                                               | `PlayerDeepSleepEvent`                                       | 是   |
