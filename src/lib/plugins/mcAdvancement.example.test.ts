@@ -53,7 +53,13 @@ interface Core {
   triggerById(id: string): TriggerSpec;
   triggerGroup(id: string): string;
   analyze(code: string): Analysis;
-  buildCode(meta: unknown, direction: string, nodes: unknown[], edges: unknown[]): string;
+  buildCode(
+    meta: unknown,
+    direction: string,
+    nodes: unknown[],
+    edges: unknown[],
+    groups?: { id: string; label: string; memberIds: string[] }[]
+  ): string;
   buildJarRequest(
     code: string
   ):
@@ -76,6 +82,8 @@ interface Core {
   parseFlow(body: string): {
     direction: string;
     edges: { from: string; label: string; to: string }[];
+    groupOf: Map<string, string>;
+    groups: { id: string; label: string }[];
     nodes: { id: string; label: string; shape: string }[];
     skipped: number;
   };
@@ -687,6 +695,7 @@ describe('importDatapackZip：逆向导入', () => {
     }
     const imported = await CORE.importDatapackZip(exported.bytes);
     expect(imported).toBeDefined();
+    expect(imported?.code).toContain('subgraph'); // 逆向导入产物带分组语法
     const a = CORE.analyze(imported?.code ?? '');
     expect(a.ok).toBe(true);
     expect(a.tabs).toHaveLength(1);
@@ -767,6 +776,108 @@ describe('importDatapackZip：逆向导入', () => {
     await expect(CORE.readZipEntries(huge)).rejects.toThrow('ZIP_TOO_LARGE');
     // 超限 zip 整体放弃导入（放行给内置解析器）
     expect(await CORE.importDatapackZip(huge)).toBeUndefined();
+  });
+});
+
+describe('subgraph 成就栏（循环 11）', () => {
+  const groupedCode = `flowchart TD
+    subgraph adv_main["冒险栏"]
+        mine[挖矿达人]
+        mine --> fight[战斗狂人]
+    end
+    subgraph life["生活栏"]
+        cook[干饭人]
+    end
+`;
+
+  it('parseFlow 解析 subgraph：组归属/标题/组内外边', () => {
+    const flow = CORE.parseFlow(groupedCode);
+    expect(flow.groups).toEqual([
+      { id: 'adv_main', label: '冒险栏' },
+      { id: 'life', label: '生活栏' }
+    ]);
+    expect(flow.groupOf.get('mine')).toBe('adv_main');
+    expect(flow.groupOf.get('cook')).toBe('life');
+    expect(flow.edges).toEqual([{ from: 'mine', label: '', to: 'fight' }]);
+  });
+
+  it('analyze：subgraph = 成就栏（组 id 为根、标题为栏名）', () => {
+    const a = CORE.analyze(groupedCode);
+    expect(a.ok).toBe(true);
+    expect(a.tabs).toHaveLength(2);
+    expect(a.tabs.map((t) => t.name)).toEqual(['冒险栏', '生活栏']);
+    expect(a.tabs[0].rootId).toBe('adv_main');
+    expect(a.tabs[0].members).toContain('mine');
+    expect(a.tabs[0].members).toContain('fight');
+    expect(a.nodes.find((n) => n.id === 'fight')?.parent).toBe('mine');
+    expect(a.nodes.find((n) => n.id === 'cook')?.tab).toBe('life');
+  });
+
+  it('跨 subgraph 连线被忽略并给出警告（成员回落到组根）', () => {
+    const cross = `${groupedCode}    cook --> mine\n`;
+    const a = CORE.analyze(cross);
+    expect(a.ok).toBe(true);
+    expect(a.warnings.some((w) => w.msg.includes('跨成就栏'))).toBe(true);
+    // 跨栏边未建立承接——mine 归属冒险栏（挂组根，而非 cook）
+    expect(a.nodes.find((n) => n.id === 'mine')?.parent).toBe('adv_main');
+    expect(a.nodes.find((n) => n.id === 'mine')?.tab).toBe('adv_main');
+  });
+
+  it('subgraph 与游离节点混用：游离节点仍按连通分量成栏', () => {
+    const mixed = `${groupedCode}    loner_root[孤栏]\n    loner_root --> loner_child[孤民]\n`;
+    const a = CORE.analyze(mixed);
+    expect(a.ok).toBe(true);
+    expect(a.tabs).toHaveLength(3);
+    expect(a.tabs.map((t) => t.name)).toContain('孤栏');
+  });
+
+  it('buildCode(groups) ↔ analyze 往返不动点（subgraph 形态保持）', () => {
+    const first = CORE.analyze(groupedCode);
+    if (!first.ok) {
+      throw new Error('预分析失败');
+    }
+    const nodes = first.nodes.map((n) => ({ id: n.id, label: n.label, shape: n.shape }));
+    const groups = first.tabs.map((t) => ({
+      id: t.rootId,
+      label: t.name,
+      memberIds: t.members
+    }));
+    const rebuilt = CORE.buildCode(first.meta, 'TD', nodes, first.edges, groups);
+    expect(rebuilt).toContain('subgraph adv_main["冒险栏"]');
+    const second = CORE.analyze(rebuilt);
+    expect(second.ok).toBe(true);
+    expect(second.tabs.map((t) => t.name)).toEqual(['冒险栏', '生活栏']);
+    expect(second.tabs[0].members).toEqual(first.tabs[0].members);
+  });
+
+  it('subgraph 组内环报错；未连线成员自动挂到组根（subgraph 已表达归属）', () => {
+    const cycle =
+      'flowchart TD\n    subgraph g["栏"]\n        a[甲]\n        a --> b[乙]\n        b --> a\n    end\n';
+    const a = CORE.analyze(cycle);
+    expect(a.ok).toBe(false);
+    expect(a.errors.some((e) => e.msg.includes('subgraph「栏」内存在环'))).toBe(true);
+
+    const plain = 'flowchart TD\n    subgraph g["栏"]\n        a[甲]\n        b[乙]\n    end\n';
+    const ok = CORE.analyze(plain);
+    expect(ok.ok).toBe(true); // 未连线成员自动挂根，不报多根
+    expect(ok.nodes.find((n) => n.id === 'a')?.parent).toBe('g');
+    expect(ok.nodes.find((n) => n.id === 'b')?.parent).toBe('g');
+  });
+
+  it('生成的 subgraph 代码可被可视化编辑器导入（画布兼容取舍不阻塞）', () => {
+    const a = CORE.analyze(groupedCode);
+    if (!a.ok) {
+      throw new Error('预分析失败');
+    }
+    const rebuilt = CORE.buildCode(
+      a.meta,
+      'TD',
+      a.nodes.map((n) => ({ id: n.id, label: n.label, shape: n.shape })),
+      a.edges,
+      a.tabs.map((t) => ({ id: t.rootId, label: t.name, memberIds: t.members }))
+    );
+    const parsed = parseCode(rebuilt);
+    expect(parsed.ok).toBe(true);
   });
 });
 

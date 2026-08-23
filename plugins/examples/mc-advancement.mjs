@@ -624,11 +624,22 @@ const coreFactory = function () {
           node.shape = tok.shape;
         }
       }
+      // 首次出现的语句归属当前 subgraph（嵌套时最内层先到先得）
+      if (groupStack.length > 0 && !groupOf.has(tok.id)) {
+        groupOf.set(tok.id, groupStack.at(-1));
+      }
       return node;
     };
 
-    const SKIP_RE =
-      /^%%|^(?:subgraph|style|classDef|class|click|linkStyle|direction|title)\s|^end\s*$/;
+    const SKIP_RE = /^%%|^(?:style|classDef|class|click|linkStyle|direction|title)\s|^end\s*$/;
+
+    // subgraph 结构解析：subgraph id["标题"] … end（一级即可；嵌套按最内层生效）。
+    // 组归属记入 groupOf，subgraph 本身作为「组节点」入表（id=组 id，label=标题）。
+    const groups = [];
+    const groupOf = new Map();
+    const groupStack = [];
+    const SUBGRAPH_RE =
+      /^subgraph\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)\s*(?:\[(".*"|[^[\]]*)\])?\s*(?:\[(?:TB|BT|LR|RL)\])?\s*$/;
 
     for (const rawLine of body.split('\n')) {
       const line = rawLine.trim();
@@ -641,6 +652,21 @@ const coreFactory = function () {
         if (head[2] && /LR|RL/i.test(head[2])) {
           direction = 'LR';
         }
+        continue;
+      }
+      if (/^end\s*;?$/.test(line)) {
+        groupStack.pop();
+        continue;
+      }
+      const sub = SUBGRAPH_RE.exec(line);
+      if (sub) {
+        const rawTitle = (sub[2] ?? '').trim();
+        const title =
+          rawTitle.startsWith('"') && rawTitle.endsWith('"')
+            ? rawTitle.slice(1, -1).replaceAll('\\"', '"')
+            : rawTitle;
+        groups.push({ id: sub[1], label: title || sub[1] });
+        groupStack.push(sub[1]);
         continue;
       }
       if (SKIP_RE.test(line)) {
@@ -680,7 +706,7 @@ const coreFactory = function () {
         }
       }
     }
-    return { direction, edges, headerSeen, nodes, skipped };
+    return { direction, edges, groupOf, groups, headerSeen, nodes, skipped };
   };
 
   // --------------------------------------------------------- 代码反向生成
@@ -711,19 +737,59 @@ const coreFactory = function () {
   };
 
   /** 由可编辑模型生成完整图表代码（frontmatter + 规范 flowchart 文本）。 */
-  const buildCode = (meta, direction, nodes, edges) => {
+  /**
+   * 由可编辑模型生成完整图表代码（frontmatter + 规范 flowchart 文本）。
+   * groups（可选）：[{id, label, memberIds}] —— 输出为 subgraph 成就栏；
+   * 未列出的节点与边平铺在 subgraph 之外（无 groups 时全部平铺，向后兼容）。
+   */
+  const buildCode = (meta, direction, nodes, edges, groups) => {
     const fm = `---\n${JSON.stringify({ mcadv: meta }, null, 2)}\n---\n`;
     const lines = [`flowchart ${direction === 'LR' ? 'LR' : 'TD'}`];
-    for (const node of nodes) {
-      lines.push(`    ${renderNode(node)}`);
-    }
-    for (const edge of edges) {
+    const inGroup = new Set();
+    const edgeLine = (edge, indent) => {
       const label = String(edge.label ?? '')
         .replaceAll(/[|"']/g, '')
         .trim();
-      lines.push(
-        label ? `    ${edge.from} -->|${label}| ${edge.to}` : `    ${edge.from} --> ${edge.to}`
-      );
+      return `${indent}${edge.from} -->${label ? `|${label}|` : ''} ${edge.to}`;
+    };
+    if (groups && groups.length > 0) {
+      for (const group of groups) {
+        lines.push(
+          `    subgraph ${group.id}["${String(group.label ?? group.id).replaceAll('"', '')}"]`
+        );
+        for (const node of nodes) {
+          if (group.memberIds.includes(node.id)) {
+            inGroup.add(node.id);
+            // 组 id 节点不渲染为普通节点——subgraph 框（标题）就是栏根本身
+            if (node.id !== group.id) {
+              lines.push(`        ${renderNode(node)}`);
+            }
+          }
+        }
+        for (const edge of edges) {
+          if (
+            group.memberIds.includes(edge.from) &&
+            group.memberIds.includes(edge.to) &&
+            // 组 id 参与的边不输出：栏根是 cluster 本身，dagre 不允许边
+            // 端点即 cluster id（setParent 环）；读回时未连线成员自动挂根
+            edge.from !== group.id &&
+            edge.to !== group.id
+          ) {
+            lines.push(edgeLine(edge, '        '));
+          }
+        }
+        lines.push('    end');
+      }
+    }
+    for (const node of nodes) {
+      if (!inGroup.has(node.id)) {
+        lines.push(`    ${renderNode(node)}`);
+      }
+    }
+    for (const edge of edges) {
+      if (!inGroup.has(edge.from) && !inGroup.has(edge.to)) {
+        lines.push(edgeLine(edge, '    '));
+      }
     }
     return `${fm}${lines.join('\n')}\n`;
   };
@@ -784,6 +850,20 @@ const coreFactory = function () {
       errors.push({ msg: '图类型必须是流程图（flowchart/graph）才能导出 MC 成就插件' });
       return { edges: [], errors, meta, nodes: [], ok: false, tabs: [], warnings };
     }
+    // subgraph 分组：组 id 即该成就栏的根节点（组内无实体同名节点时补一个，
+    // label=组标题）——之后 nid 规范化/环检测/BFS 全部复用同一套管线。
+    if (flow.groups.length > 0) {
+      const flowById = new Set(flow.nodes.map((n) => n.id));
+      for (const group of flow.groups) {
+        if (!flowById.has(group.id)) {
+          flow.nodes.push({ id: group.id, label: group.label, shape: 'rect' });
+        } else {
+          const existing = flow.nodes.find((n) => n.id === group.id);
+          existing.label = group.label || existing.label;
+        }
+        flow.groupOf.set(group.id, group.id);
+      }
+    }
     if (flow.nodes.length === 0) {
       errors.push({ msg: '图中没有任何节点：先在画布上添加成就节点' });
       return { edges: [], errors, meta, nodes: [], ok: false, tabs: [], warnings };
@@ -814,7 +894,7 @@ const coreFactory = function () {
     }
 
     // 邻接（忽略自环边与完全重复的边）
-    const edges = [];
+    let edges = [];
     const seenEdge = new Set();
     for (const e of flow.edges) {
       if (e.from === e.to) {
@@ -826,6 +906,26 @@ const coreFactory = function () {
       }
       seenEdge.add(sig);
       edges.push(e);
+    }
+    // subgraph 模式：跨成就栏的连线在 MC 中无语义（进度不能跨栏承接）——
+    // 丢弃并提示；组间与组内的划分以 groupOf 为准。
+    const usingGroups = flow.groups.length > 0;
+    if (usingGroups) {
+      let cross = null;
+      edges = edges.filter((e) => {
+        const ga = flow.groupOf.get(e.from);
+        const gb = flow.groupOf.get(e.to);
+        const sameSide = ga === gb; // 同组，或同为组外游离节点
+        if (!sameSide && !cross) {
+          cross = `${e.from} → ${e.to}`;
+        }
+        return sameSide;
+      });
+      if (cross) {
+        warnings.push({
+          msg: `存在跨成就栏的连线（如 ${cross}）——MC 进度不能跨栏承接，已忽略；请把连线限制在 subgraph 内`
+        });
+      }
     }
     const indegree = new Map();
     const children = new Map();
@@ -880,8 +980,11 @@ const coreFactory = function () {
       });
     }
 
-    // 连通分量（并查集）
-    const parent0 = new Map(flow.nodes.map((n) => [n.id, n.id]));
+    // 连通分量（并查集）——仅对未入 subgraph 的游离节点生效（subgraph 模式）
+    const looseNodeIds = flow.nodes
+      .map((n) => n.id)
+      .filter((id) => !usingGroups || !flow.groupOf.has(id));
+    const parent0 = new Map(looseNodeIds.map((id) => [id, id]));
     const find = (x) => {
       while (parent0.get(x) !== x) {
         parent0.set(x, parent0.get(parent0.get(x)));
@@ -890,6 +993,9 @@ const coreFactory = function () {
       return x;
     };
     for (const e of edges) {
+      if (!parent0.has(e.from) || !parent0.has(e.to)) {
+        continue;
+      }
       const ra = find(e.from);
       const rb = find(e.to);
       if (ra !== rb) {
@@ -897,16 +1003,71 @@ const coreFactory = function () {
       }
     }
     const components = new Map();
-    for (const node of flow.nodes) {
-      const r = find(node.id);
+    for (const id of looseNodeIds) {
+      const r = find(id);
       if (!components.has(r)) {
         components.set(r, []);
       }
-      components.get(r).push(node.id);
+      components.get(r).push(id);
     }
 
     // 每个分量恰一个根（无入边节点）
     const tabs = [];
+    // subgraph 模式：每个 subgraph = 一个成就栏（组 id 强制为根；组内
+    // 未连线的成员自动挂到根下——subgraph 本身已表达归属，无需显式画线）
+    if (usingGroups) {
+      for (const group of flow.groups) {
+        const memberIds = flow.nodes
+          .filter((n) => flow.groupOf.get(n.id) === group.id)
+          .map((n) => n.id);
+        if (!memberIds.includes(group.id)) {
+          continue; // 组 id 冲突被规范化吞掉——错误已在 nid 冲突段报告
+        }
+        const groupMembers = memberIds.filter((id) => id !== group.id);
+        if (groupMembers.length === 0) {
+          warnings.push({ msg: `subgraph「${group.label}」内没有成就节点，已忽略` });
+          continue;
+        }
+        for (const id of groupMembers) {
+          if ((indegree.get(id) ?? 0) === 0) {
+            edges.push({ from: group.id, to: id });
+            if (!children.has(group.id)) {
+              children.set(group.id, []);
+            }
+            children.get(group.id).push(id);
+            indegree.set(id, 1);
+          }
+        }
+        // 组内环：根以外的成员若经组内边形成环，环上节点均有入边且不可达——
+        // 用可达性检测（从根 BFS 不到的成员即为环/断链）
+        const reachable = new Set([group.id]);
+        const queue = [group.id];
+        while (queue.length > 0) {
+          const cur = queue.shift();
+          for (const next of children.get(cur) ?? []) {
+            if (groupMembers.includes(next) && !reachable.has(next)) {
+              reachable.add(next);
+              queue.push(next);
+            }
+          }
+        }
+        const unreachable = groupMembers.filter((id) => !reachable.has(id));
+        if (unreachable.length > 0) {
+          errors.push({
+            msg: `subgraph「${group.label}」内存在环（涉及 ${unreachable.join('、')}），MC 进度树不允许成环`,
+            nodeId: unreachable[0]
+          });
+          continue;
+        }
+        tabs.push({
+          members: [...reachable],
+          meta: tabMeta(meta, group.id),
+          name: byIdLabel(flow, group.id),
+          rootId: group.id,
+          rootNid: nidOf.get(group.id)
+        });
+      }
+    }
     for (const memberIds of components.values()) {
       const roots = memberIds.filter((id) => (indegree.get(id) ?? 0) === 0);
       if (roots.length === 0) {
@@ -917,7 +1078,11 @@ const coreFactory = function () {
       }
       if (roots.length > 1) {
         errors.push({
-          msg: `成就栏存在 ${roots.length} 个无父级节点（${roots.join('、')}）：同一栏内只能有一个根，请把它们连到同一个根下（需要多栏时请断开成互不相连的多棵树）`
+          msg: `成就栏存在 ${roots.length} 个无父级节点（${roots.join('、')}）：同一栏内只能有一个根，${
+            usingGroups
+              ? '请用 subgraph 划分多栏并在组内连线'
+              : '请把它们连到同一个根下（需要多栏时请断开成互不相连的多棵树）'
+          }`
         });
         continue;
       }
@@ -2952,7 +3117,19 @@ ${rows.join('\n')}
       return undefined;
     }
 
-    const code = buildCode(meta, 'TD', nodes, edges);
+    // 平铺生成 → 复分析（顺带 normalize meta）→ 带 subgraph 分组重建：
+    // 逆向导入的产物与面板写回的代码形态一致（subgraph = 成就栏）
+    const flat = buildCode(meta, 'TD', nodes, edges);
+    const checked = analyze(flat);
+    if (!checked.ok) {
+      return { code: flat, warnings };
+    }
+    const groups = checked.tabs.map((t) => ({
+      id: t.rootId,
+      label: t.name,
+      memberIds: t.members
+    }));
+    const code = buildCode(checked.meta, 'TD', nodes, edges, groups);
     return { code, warnings };
   };
 
@@ -3218,7 +3395,11 @@ const FRONTEND_HTML = `<!doctype html>
       function rebuildCode() {
         var a = S.analysis;
         var nodes = a.nodes.map(function (n) { return { id: n.id, label: n.label, shape: n.shape }; });
-        S.code = CORE.buildCode(a.meta, a.direction, nodes, a.edges);
+        // 成就栏输出为 subgraph（栏根 id = 组 id，栏名 = 组标题）
+        var groups = a.tabs.map(function (t) {
+          return { id: t.rootId, label: t.name, memberIds: t.members };
+        });
+        S.code = CORE.buildCode(a.meta, a.direction, nodes, a.edges, groups);
         S.analysis = CORE.analyze(S.code);
       }
 
@@ -3821,7 +4002,7 @@ export default {
   id: 'flow.mc-advancement',
   name: 'MC 进度设计器',
   permissions: ['import:file', 'export:format', 'ui:frontend'],
-  version: '1.4.0'
+  version: '1.5.0'
 };
 
 // 单测钩子（不改变插件运行时行为）
