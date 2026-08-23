@@ -109,6 +109,43 @@ if (!result.ok && (result.error.code === 'JDK_NOT_FOUND' || result.error.code ==
     result.ok ? result.jdkVersion : result.error?.message
   );
 
+  // 单触发器极小工程：helper 生成门的最严苛情形（无 countUp/无 param/纯事件
+  // 直授等形态各选一个代表）
+  const singles = ['ride', 'portal', 'xp_gain', 'glide', 'shear'];
+  let singlesOk = true;
+  let singlesDetail = '';
+  for (const tid of singles) {
+    const spec = CORE.TRIGGERS.find((t) => t.id === tid);
+    const params = {};
+    for (const p of spec.params) {
+      params[p.key] = p.def;
+    }
+    if (tid === 'chat_keyword') {
+      params.keyword = 'hi';
+    }
+    const singleMeta = CORE.readMeta(CORE.starterCode()).meta;
+    singleMeta.nodes = { a: { params, trigger: tid } };
+    const singleCode = CORE.buildCode(
+      singleMeta,
+      'TD',
+      [
+        { id: 'r', label: '根', shape: 'rect' },
+        { id: 'a', label: spec.name, shape: 'rect' }
+      ],
+      [{ from: 'r', to: 'a' }]
+    );
+    const singleReq = CORE.buildJarRequest(singleCode);
+    const single = await build(singleReq.files, {
+      filename: singleReq.filename,
+      toolchainDir
+    });
+    if (!single.ok) {
+      singlesOk = false;
+      singlesDetail += `${tid}: ${single.error?.message ?? ''} `;
+    }
+  }
+  check('单触发器极小工程编译（ride/portal/xp_gain/glide/shear）', singlesOk, singlesDetail);
+
   if (result.ok) {
     // 经中央目录解析 jar（jar 工具写数据描述符，本地头无尺寸；条目 deflate）
     const { inflateRawSync } = await import('node:zlib');
