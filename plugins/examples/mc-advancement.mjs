@@ -3498,7 +3498,7 @@ export default {
   id: 'flow.mc-advancement',
   name: 'MC 进度设计器',
   permissions: ['export:format', 'ui:frontend'],
-  version: '1.1.0'
+  version: '1.2.0'
 };
 
 // 单测钩子（不改变插件运行时行为）
