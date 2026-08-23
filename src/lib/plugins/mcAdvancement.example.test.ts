@@ -2078,3 +2078,30 @@ describe('循环 52（续）：背景纹理 datalist 与提示', () => {
     );
   });
 });
+
+describe('循环 53：int 参数非整数显式报错（此前 2.5 放行，Java getInt 静默截断）', () => {
+  it('amount=2.5 与 y=64.5 均报「整数」错误；合法整数值不受影响', () => {
+    const build = (params: Record<string, unknown>, trigger: string) =>
+      CORE.analyze(
+        CORE.buildCode(
+          (() => {
+            const m = CORE.readMeta(CORE.starterCode()).meta;
+            m.nodes = { a: { params, trigger } };
+            return m;
+          })(),
+          'TD',
+          [
+            { id: 'root', label: '根', shape: 'rect' },
+            { id: 'a', label: '甲', shape: 'rect' }
+          ],
+          [{ from: 'root', to: 'a' }]
+        )
+      );
+    const r1 = build({ amount: 2.5 }, 'break_block');
+    expect(r1.errors.some((e) => e.msg.includes('需要') && e.msg.includes('≥1 的整数'))).toBe(true);
+    const r2 = build({ y: 64.5 }, 'reach_height');
+    expect(r2.errors.some((e) => e.msg.includes('需要是整数'))).toBe(true);
+    const r3 = build({ amount: 10, y: -32 }, 'reach_height');
+    expect(r3.errors.length).toBe(0);
+  });
+});

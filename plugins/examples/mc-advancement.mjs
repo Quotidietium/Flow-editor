@@ -1242,10 +1242,11 @@ const coreFactory = function () {
       for (const p of spec.params) {
         if (p.type === 'int') {
           const v = Number(nm.params[p.key] ?? p.def);
-          // min 仅在有声明时约束（reach_height 的 Y 允许负值——below 模式需要）
-          if (!Number.isFinite(v) || (p.min !== undefined && v < p.min)) {
+          // min 仅在有声明时约束（reach_height 的 Y 允许负值——below 模式需要）；
+          // 非整数（如 2.5）在 Java 侧被 getInt 静默截断——此处显式报错
+          if (!Number.isInteger(v) || (p.min !== undefined && v < p.min)) {
             errors.push({
-              msg: `成就「${node.label}」的参数「${p.label}」需要${p.min === undefined ? '是数值' : ` ≥${p.min} 的整数`}`,
+              msg: `成就「${node.label}」的参数「${p.label}」需要${p.min === undefined ? '是整数' : ` ≥${p.min} 的整数`}`,
               nodeId
             });
           }
