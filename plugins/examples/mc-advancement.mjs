@@ -1373,6 +1373,19 @@ const coreFactory = function () {
         seenLabels.set(label, node.id);
       }
     }
+    // 本地化未开启时英文输入被静默忽略——提示用户而非默默丢弃
+    if (meta.localization !== 'on') {
+      const enUsers = nodes.filter(
+        (n) =>
+          n.parent !== null &&
+          (String(n.meta.en ?? '').trim() || String(n.meta.enDesc ?? '').trim())
+      );
+      if (enUsers.length > 0) {
+        warnings.push({
+          msg: `${enUsers.length} 个成就填了英文名称/描述，但本地化未开启（插件设置 → 本地化）——导出时将被忽略`
+        });
+      }
+    }
     for (const tab of tabs) {
       const memberCount = tab.members.length - 1;
       if (tab.meta.completionist && memberCount === 0) {

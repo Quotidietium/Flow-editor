@@ -935,6 +935,39 @@ describe('subgraph 成就栏（循环 11）', () => {
   });
 });
 
+describe('本地化关闭时英文忽略提示（循环 30）', () => {
+  it('off + 含 en 字段 → 一条汇总警告；on 时无此警告', () => {
+    const meta = CORE.readMeta(CORE.starterCode()).meta;
+    meta.localization = 'off';
+    meta.nodes = { a: { en: 'Alpha', trigger: 'manual' } };
+    const code = CORE.buildCode(
+      meta,
+      'TD',
+      [
+        { id: 'root', label: '根', shape: 'rect' },
+        { id: 'a', label: '甲', shape: 'rect' }
+      ],
+      [{ from: 'root', to: 'a' }]
+    );
+    const off = CORE.analyze(code);
+    expect(off.warnings.some((w) => w.msg.includes('本地化未开启'))).toBe(true);
+
+    meta.localization = 'on';
+    const on = CORE.analyze(
+      CORE.buildCode(
+        meta,
+        'TD',
+        [
+          { id: 'root', label: '根', shape: 'rect' },
+          { id: 'a', label: '甲', shape: 'rect' }
+        ],
+        [{ from: 'root', to: 'a' }]
+      )
+    );
+    expect(on.warnings.some((w) => w.msg.includes('本地化未开启'))).toBe(false);
+  });
+});
+
 describe('delete/reparent 同步与保留名（循环 28）', () => {
   it('Windows 保留名 id 报错（con/nul/com1）', () => {
     const a = CORE.analyze('flowchart TD\n r[根]\n r --> con\n r --> nul[甲]\n con[乙]\n');
