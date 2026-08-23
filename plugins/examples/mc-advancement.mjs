@@ -4693,7 +4693,7 @@ const FRONTEND_HTML = `<!doctype html>
           + inputHtml('version', '插件版本号', m.version || '1.0.0', 'text')
           + '</div>';
         html += '<div class="row">'
-          + inputHtml('packFormat', '数据包格式版本（1.21.11 = 94）', String(m.packFormat), 'number')
+          + inputHtml('packFormat', '数据包格式版本（1.21.11 = 94）', String(m.packFormat), 'number', ' min="1"')
           + inputHtml('autosaveSeconds', '计数自动保存间隔（秒）', String(m.autosaveSeconds), 'number', ' min="30"')
           + '</div>';
         html += '<div class="row">'

@@ -2332,3 +2332,14 @@ describe('循环 63：播报格式标签语义修正', () => {
     expect(listener).toContain('event.message(');
   });
 });
+
+describe('循环 66：packFormat 数字输入 min 软护栏', () => {
+  it('packFormat 输入带 min="1"（与 autosave 的 min=30 同款软护栏）', () => {
+    const html = decodeURIComponent(
+      plugin.frontend.url.replace('data:text/html;charset=utf-8,', '')
+    );
+    expect(html).toContain(
+      "inputHtml('packFormat', '数据包格式版本（1.21.11 = 94）', String(m.packFormat), 'number', ' min=\"1\"')"
+    );
+  });
+});
