@@ -38,6 +38,7 @@ interface Analysis {
   nodes: AnalysisNode[];
   ok: boolean;
   tabs: { members: string[]; name: string; rootId: string; rootNid: string }[];
+  skipped?: number;
   warnings: Issue[];
 }
 interface TriggerParam {
@@ -1344,7 +1345,7 @@ describe('循环 34 三项核验', () => {
     if (!parsed.ok) {
       throw new Error('预分析失败');
     }
-    parsed.meta.nodes = { ...parsed.meta.nodes };
+    parsed.meta.nodes = { ...(parsed.meta.nodes as Record<string, unknown>) };
     const renamed = CORE.buildCode(
       parsed.meta,
       'TD',
@@ -1399,7 +1400,7 @@ describe('AsyncChat 闭包提取与覆盖确认（循环 32）', () => {
 
 describe('可取消事件 ignoreCancelled（循环 31）', () => {
   it('trade/tame/breed/chat 四个 Cancellable 事件带 ignoreCancelled', () => {
-    const mk = (trigger) => {
+    const mk = (trigger: string) => {
       const meta = CORE.readMeta(CORE.starterCode()).meta;
       meta.nodes = { x: { params: trigger === 'chat_keyword' ? { keyword: 'hi' } : {}, trigger } };
       return CORE.exportZip(
@@ -1414,7 +1415,7 @@ describe('可取消事件 ignoreCancelled（循环 31）', () => {
         )
       );
     };
-    const expectIc = (trigger, method) => {
+    const expectIc = (trigger: string, method: string) => {
       const r = mk(trigger);
       if (!r.ok) {
         throw new Error(`${trigger} 导出失败`);
@@ -1930,17 +1931,17 @@ describe('插件导出钩子', () => {
     return { messages, notify: (m: string) => messages.push(m) };
   };
 
-  it('合法图返回 zip blob', () => {
+  it('合法图返回 zip blob', async () => {
     const c = ctx();
-    const out = plugin.exports?.[0]?.run({ code: CORE.starterCode() }, c);
+    const out = await plugin.exports?.[0]?.run({ code: CORE.starterCode() }, c);
     expect(out?.filename).toBe('MyAchievements.zip');
     expect(out?.blob).toBeInstanceOf(Blob);
     expect(c.messages[0]).toContain('MyAchievements.zip');
   });
 
-  it('非法图返回 undefined 并提示首个错误', () => {
+  it('非法图返回 undefined 并提示首个错误', async () => {
     const c = ctx();
-    const out = plugin.exports?.[0]?.run({ code: 'pie title x\n  "a": 1\n' }, c);
+    const out = await plugin.exports?.[0]?.run({ code: 'pie title x\n  "a": 1\n' }, c);
     expect(out).toBeUndefined();
     expect(c.messages[0]).toContain('无法导出 MC 插件');
   });
@@ -2128,7 +2129,7 @@ describe('循环 54：校验面板定位跳转（全局/栏级问题）', () => 
   it('设置级问题带 scope:settings；栏级问题带 tabId', () => {
     const meta = CORE.readMeta(CORE.starterCode()).meta;
     meta.command = 'kill'; // 原版命令冲突 → 设置级
-    meta.tabs.root.background = 'not-a-texture-path'; // 栏级
+    (meta.tabs as Record<string, { background?: string }>).root.background = 'not-a-texture-path'; // 栏级
     const r = CORE.analyze(
       CORE.buildCode(
         meta,
@@ -2187,9 +2188,14 @@ describe('循环 55：自动保存间隔边界（负值曾致插件 onEnable 崩
       ).toBe(true);
     }
     const r2 = build(120.5);
-    const cfg2 = r2.ok ? (r2.files.find((f) => f.path.endsWith('config.yml'))?.text ?? '') : '';
+    if (!r2.ok) {
+      throw new Error('导出失败');
+    }
+    const cfg2 = r2.files.find((f) => f.path.endsWith('config.yml'))?.text ?? '';
     expect(cfg2).toContain('autosave-interval-seconds: 120'); // 截断而非 120.5
-    expect(r2.analysis.warnings.some((w) => w.msg.includes('不是整数'))).toBe(true);
+    expect(r2.analysis.warnings.some((w: { msg: string }) => w.msg.includes('不是整数'))).toBe(
+      true
+    );
   });
 });
 
@@ -2243,8 +2249,9 @@ describe('循环 56：战利品区间/权重与负经验值——静默行为显
 describe('循环 57：栏图标与大满贯图标格式校验（此前零校验）', () => {
   it('非法栏图标/大满贯图标产生警告（带 tabId 可定位），整栏加载失败风险可见', () => {
     const meta = CORE.readMeta(CORE.starterCode()).meta;
-    meta.tabs.root.icon = 'Not Valid!!';
-    meta.tabs.root.completionistIcon = '也是错的';
+    (meta.tabs as Record<string, { icon?: string }>).root.icon = 'Not Valid!!';
+    (meta.tabs as Record<string, { completionistIcon?: string }>).root.completionistIcon =
+      '也是错的';
     const r = CORE.analyze(
       CORE.buildCode(
         meta,
@@ -2302,7 +2309,7 @@ describe('循环 61：生成 README 修正（版本硬编码 + revoke 缺席）'
 describe('循环 62：大满贯负经验值如实提示（原样输出=解锁扣经验）', () => {
   it('completionistXp=-50 → 警告「扣除玩家经验」+ JSON rewards 原样 -50', () => {
     const meta = CORE.readMeta(CORE.starterCode()).meta;
-    meta.tabs.root.completionistXp = -50;
+    (meta.tabs as Record<string, { completionistXp?: number }>).root.completionistXp = -50;
     const r = CORE.exportZip(
       CORE.buildCode(
         meta,
