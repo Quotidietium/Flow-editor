@@ -66,7 +66,9 @@
   });
 
   let width = $state(0);
-  let isMobile = $derived(width < 640);
+  // 768 与 Navbar 桌面行（md:flex）断点对齐——此前 640–768 灰区两处皆不
+  // 渲染，插件/分享/历史在该区间完全不可达（窄视口 e2e 发现）
+  let isMobile = $derived(width < 768);
   let isViewMode = $state(true);
 
   // Record the Timeline for the whole session, not just while the panel is open.
