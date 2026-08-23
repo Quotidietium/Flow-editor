@@ -2282,3 +2282,29 @@ describe('循环 61：生成 README 修正（版本硬编码 + revoke 缺席）'
     expect(readme).toContain('revoke <玩家> <成就id>'); // 循环 41 的 revoke 曾未入 README
   });
 });
+
+describe('循环 62：大满贯负经验值如实提示（原样输出=解锁扣经验）', () => {
+  it('completionistXp=-50 → 警告「扣除玩家经验」+ JSON rewards 原样 -50', () => {
+    const meta = CORE.readMeta(CORE.starterCode()).meta;
+    meta.tabs.root.completionistXp = -50;
+    const r = CORE.exportZip(
+      CORE.buildCode(
+        meta,
+        'TD',
+        [
+          { id: 'root', label: '根', shape: 'rect' },
+          { id: 'a', label: '甲', shape: 'rect' }
+        ],
+        [{ from: 'root', to: 'a' }]
+      )
+    );
+    if (!r.ok) {
+      throw new Error('导出失败');
+    }
+    const warn = r.analysis.warnings.find((w) => w.msg.includes('大满贯奖励经验 -50'));
+    expect(warn?.msg).toContain('扣除玩家经验');
+    expect(warn?.tabId).toBe('root');
+    const comp = r.files.find((f) => f.path.endsWith('root_completionist.json'))?.text ?? '';
+    expect(JSON.parse(comp).rewards.experience).toBe(-50); // 行为如实：原样输出
+  });
+});

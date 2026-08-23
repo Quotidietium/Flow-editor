@@ -1572,6 +1572,14 @@ const coreFactory = function () {
           tabId: tab.rootId
         });
       }
+      // 表单侧已钳制 ≥0；手改 frontmatter 的负值会原样进 rewards（解锁时扣经验）——如实提示
+      const cXp = Number(tab.meta.completionistXp ?? 0);
+      if (tab.meta.completionist && Number.isFinite(cXp) && cXp < 0) {
+        warnings.push({
+          msg: `成就栏「${tab.name}」的大满贯奖励经验 ${tab.meta.completionistXp} 为负数，解锁时将扣除玩家经验——通常非预期`,
+          tabId: tab.rootId
+        });
+      }
     }
 
     // 无法解析的行（如非 ASCII 节点 id、畸形语句）此前静默丢弃——汇总为
