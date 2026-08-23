@@ -1988,3 +1988,62 @@ describe('循环 50：设计文档触发器表 ↔ TRIGGERS 注册表一致性�
     }
   });
 });
+
+describe('循环 51：全局设置校验完善（命令/包名/packFormat）', () => {
+  const analyzeWith = (metaPatch: Record<string, unknown>) => {
+    const meta = CORE.readMeta(CORE.starterCode()).meta;
+    Object.assign(meta, metaPatch);
+    return CORE.analyze(
+      CORE.buildCode(
+        meta,
+        'TD',
+        [
+          { id: 'root', label: '根', shape: 'rect' },
+          { id: 'a', label: '甲', shape: 'rect' }
+        ],
+        [{ from: 'root', to: 'a' }]
+      )
+    );
+  };
+
+  it('命令与原版命令同名 → 遮蔽警告；命令/包名规范化不再静默', () => {
+    const r = CORE.analyze(
+      CORE.buildCode(
+        (() => {
+          const m = CORE.readMeta(CORE.starterCode()).meta;
+          m.command = '1kill';
+          m.packageName = 'My.Pkg';
+          return m;
+        })(),
+        'TD',
+        [
+          { id: 'root', label: '根', shape: 'rect' },
+          { id: 'a', label: '甲', shape: 'rect' }
+        ],
+        [{ from: 'root', to: 'a' }]
+      )
+    );
+    // 「1kill」数字开头 → 回退 namespace；回退后不再撞原版名
+    expect(r.warnings.some((w) => w.msg.includes('已规范为「/') && w.msg.includes('1kill'))).toBe(
+      true
+    );
+    expect(r.warnings.some((w) => w.msg.includes('包名「My.Pkg」已规范为'))).toBe(true);
+    // 直接命中原版命令
+    const r2 = analyzeWith({ command: 'kill' });
+    expect(
+      r2.warnings.some((w) => w.msg.includes('/kill 与原版命令同名') && w.msg.includes('遮蔽'))
+    ).toBe(true);
+    // 常规命令无此警告
+    const r3 = analyzeWith({ command: 'myach' });
+    expect(r3.warnings.some((w) => w.msg.includes('原版命令同名'))).toBe(false);
+  });
+
+  it('packFormat 非整数截断告警；0/负值告警数据包无法加载', () => {
+    const r = analyzeWith({ packFormat: 94.5 });
+    expect(r.meta.packFormat).toBe(94);
+    expect(r.warnings.some((w) => w.msg.includes('94.5」不是整数'))).toBe(true);
+    const r2 = analyzeWith({ packFormat: 0 });
+    expect(r2.warnings.some((w) => w.msg.includes('数据包格式版本 0 无效'))).toBe(true);
+    expect(r2.meta.packFormat).toBe(0); // 不静默改值，仅提示
+  });
+});

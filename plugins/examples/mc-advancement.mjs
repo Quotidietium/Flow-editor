@@ -537,6 +537,20 @@ const coreFactory = function () {
     return /^[a-z]/.test(clean) ? clean : ns;
   };
 
+  /** 1.21 原版命令名（遮蔽风险名单）：插件命令同名时优先级高于原版。 */
+  const VANILLA_COMMANDS = new Set(
+    (
+      'advancement attribute ban banlist bossbar clear clone damage data datapack debug ' +
+      'defaultgamemode deop difficulty effect enchant execute experience fill fillbiome ' +
+      'forceload function gamemode gamerule give help item jfr kick kill list locate loot ' +
+      'me msg op pardon particle permission playsound random recipe reload return ride ' +
+      'rotate save-all save-off save-on schedule scoreboard seed setblock setidletimeout ' +
+      'setworldspawn spawnpoint spectate spreadplayers stop stopsound summon tag team ' +
+      'teammsg teleport tell tellraw tick time title tm tp transfer trigger w weather ' +
+      'whitelist worldborder xp'
+    ).split(' ')
+  );
+
   /** Java 枚举常量名。 */
   const enumName = (nid) => {
     const up = nid.toUpperCase();
@@ -1400,9 +1414,42 @@ const coreFactory = function () {
         msg: `版本号「${meta.version}」含非法字符，将作为 jar 文件名时建议只用字母/数字/._-`
       });
     }
+    const rawPkg = String(meta.packageName ?? '');
+    const rawCmd = String(meta.command ?? '');
     meta.packageName = normPackage(meta.packageName, meta.namespace);
     meta.command = normCommand(meta.command, meta.namespace);
+    // 包名/命令规范化告警（与命名空间/插件名同等待遇——此前静默改写无感知）
+    if (rawPkg && rawPkg !== meta.packageName) {
+      warnings.push({
+        msg: `包名「${rawPkg}」已规范为「${meta.packageName}」（小写字母/数字/下划线，至少两段，段首须字母）`
+      });
+    }
+    if (rawCmd && rawCmd !== meta.command) {
+      warnings.push({
+        msg: `命令「/${rawCmd}」已规范为「/${meta.command}」（小写字母开头，仅限字母/数字/_/-）`
+      });
+    }
+    // 插件命令与原版命令同名会遮蔽原版行为（玩家 /kill 变成进度查询）——提示换名
+    if (VANILLA_COMMANDS.has(meta.command)) {
+      warnings.push({
+        msg: `命令 /${meta.command} 与原版命令同名，会遮蔽原版行为（玩家执行 /${meta.command} 将变成进度查询），建议换个命令名`
+      });
+    }
+    const rawPf = meta.packFormat;
     meta.packFormat = Number.isFinite(Number(meta.packFormat)) ? Number(meta.packFormat) : 94;
+    // pack.mcmeta 的 pack_format 必须是有效正整数（表单清空会得 0），
+    // 否则服务端判定数据包不兼容、进度全部不加载
+    if (rawPf !== undefined && rawPf !== null && String(rawPf) !== '' && !Number.isInteger(Number(rawPf))) {
+      meta.packFormat = Math.trunc(Number(rawPf)) || 94;
+      warnings.push({
+        msg: `数据包格式版本「${rawPf}」不是整数，已规范为 ${meta.packFormat}（pack.mcmeta 要求整数）`
+      });
+    }
+    if (meta.packFormat < 1) {
+      warnings.push({
+        msg: `数据包格式版本 ${meta.packFormat} 无效（应为正整数，Paper 1.21.11 = 94）——数据包可能无法加载`
+      });
+    }
 
     // 孤儿元数据：汇总为单条（病态输入可达数万键，逐条警告会灌爆面板）
     const orphanKeys = Object.keys(meta.nodes).filter((key) => !nidOf.has(key));
