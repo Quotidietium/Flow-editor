@@ -2176,3 +2176,50 @@ describe('循环 55：自动保存间隔边界（负值曾致插件 onEnable 崩
     expect(r2.analysis.warnings.some((w) => w.msg.includes('不是整数'))).toBe(true);
   });
 });
+
+describe('循环 56：战利品区间/权重与负经验值——静默行为显式化', () => {
+  it('min>max 区间警告；weight=0.5 警告；xp<0 警告（生成侧钳制/忽略不再无声）', () => {
+    const meta = CORE.readMeta(CORE.starterCode()).meta;
+    meta.nodes = {
+      a: {
+        loot: [
+          { item: 'minecraft:diamond', max: 2, min: 5 },
+          { item: 'minecraft:emerald', max: 3, min: 1, weight: 0.5 }
+        ],
+        params: {},
+        trigger: 'manual',
+        xp: -100
+      }
+    };
+    const r = CORE.exportZip(
+      CORE.buildCode(
+        meta,
+        'TD',
+        [
+          { id: 'root', label: '根', shape: 'rect' },
+          { id: 'a', label: '甲', shape: 'rect' }
+        ],
+        [{ from: 'root', to: 'a' }]
+      )
+    );
+    if (!r.ok) {
+      throw new Error(r.errors.map((e) => e.msg).join(';'));
+    }
+    expect(r.analysis.warnings.some((w) => w.msg.includes('数量区间（5~2）无效'))).toBe(true);
+    expect(r.analysis.warnings.some((w) => w.msg.includes('权重「0.5」无效'))).toBe(true);
+    expect(r.analysis.warnings.some((w) => w.msg.includes('经验奖励 -100 为负数'))).toBe(true);
+    // 生成侧钳制结果：diamond [5,5]（max 抬到 min），emerald 权重被忽略
+    const loot =
+      r.files.find((f) => f.path.includes('loot_table') && f.path.includes('a.json'))?.text ?? '';
+    const parsed = JSON.parse(loot) as {
+      pools: {
+        entries: {
+          weight?: number;
+          functions: { function: string; count: { max: number; min: number } }[];
+        }[];
+      }[];
+    };
+    expect(parsed.pools[0].entries[0].functions[0].count).toEqual({ max: 5, min: 5 });
+    expect(parsed.pools[0].entries[1].weight).toBeUndefined();
+  });
+});

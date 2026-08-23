@@ -1314,10 +1314,36 @@ const coreFactory = function () {
             nodeId
           });
         }
+        // 生成侧会静默钳制（min≥1、max≥min、weight≥1 整数）——提前告知
+        if (item) {
+          const mn = Number(raw.min ?? 1);
+          const mx = Number(raw.max ?? raw.min ?? 1);
+          if (Number.isFinite(mn) && Number.isFinite(mx) && (mn < 1 || mx < mn)) {
+            warnings.push({
+              msg: `成就「${node.label}」的战利品「${item}」数量区间（${raw.min}~${raw.max}）无效，导出时将按 min≥1 且 max≥min 规范`,
+              nodeId
+            });
+          }
+          const w = Number(raw.weight ?? 1);
+          if ((raw.weight !== undefined && raw.weight !== null && String(raw.weight) !== '') && (!Number.isInteger(w) || w < 1)) {
+            warnings.push({
+              msg: `成就「${node.label}」的战利品「${item}」权重「${raw.weight}」无效（须 ≥1 整数），导出时忽略权重`,
+              nodeId
+            });
+          }
+        }
       }
       if (emptyLoot > 0) {
         warnings.push({
           msg: `成就「${node.label}」有 ${emptyLoot} 条未填物品的战利品条目，导出时忽略`,
+          nodeId
+        });
+      }
+      // 负经验值在生成侧被静默忽略（rewards 仅 >0 输出）——显式告知
+      const xpVal = Number(nm.xp ?? 0);
+      if (Number.isFinite(xpVal) && xpVal < 0) {
+        warnings.push({
+          msg: `成就「${node.label}」的经验奖励 ${nm.xp} 为负数，导出时不输出 rewards（如需扣经验请用战利品/函数）`,
           nodeId
         });
       }
