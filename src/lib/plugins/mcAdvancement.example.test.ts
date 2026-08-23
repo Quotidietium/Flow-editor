@@ -2246,3 +2246,14 @@ describe('循环 57：栏图标与大满贯图标格式校验（此前零校验�
     expect(r.warnings.some((w) => w.msg.includes('大满贯图标「也是错的」'))).toBe(true);
   });
 });
+
+describe('循环 58：issue 行键盘可达（与树行同模式）+ 插件版本 1.9.0', () => {
+  it('可定位 issue 带 role/tabindex 与 Enter/Space 处理；插件版本升至 1.9.0', () => {
+    const html = decodeURIComponent(
+      plugin.frontend.url.replace('data:text/html;charset=utf-8,', '')
+    );
+    expect(html).toContain('\' role="button" tabindex="0"'); // issueRow 输出
+    expect(html).toContain("ev.key === 'Enter' || ev.key === ' '");
+    expect(plugin.version).toBe('1.9.0');
+  });
+});

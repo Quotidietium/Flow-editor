@@ -4746,10 +4746,12 @@ const FRONTEND_HTML = `<!doctype html>
         var a = S.analysis;
         var html = '';
         var issueRow = function (cls, i) {
-          // 可定位的才给 pointer 光标与点击（全局说明类问题点了没反应是假可点）
+          // 可定位的才给 pointer 光标与点击（全局说明类问题点了没反应是假可点）；
+          // 与树行同款键盘可达（Enter/Space 触发）
           var actionable = i.nodeId || i.scope === 'settings' || i.tabId;
           return '<div class="issue ' + cls + (actionable ? ' link' : '') + '" data-n="' + esc(i.nodeId || '') + '"'
             + (i.scope === 'settings' ? ' data-s="1"' : '') + (i.tabId ? ' data-t="' + esc(i.tabId) + '"' : '')
+            + (actionable ? ' role="button" tabindex="0"' : '')
             + '>' + (cls === 'error' ? '✗ ' : '⚠ ') + esc(i.msg) + '</div>';
         };
         a.errors.forEach(function (i) { html += issueRow('error', i); });
@@ -4762,7 +4764,7 @@ const FRONTEND_HTML = `<!doctype html>
           jarBtn.disabled = a.errors.length > 0; // 与导出按钮同态（编译必失败）
         }
         Array.prototype.forEach.call($('issues').querySelectorAll('.issue.link'), function (el) {
-          el.onclick = function () {
+          var jump = function () {
             var nid = el.getAttribute('data-n');
             if (nid && findNode(nid)) {
               S.settings = false;
@@ -4781,6 +4783,13 @@ const FRONTEND_HTML = `<!doctype html>
               S.settings = true; // 设置级问题 → 跳插件设置表单
               S.sel = null;
               render();
+            }
+          };
+          el.onclick = jump;
+          el.onkeydown = function (ev) {
+            if (ev.key === 'Enter' || ev.key === ' ' || ev.key === 'Spacebar') {
+              ev.preventDefault();
+              jump();
             }
           };
         });
@@ -4943,7 +4952,7 @@ export default {
   id: 'flow.mc-advancement',
   name: 'MC 进度设计器',
   permissions: ['import:file', 'export:format', 'ui:frontend'],
-  version: '1.8.0'
+  version: '1.9.0'
 };
 
 // 单测钩子（不改变插件运行时行为）
