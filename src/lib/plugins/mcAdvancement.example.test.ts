@@ -935,6 +935,61 @@ describe('subgraph 成就栏（循环 11）', () => {
   });
 });
 
+describe('循环 38 三项核验', () => {
+  it('suggest 与 thresholds 同源（均用 achievement.id()）', () => {
+    const r = CORE.exportZip(CORE.starterCode());
+    if (!r.ok) {
+      throw new Error('导出失败');
+    }
+    const cmd = r.files.find((f) => f.path.endsWith('Command.java'))?.text ?? '';
+    const listener = r.files.find((f) => f.path.endsWith('AchievementListener.java'))?.text ?? '';
+    expect(cmd).toContain('.map(Achievement::id)'); // suggest 列表源
+    expect(listener).toContain('"thresholds." + achievement.id()'); // config 键源
+    // 同一枚举 id() → 两处天然一致（无独立键表可漂移）
+  });
+
+  it('外部 rewards.function 指向不影响 loot 还原（以 loot_table 文件为准）', async () => {
+    const meta = CORE.readMeta(CORE.starterCode()).meta;
+    meta.nodes = {
+      treasure: { loot: [{ item: 'minecraft:diamond', max: 1, min: 1 }], trigger: 'break_block' }
+    };
+    const exported = CORE.exportZip(
+      CORE.buildCode(
+        meta,
+        'TD',
+        [
+          { id: 'root', label: '根', shape: 'rect' },
+          { id: 'treasure', label: '寻宝', shape: 'rect' }
+        ],
+        [{ from: 'root', to: 'treasure' }]
+      )
+    );
+    if (!exported.ok) {
+      throw new Error('导出失败');
+    }
+    const entries = await CORE.readZipEntries(exported.bytes);
+    // 篡改 advancement JSON 的 rewards.function 指向 minecraft: 外部函数
+    const files = [...entries.entries()].map(([name, data]) => {
+      let text = new TextDecoder().decode(data);
+      if (name.endsWith('advancement/treasure.json')) {
+        const json = JSON.parse(text);
+        json.rewards = { function: 'minecraft:builtin/entity' }; // 外部指向
+        text = JSON.stringify(json);
+      }
+      return { path: name, text };
+    });
+    const imported = await CORE.importDatapackZip(
+      CORE.buildZip(files.filter((f) => !f.path.endsWith('flow-editor.json')))
+    );
+    expect(imported).toBeDefined();
+    const a = CORE.analyze(imported?.code ?? '');
+    // loot 仍按 loot_table 文件还原（不受 function 指向篡改影响）
+    expect(a.nodes.find((n) => n.id === 'treasure')?.meta.loot).toEqual([
+      { item: 'minecraft:diamond', max: 1, min: 1 }
+    ]);
+  });
+});
+
 describe('循环 37', () => {
   it('save 失败时 dirty 保持（仅成功后才清）', () => {
     const r = CORE.exportZip(CORE.starterCode());
