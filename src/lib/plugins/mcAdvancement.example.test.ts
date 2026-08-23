@@ -2308,3 +2308,21 @@ describe('循环 62：大满贯负经验值如实提示（原样输出=解锁扣
     expect(JSON.parse(comp).rewards.experience).toBe(-50); // 行为如实：原样输出
   });
 });
+
+describe('循环 63：播报格式标签语义修正', () => {
+  it('留空=保留原版播报（曾误标「留空不播报」——空串实际不调用 event.message，原版消息保留）', () => {
+    const html = decodeURIComponent(
+      plugin.frontend.url.replace('data:text/html;charset=utf-8,', '')
+    );
+    expect(html).toContain('留空=保留原版播报');
+    expect(html).not.toContain('留空不播报');
+    // Java 侧语义锚：空 format 跳过 event.message（原版消息不被替换）
+    const r = CORE.exportZip(CORE.starterCode());
+    if (!r.ok) {
+      throw new Error('导出失败');
+    }
+    const listener = r.files.find((f) => f.path.endsWith('AchievementListener.java'))?.text ?? '';
+    expect(listener).toContain('!format.isEmpty()');
+    expect(listener).toContain('event.message(');
+  });
+});

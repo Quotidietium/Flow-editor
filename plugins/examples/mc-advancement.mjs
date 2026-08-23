@@ -4722,7 +4722,7 @@ const FRONTEND_HTML = `<!doctype html>
           + inputHtml('autosaveSeconds', '计数自动保存间隔（秒）', String(m.autosaveSeconds), 'number', ' min="30"')
           + '</div>';
         html += '<div class="row">'
-          + inputHtml('announceFormat', '播报格式（%player%/%name%，留空不播报）', m.announceFormat, 'text')
+          + inputHtml('announceFormat', '播报格式（%player%/%name%，留空=保留原版播报）', m.announceFormat, 'text')
           + '</div>';
         html += '<div class="row">'
           + '<div><label>本地化（多语言进度名）</label><select data-k="localization">'
