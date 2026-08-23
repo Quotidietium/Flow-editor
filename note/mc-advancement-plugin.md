@@ -271,8 +271,9 @@ MyAchievements/
 
 ## 8. 明确不做（通道 C）
 
-- 物品/配方/自定义战利品表内容编辑：rewards 仅支持经验值（战利品表/函数
-  属数据包工程范畴，超出图表可表达范围；config.yml 注释给出扩展指引）。
+- ~~物品/配方/自定义战利品表内容编辑~~ → **2.0.134 已实现条目化战利品
+  奖励**（物品+数量区间+权重 → 自动生成 loot_table 与发放函数，见 §12）；
+  仍不做：任意 loot table JSON 原文编辑（条件/附魔函数等属数据包工程范畴）。
 - 服务端侧本地化文件（成就名硬编码中文，与 REF 一致）。
 - Spigot 兼容（paper-plugin.yml 为 Paper 专属，与 REF 取舍一致）。
 - ~~导入既有数据包 zip 逆向成图~~ → **2.0.132 已实现**（见 §10）。
@@ -393,3 +394,16 @@ would create a cycle`（画布静默保留旧图）——生成侧已排除该�
   手写代码遇到此报错请检查组 id 是否被当作节点/连线使用。
 - 主界面可视化画布（model.ts）对 subgraph 行按不支持跳过：画布编辑会把
   图平铺化显示，但 tab 语义经连通分量完整保留（边都在），不丢数据。
+
+## 12. 战利品奖励（2.0.134）
+
+成就达成时发放物品（`nodes.<id>.loot = [{item, min, max, weight?}]`）：
+
+- 生成 `loot_table/<id>.json`（单池，条目 = 物品 + `minecraft:set_count`
+  数量区间，可加权；表类型 `minecraft:chest`）与
+  `function/<id>.mcfunction`（`loot give @p loot <ns>:<id>`）；
+  成就 JSON 的 `rewards` 同时含 `experience`（若配置）与 `function`
+  （**1.21 语义**：旧 `rewards.loot` 已移除，必须走函数）。
+- 前端成就表单条目化编辑；逆向导入从 loot_table 反推条目（外部包）或走
+  溯源元数据无损还原（自家导出）。
+- 桌面编译链路径白名单含 `.mcfunction`（发放函数随 jar 打包）。
