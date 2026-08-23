@@ -2246,10 +2246,11 @@ ${perNode(
       blocks.push(`    @EventHandler(ignoreCancelled = true)
     public void onChat(AsyncChatEvent event) {
         // AsyncChat 在异步线程触发：Bukkit 的进度授予 API 非线程安全——
-        // 检查与授予整体调度回主线程执行
+        // 调度回主线程执行。message/player 必须在调度【前】提取为不可变
+        // 值：runTask 延迟执行时异步管线可能已修改 event 的可变组件
+        Player player = event.getPlayer();
+        String message = PlainTextComponentSerializer.plainText().serialize(event.message());
         plugin.getServer().getScheduler().runTask(plugin, () -> {
-            Player player = event.getPlayer();
-            String message = PlainTextComponentSerializer.plainText().serialize(event.message());
 ${perNode(
   'chat_keyword',
   () => `            {
@@ -4493,7 +4494,7 @@ const FRONTEND_HTML = `<!doctype html>
       $('btnExport').onclick = exportZipFile;
       $('btnJar').onclick = exportJarFile;
       $('btnStarter').onclick = function () {
-        if (!confirm('用示例成就图替换当前图表内容？')) { return; }
+        if (!confirm('用示例成就图替换当前图表的全部内容？（现有成就、触发器、战利品、本地化、样式等所有设置都会丢失）')) { return; }
         tool('set_code', { code: CORE.starterCode() }).then(load);
       };
       // 设置入口放在 header 最右

@@ -935,6 +935,39 @@ describe('subgraph 成就栏（循环 11）', () => {
   });
 });
 
+describe('AsyncChat 闭包提取与覆盖确认（循环 32）', () => {
+  it('message/player 在 runTask 之前提取（不捕获可变 event）', () => {
+    const meta = CORE.readMeta(CORE.starterCode()).meta;
+    meta.nodes = { c: { params: { keyword: 'hi' }, trigger: 'chat_keyword' } };
+    const r = CORE.exportZip(
+      CORE.buildCode(
+        meta,
+        'TD',
+        [
+          { id: 'root', label: '根', shape: 'rect' },
+          { id: 'c', label: '聊', shape: 'rect' }
+        ],
+        [{ from: 'root', to: 'c' }]
+      )
+    );
+    if (!r.ok) {
+      throw new Error('导出失败');
+    }
+    const listener = r.files.find((f) => f.path.endsWith('AchievementListener.java'))?.text ?? '';
+    const extractPos = listener.indexOf('String message = PlainTextComponentSerializer');
+    const runPos = listener.indexOf('runTask(plugin, () -> {');
+    expect(extractPos).toBeGreaterThan(-1);
+    expect(runPos).toBeGreaterThan(extractPos); // 提取在调度前
+  });
+
+  it('前端内嵌脚本：覆盖确认文案列出丢失项', () => {
+    const html = decodeURIComponent(
+      plugin.frontend.url.replace('data:text/html;charset=utf-8,', '')
+    );
+    expect(html).toContain('触发器、战利品、本地化、样式等所有设置都会丢失');
+  });
+});
+
 describe('可取消事件 ignoreCancelled（循环 31）', () => {
   it('trade/tame/breed/chat 四个 Cancellable 事件带 ignoreCancelled', () => {
     const mk = (trigger) => {
