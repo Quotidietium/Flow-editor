@@ -2590,6 +2590,12 @@ ${rows.join('\n')}
       { path: 'src/main/resources/paper-plugin.yml', text: paperPluginYml(a, cls) },
       { path: 'src/main/resources/config.yml', text: configYml(a) },
       { path: 'src/main/resources/datapack/pack.mcmeta', text: packMcmeta(a) },
+      // 溯源元数据：逆向导入（打开 zip）时完整还原触发器/参数/栏设置。
+      // 位于数据包根目录，Minecraft 忽略未知文件，不影响加载。
+      {
+        path: 'src/main/resources/datapack/flow-editor.json',
+        text: JSON.stringify({ mcadv: a.meta }, null, 2) + '\n'
+      },
       { path: `src/main/java/${pkgPath}/${cls}Plugin.java`, text: javaMain(a, cls) },
       { path: `src/main/java/${pkgPath}/${cls}Bootstrap.java`, text: javaBootstrap(a.meta, cls) },
       { path: `src/main/java/${pkgPath}/Achievement.java`, text: javaEnum(a) },
@@ -2712,6 +2718,235 @@ ${rows.join('\n')}
     return out;
   };
 
+  // ------------------------------------------------------------- zip 读取
+
+  const inflateRaw = async (raw) => {
+    if (typeof DecompressionStream === 'undefined') {
+      throw new Error('DEFLATE_UNSUPPORTED');
+    }
+    const stream = new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  };
+
+  /** 解析 zip：中央目录定位条目；store 直读、deflate 走 DecompressionStream。 */
+  const readZipEntries = async (bytes) => {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const eocd = bytes.length - 22;
+    if (eocd < 0 || view.getUint32(eocd, true) !== 0x06_05_4b_50) {
+      throw new Error('NOT_ZIP');
+    }
+    const count = view.getUint16(eocd + 10, true);
+    let p = view.getUint32(eocd + 16, true);
+    const entries = new Map();
+    const decoder = new TextDecoder();
+    const inflaters = [];
+    for (let i = 0; i < count; i++) {
+      if (view.getUint32(p, true) !== 0x02_01_4b_50) {
+        throw new Error('BAD_CENTRAL');
+      }
+      const method = view.getUint16(p + 10, true);
+      const csize = view.getUint32(p + 20, true);
+      const nameLen = view.getUint16(p + 28, true);
+      const extraLen = view.getUint16(p + 30, true);
+      const commentLen = view.getUint16(p + 32, true);
+      const localOff = view.getUint32(p + 42, true);
+      const name = decoder.decode(bytes.slice(p + 46, p + 46 + nameLen));
+      const localNameLen = view.getUint16(localOff + 26, true);
+      const localExtraLen = view.getUint16(localOff + 28, true);
+      const start = localOff + 30 + localNameLen + localExtraLen;
+      const raw = bytes.slice(start, start + csize);
+      if (!name.endsWith('/')) {
+        if (method === 0) {
+          entries.set(name, raw);
+        } else if (method === 8) {
+          inflaters.push(inflateRaw(raw).then((data) => entries.set(name, data)));
+        }
+      }
+      p += 46 + nameLen + extraLen + commentLen;
+    }
+    await Promise.all(inflaters);
+    return entries;
+  };
+
+  /**
+   * 逆向导入：MC 数据包 zip（pack.mcmeta + data/<ns>/advancement/*.json）
+   * 或本插件导出的 Maven 工程 zip（datapack 嵌套布局）。
+   * 自家导出携带 datapack/flow-editor.json 溯源元数据 → 触发器/参数/栏
+   * 设置完整还原；外部数据包尽力还原（impossible 条件无法反推触发方式，
+   * 按仅命令授予；无父进度视为栏根）。
+   * 返回 { code, warnings } 或 undefined（不是可识别的数据包）。
+   */
+  const importDatapackZip = async (bytes) => {
+    let entries;
+    try {
+      entries = await readZipEntries(bytes);
+    } catch {
+      return undefined;
+    }
+    let base = null;
+    if (entries.has('pack.mcmeta')) {
+      base = '';
+    } else if (entries.has('src/main/resources/datapack/pack.mcmeta')) {
+      base = 'src/main/resources/datapack/';
+    }
+    if (base === null) {
+      return undefined;
+    }
+    const decoder = new TextDecoder();
+    const warnings = [];
+
+    // 溯源元数据（自家导出）
+    let provenance = null;
+    const provEntry = entries.get(`${base}flow-editor.json`);
+    if (provEntry) {
+      try {
+        const parsed = JSON.parse(decoder.decode(provEntry));
+        if (parsed?.mcadv && typeof parsed.mcadv === 'object') {
+          provenance = parsed.mcadv;
+        }
+      } catch {
+        warnings.push('溯源元数据 flow-editor.json 无法解析，按外部数据包尽力还原');
+      }
+    }
+
+    // 收集 advancement JSON（按命名空间）
+    const advPrefix = `${base}data/`;
+    const advSuffix = '/advancement/';
+    const byNs = new Map();
+    for (const [name, data] of entries) {
+      if (!name.startsWith(advPrefix) || !name.endsWith('.json')) {
+        continue;
+      }
+      const rest = name.slice(advPrefix.length, -5);
+      const idx = rest.indexOf(advSuffix);
+      if (idx <= 0) {
+        continue;
+      }
+      const ns = rest.slice(0, idx);
+      const nid = rest.slice(idx + advSuffix.length);
+      if (!ns || !nid || nid.includes('/')) {
+        continue;
+      }
+      try {
+        const json = JSON.parse(decoder.decode(data));
+        if (!json || typeof json !== 'object') {
+          continue;
+        }
+        if (!byNs.has(ns)) {
+          byNs.set(ns, new Map());
+        }
+        byNs.get(ns).set(nid, json);
+      } catch {
+        warnings.push(`进度文件 ${name} 不是合法 JSON，已跳过`);
+      }
+    }
+    if (byNs.size === 0) {
+      return undefined;
+    }
+    let ns = null;
+    if (provenance?.namespace && byNs.has(provenance.namespace)) {
+      ns = provenance.namespace;
+    } else if (byNs.size === 1) {
+      ns = byNs.keys().next().value;
+    } else {
+      const sorted = [...byNs.entries()].sort((a, b) => b[1].size - a[1].size);
+      ns = sorted[0][0];
+      warnings.push(`数据包含多个命名空间，仅导入「${ns}」（其余 ${byNs.size - 1} 个跳过）`);
+    }
+    const advs = byNs.get(ns);
+
+    // 大满贯识别：全部条件都是同栏其他进度 id 的 impossible 条件
+    let completionist = null;
+    for (const [nid, json] of advs) {
+      const criteria = json.criteria ?? {};
+      const keys = Object.keys(criteria);
+      const allOthers = keys.every(
+        (k) => k !== nid && advs.has(k) && criteria[k]?.trigger === 'minecraft:impossible'
+      );
+      if (keys.length >= 1 && allOthers) {
+        completionist = { json, nid };
+        break;
+      }
+    }
+    if (completionist) {
+      advs.delete(completionist.nid);
+    }
+
+    // 重建节点与边（溯源元数据优先，缺失的节点/栏从 advancement JSON 恢复）
+    const FRAME_SHAPE_IN = { challenge: 'diamond', goal: 'round', task: 'rect' };
+    const meta = { ...defaultMeta(), ...(provenance ?? {}) };
+    meta.nodes = { ...(provenance?.nodes ?? {}) };
+    meta.tabs = { ...(provenance?.tabs ?? {}) };
+    meta.namespace = ns; // 文件为准（数据包可能被外部改名）
+    if (!meta.command) {
+      meta.command = ns;
+    }
+    const nodes = [];
+    const edges = [];
+    const rootIds = [];
+    for (const [nid, json] of advs) {
+      const display = json.display ?? {};
+      const pidRaw = typeof json.parent === 'string' ? json.parent : '';
+      const pid = pidRaw.startsWith(`${ns}:`) ? pidRaw.slice(ns.length + 1) : '';
+      const label = display.title?.text ?? nid;
+      const shape = FRAME_SHAPE_IN[display.frame ?? 'task'] ?? 'rect';
+      nodes.push({ id: nid, label, shape });
+      if (!meta.nodes[nid] || typeof meta.nodes[nid] !== 'object') {
+        meta.nodes[nid] = {
+          announce: true,
+          desc: display.description?.text ?? '',
+          hidden: display.hidden === true,
+          icon: display.icon?.id ?? '',
+          params: {},
+          toast: display.show_toast !== false,
+          trigger: 'manual',
+          xp: Number(json.rewards?.experience) || 0
+        };
+      }
+      if (pid && advs.has(pid)) {
+        edges.push({ from: pid, to: nid });
+      } else {
+        rootIds.push(nid);
+        if (!meta.tabs[nid] || typeof meta.tabs[nid] !== 'object') {
+          meta.tabs[nid] = {
+            background: display.background ?? 'minecraft:textures/block/deepslate_tiles.png',
+            completionist: Boolean(completionist),
+            desc: display.description?.text ?? '',
+            icon: display.icon?.id ?? 'minecraft:nether_star'
+          };
+        }
+      }
+    }
+    if (completionist && rootIds.length > 0) {
+      // 大满贯归到其 parent 所在栏（溯源缺省时）
+      const parentRaw = completionist.json.parent;
+      const pid =
+        typeof parentRaw === 'string' && parentRaw.startsWith(`${ns}:`)
+          ? parentRaw.slice(ns.length + 1)
+          : '';
+      let target = rootIds.includes(pid) ? pid : rootIds[0];
+      if (!target) {
+        target = rootIds[0];
+      }
+      const cDisplay = completionist.json.display ?? {};
+      const base = meta.tabs[target] ?? {};
+      meta.tabs[target] = {
+        ...base,
+        completionist: true,
+        completionistDesc: cDisplay.description?.text ?? base.completionistDesc,
+        completionistIcon: cDisplay.icon?.id ?? base.completionistIcon,
+        completionistName: cDisplay.title?.text ?? base.completionistName,
+        completionistXp: Number(completionist.json.rewards?.experience) || base.completionistXp
+      };
+    }
+    if (nodes.length === 0) {
+      return undefined;
+    }
+
+    const code = buildCode(meta, 'TD', nodes, edges);
+    return { code, warnings };
+  };
+
   /** 一键导出：分析 → 生成 → 打包。失败返回 { ok:false, errors }。 */
   const exportZip = (code) => {
     const a = analyze(code);
@@ -2819,6 +3054,8 @@ ${rows.join('\n')}
     tabMeta,
     triggerById,
     triggerGroup,
+    importDatapackZip,
+    readZipEntries,
     triggerParams
   };
 };
@@ -3520,6 +3757,7 @@ export default {
   description:
     '把流程图变成 Paper 成就插件：节点=成就、连线=承接、形状=框架类型、连通分量=成就栏；' +
     '元数据（触发方式/图标/奖励等）存于 frontmatter 并经前端面板编辑；一键导出 Maven 工程 zip；' +
+    '打开 zip 可逆向导入回图表（自家导出完整还原，外部数据包尽力还原）；' +
     '桌面版还可离线编译为可安装的 .jar（内置 Paper 编译工具链，需本机自装 JDK 21+，应用不捆绑 Java）。',
   export: {
     id: 'mc-plugin',
@@ -3548,10 +3786,33 @@ export default {
       'allow-scripts allow-same-origin allow-forms allow-popups allow-downloads allow-modals',
     url: FRONTEND_URL
   },
+  // 逆向导入：接管 .zip（数据包布局或本插件导出的 Maven 工程）；非成就
+  // 数据包返回 undefined 放行给内置解析器。需要宿主提供 bytes（2.0.132+）。
+  import: {
+    async import(file, ctx) {
+      if (!file.bytes) {
+        return undefined; // 旧宿主只给文本通道，二进制无法可靠承载
+      }
+      try {
+        const result = await CORE.importDatapackZip(file.bytes);
+        if (!result) {
+          return undefined;
+        }
+        for (const warning of result.warnings) {
+          ctx.notify(`导入提示：${warning}`);
+        }
+        return { code: result.code };
+      } catch {
+        return undefined;
+      }
+    },
+    extensions: ['zip'],
+    name: 'MC 数据包 / Maven 工程（.zip）'
+  },
   id: 'flow.mc-advancement',
   name: 'MC 进度设计器',
-  permissions: ['export:format', 'ui:frontend'],
-  version: '1.3.0'
+  permissions: ['import:file', 'export:format', 'ui:frontend'],
+  version: '1.4.0'
 };
 
 // 单测钩子（不改变插件运行时行为）
