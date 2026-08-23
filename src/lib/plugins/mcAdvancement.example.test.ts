@@ -2355,3 +2355,15 @@ describe('循环 67：renameNode 非法 id 闸门（空格/中文曾直接产出
     expect((html.match(/renameNode\(/g) ?? []).length).toBeGreaterThanOrEqual(4); // 1 定义 + 3 调用
   });
 });
+
+describe('循环 68：statistic 统计项 datalist', () => {
+  it('stats datalist 存在且 stat 输入挂载；候选含默认 walk_one_cm 与常用项', () => {
+    const html = decodeURIComponent(
+      plugin.frontend.url.replace('data:text/html;charset=utf-8,', '')
+    );
+    const opts = [...html.matchAll(/<option value="(jump|walk_one_cm|mob_kills|deaths)">/g)];
+    expect(opts.length).toBeGreaterThanOrEqual(4);
+    expect(html).toContain('<datalist id="stats">');
+    expect(html).toContain(`' list="stats"'`);
+  });
+});

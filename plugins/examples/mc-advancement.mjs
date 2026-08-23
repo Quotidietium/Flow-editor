@@ -3907,6 +3907,15 @@ const BG_TEXTURES = [
 ];
 const BG_OPTIONS = BG_TEXTURES.map((b) => `<option value="minecraft:textures/block/${b}.png">`).join('');
 
+/** statistic 触发器常用统计项候选（无前缀原版自定义统计名；
+ *  未知名运行期 Registry 查不到 → onEnable 警告并跳过，安全降级）。 */
+const STAT_ITEMS = [
+  'walk_one_cm', 'sprint_one_cm', 'sneak_time', 'climb_one_cm', 'fly_one_cm',
+  'jump', 'deaths', 'mob_kills', 'player_kills', 'damage_dealt', 'damage_taken',
+  'animals_bred', 'fish_caught', 'sleep_in_bed', 'play_time'
+];
+const STAT_OPTIONS = STAT_ITEMS.map((s) => `<option value="${s}">`).join('');
+
 const FRONTEND_HTML = `<!doctype html>
 <html lang="zh-CN">
   <head>
@@ -3975,6 +3984,9 @@ const FRONTEND_HTML = `<!doctype html>
     </datalist>
     <datalist id="backgrounds">
       ${BG_OPTIONS}
+    </datalist>
+    <datalist id="stats">
+      ${STAT_OPTIONS}
     </datalist>
     <script>
       var CORE = (${coreFactory.toString()})();
@@ -4287,6 +4299,7 @@ const FRONTEND_HTML = `<!doctype html>
               + '</select>';
           } else {
             html += '<label>' + esc(p.label) + '</label><input type="' + (p.type === 'int' ? 'number' : 'text') + '" data-p="' + p.key + '" value="' + esc(v) + '"'
+              + (p.key === 'stat' ? ' list="stats"' : '')
               + (p.ph ? ' placeholder="' + esc(p.ph) + '"' : '') + (p.min !== undefined ? ' min="' + p.min + '"' : '') + ' />';
           }
         });
