@@ -1258,12 +1258,23 @@ const coreFactory = function () {
             });
           }
         }
-        // 枚举大写名（villager 职业 / 弹射物 EntityType）
+        // 枚举大写名（villager 职业 / 弹射物 EntityType / 工具 Material）——
+        // 运行期 equalsIgnoreCase 大小写不敏感，小写仍匹配；建议大写仅为规范
         if (p.key === 'profession' || p.key === 'projectile' || p.key === 'tool') {
           const v = String(nm.params[p.key] ?? '').trim();
           if (v && !/^[A-Z][A-Z0-9_]*$/.test(v)) {
             warnings.push({
-              msg: `成就「${node.label}」的参数「${p.label}」的值「${v}」应为枚举名（大写，如 FARMER/ARROW），服务端将按「任意」降级`,
+              msg: `成就「${node.label}」的参数「${p.label}」的值「${v}」建议用标准枚举名（大写，如 FARMER/ARROW）——当前写法大小写不敏感仍可匹配，但拼错枚举名会导致永不触发`,
+              nodeId
+            });
+          }
+        }
+        // cause 值域三选，域外值三个运行期分支都不中——永不触发
+        if (p.key === 'cause') {
+          const v = String(nm.params.cause ?? 'any').trim().toLowerCase();
+          if (!['any', 'melee', 'projectile'].includes(v)) {
+            errors.push({
+              msg: `成就「${node.label}」的伤害方式「${nm.params.cause}」不在 any/melee/projectile 之内，该成就将永不触发`,
               nodeId
             });
           }

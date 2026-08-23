@@ -935,6 +935,36 @@ describe('subgraph 成就栏（循环 11）', () => {
   });
 });
 
+describe('循环 49：新参数边界探针', () => {
+  it('小写枚举建议规范（文案不再错报「降级为任意」）；cause 域外值为错误', () => {
+    const meta = CORE.readMeta(CORE.starterCode()).meta;
+    meta.nodes = {
+      t: { params: { amount: 1, profession: 'farmer' }, trigger: 'trade' },
+      k: { params: { amount: 1, cause: 'NUKE', entity: '' }, trigger: 'kill' }
+    };
+    const a = CORE.analyze(
+      CORE.buildCode(
+        meta,
+        'TD',
+        [
+          { id: 'root', label: '根', shape: 'rect' },
+          { id: 't', label: '商', shape: 'rect' },
+          { id: 'k', label: '猎', shape: 'rect' }
+        ],
+        [
+          { from: 'root', to: 't' },
+          { from: 'root', to: 'k' }
+        ]
+      )
+    );
+    const enumWarn = a.warnings.find((w) => w.msg.includes('建议用标准枚举名'));
+    expect(enumWarn?.msg).toContain('大小写不敏感仍可匹配');
+    expect(a.warnings.some((w) => w.msg.includes('降级'))).toBe(false); // 旧文案不再出现
+    expect(a.errors.some((e) => e.msg.includes('不在 any/melee/projectile'))).toBe(true);
+    expect(a.ok).toBe(false); // cause 域外阻断导出
+  });
+});
+
 describe('循环 48', () => {
   it('kill 伤害方式过滤（cause 下拉 + DamageSource 判定）', () => {
     const meta = CORE.readMeta(CORE.starterCode()).meta;
@@ -1046,7 +1076,7 @@ describe('循环 46', () => {
         [{ from: 'root', to: 't' }]
       )
     );
-    expect(bad.warnings.some((w) => w.msg.includes('应为枚举名'))).toBe(true);
+    expect(bad.warnings.some((w) => w.msg.includes('建议用标准枚举名'))).toBe(true); // 循环 49 文案修正后
   });
 });
 
