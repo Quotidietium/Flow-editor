@@ -4450,6 +4450,13 @@ const FRONTEND_HTML = `<!doctype html>
         var a = S.analysis;
         var id = newId.trim();
         if (!id || id === n.id) { render(); return; }
+        // id 会原样进 mermaid 代码：空格/中文等非法字符直接产出解析失败
+        // 或被跳行的代码（循环 42 的 parseFlow 跳行警告只在读回时才可见）
+        if (!/^[a-z0-9_]+$/.test(id)) {
+          setStatus('id 只能用小写字母/数字/下划线（当前「' + id + '」含非法字符）');
+          render();
+          return;
+        }
         if (findNode(id)) { setStatus('id「' + id + '」已存在'); render(); return; }
         a.edges.forEach(function (e) {
           if (e.from === n.id) { e.from = id; }

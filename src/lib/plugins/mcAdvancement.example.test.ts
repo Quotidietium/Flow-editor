@@ -2343,3 +2343,15 @@ describe('循环 66：packFormat 数字输入 min 软护栏', () => {
     );
   });
 });
+
+describe('循环 67：renameNode 非法 id 闸门（空格/中文曾直接产出非法 mermaid 代码）', () => {
+  it('前端脚本含 [a-z0-9_] 闸门与状态提示；三个 id 入口共用 renameNode', () => {
+    const html = decodeURIComponent(
+      plugin.frontend.url.replace('data:text/html;charset=utf-8,', '')
+    );
+    expect(html).toContain('!/^[a-z0-9_]+$/.test(id)');
+    expect(html).toContain('含非法字符');
+    // 三个 data-k="id" 入口全部经 renameNode（节点/根/栏表单）
+    expect((html.match(/renameNode\(/g) ?? []).length).toBeGreaterThanOrEqual(4); // 1 定义 + 3 调用
+  });
+});

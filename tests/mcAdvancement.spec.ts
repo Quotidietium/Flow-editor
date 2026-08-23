@@ -382,3 +382,33 @@ test('MC 设计器：重新读取丢弃未写回修改前先确认（循环 64�
   await expect(frame.locator('input[data-k="desc"]')).toBeVisible();
   await expect(frame.locator('input[data-k="desc"]')).not.toHaveValue('未写回的描述修改');
 });
+
+test('MC 设计器：节点 id 非法字符被闸门拦截（循环 67）', async ({ editPage, page }) => {
+  await editPage.view.waitFor({ state: 'visible' });
+  await installDesigner(page);
+  page.on('dialog', (dialog) => void dialog.accept());
+
+  await page.getByRole('button', { name: /打开 MC 进度设计器/ }).click();
+  await expect(page.getByTestId('plugin-manager')).toHaveCount(0, { timeout: 10_000 });
+  const frame = page.frameLocator('iframe[title="插件前端"]');
+  await frame.getByText('MC 进度设计器').first().waitFor({ timeout: 10_000 });
+
+  await frame.getByRole('button', { name: '初始化示例' }).click();
+  await frame.getByText('✓ 校验通过，可以导出').waitFor({ timeout: 10_000 });
+
+  // 选中节点，把 id 改成带空格的非法值 → 状态栏提示 + 代码不含该 id
+  await frame.getByText('愚公移山').click();
+  await frame.locator('input[data-k="id"]').fill('my ach');
+  await frame.locator('input[data-k="id"]').blur();
+  await expect(frame.locator('#status')).toContainText('非法字符');
+  await expect
+    .poll(() => page.evaluate(() => window.__FLOW_EDITOR_STATE__?.().code ?? ''))
+    .not.toContain('my ach');
+  // 合法 id 仍可正常改名（级联更新）
+  await frame.locator('input[data-k="id"]').fill('yugong');
+  await frame.locator('input[data-k="id"]').blur();
+  await frame.getByRole('button', { name: '写回编辑器' }).click();
+  await expect
+    .poll(() => page.evaluate(() => window.__FLOW_EDITOR_STATE__?.().code ?? ''))
+    .toContain('yugong');
+});
