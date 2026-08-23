@@ -655,7 +655,12 @@ const coreFactory = function () {
       return node;
     };
 
-    const SKIP_RE = /^%%|^(?:style|classDef|class|click|linkStyle|direction|title)\s|^end\s*$/;
+    const SKIP_RE = /^%%|^(?:classDef|class|click|linkStyle|direction|title)\s|^end\s*$/;
+
+    // 节点级 style 指令：`style <id> fill:#xxx,stroke:#yyy,…`（本插件生成与
+    // 读回的唯一样式通道；classDef/class 保持跳过——见设计文档取舍记录）
+    const styleOf = new Map();
+    const STYLE_RE = /^style\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)\s+([^\n]+)$/;
 
     // subgraph 结构解析：subgraph id["标题"] … end（一级即可；嵌套按最内层生效）。
     // 组归属记入 groupOf，subgraph 本身作为「组节点」入表（id=组 id，label=标题）。
@@ -691,6 +696,22 @@ const coreFactory = function () {
             : rawTitle;
         groups.push({ id: sub[1], label: title || sub[1] });
         groupStack.push(sub[1]);
+        continue;
+      }
+      const styleLine = STYLE_RE.exec(line);
+      if (styleLine) {
+        // 后行覆盖前行（与 mermaid 一致）；只保留 fill/stroke 两个已知键，
+        // 其余视觉键随轮次需要再扩展
+        const props = {};
+        for (const part of styleLine[2].split(',')) {
+          const [key, value] = part.split(':').map((s) => s?.trim());
+          if ((key === 'fill' || key === 'stroke') && value) {
+            props[key] = value;
+          }
+        }
+        if (Object.keys(props).length > 0) {
+          styleOf.set(styleLine[1], props);
+        }
         continue;
       }
       if (SKIP_RE.test(line)) {
@@ -730,7 +751,7 @@ const coreFactory = function () {
         }
       }
     }
-    return { direction, edges, groupOf, groups, headerSeen, nodes, skipped };
+    return { direction, edges, groupOf, groups, headerSeen, nodes, skipped, styleOf };
   };
 
   // --------------------------------------------------------- 代码反向生成
@@ -813,6 +834,23 @@ const coreFactory = function () {
     for (const edge of edges) {
       if (!inGroup.has(edge.from) && !inGroup.has(edge.to)) {
         lines.push(edgeLine(edge, '    '));
+      }
+    }
+    // 节点级 style 指令（视觉样式，仅影响图表显示，不影响导出的插件）
+    for (const node of nodes) {
+      const style = node.style;
+      if (!style || typeof style !== 'object') {
+        continue;
+      }
+      const parts = [];
+      for (const key of ['fill', 'stroke']) {
+        const value = String(style[key] ?? '').trim();
+        if (value) {
+          parts.push(`${key}:${value}`);
+        }
+      }
+      if (parts.length > 0) {
+        lines.push(`    style ${node.id} ${parts.join(',')}`);
       }
     }
     return `${fm}${lines.join('\n')}\n`;
@@ -1208,6 +1246,20 @@ const coreFactory = function () {
           nodeId
         });
       }
+      // 视觉样式：溯源元数据优先，缺省回落到代码里的 style 指令行；
+      // 颜色值须是 #hex 或 CSS 命名色（mermaid style 的安全子集）
+      if (!nm.style || typeof nm.style !== 'object') {
+        nm.style = flow.styleOf.get(nodeId) ?? undefined;
+      }
+      for (const key of ['fill', 'stroke']) {
+        const value = String(nm.style?.[key] ?? '').trim();
+        if (value && !/^(#[0-9a-fA-F]{3,8}|[a-zA-Z]+)$/.test(value)) {
+          warnings.push({
+            msg: `成就「${node.label}」的样式 ${key}「${value}」不是颜色值（#hex 或命名色）`,
+            nodeId
+          });
+        }
+      }
       nodes.push({
         frame: SHAPE_FRAME[node.shape] ?? 'task',
         id: nodeId,
@@ -1217,6 +1269,7 @@ const coreFactory = function () {
         params: triggerParams(meta, nodeId),
         parent: parentEdge ? nidOf.get(parentEdge.from) : null,
         shape: node.shape,
+        style: nm.style ?? null,
         tab: tabNid
       });
     };
@@ -3506,7 +3559,9 @@ const FRONTEND_HTML = `<!doctype html>
 
       function rebuildCode() {
         var a = S.analysis;
-        var nodes = a.nodes.map(function (n) { return { id: n.id, label: n.label, shape: n.shape }; });
+        var nodes = a.nodes.map(function (n) {
+          return { id: n.id, label: n.label, shape: n.shape, style: n.meta.style || null };
+        });
         // 成就栏输出为 subgraph（栏根 id = 组 id，栏名 = 组标题）
         var groups = a.tabs.map(function (t) {
           return { id: t.rootId, label: t.name, memberIds: t.members };
@@ -3641,6 +3696,17 @@ const FRONTEND_HTML = `<!doctype html>
         html += inputHtml('xp', '奖励经验值（0 = 无奖励）', String(n.meta.xp || 0), 'number', ' min="0"');
         html += '</fieldset>';
 
+        // 视觉样式：仅影响图表显示与分享链接，不影响导出的插件
+        var style = n.meta.style && typeof n.meta.style === 'object' ? n.meta.style : {};
+        html += '<fieldset><legend>视觉样式（仅编辑器显示）</legend>';
+        html += '<div class="row">'
+          + '<div><label>节点填充色</label><input type="color" data-k="styleFill" value="' + esc(/^#[0-9a-fA-F]{6}$/.test(style.fill ?? '') ? style.fill : '#ececff') + '" /></div>'
+          + '<div><label>描边色</label><input type="color" data-k="styleStroke" value="' + esc(/^#[0-9a-fA-F]{6}$/.test(style.stroke ?? '') ? style.stroke : '#9370db') + '" /></div>'
+          + '<div><label>&nbsp;</label><button type="button" id="btnClearStyle">清除样式</button></div>'
+          + '</div>';
+        html += '<p class="hint">生成 mermaid style 指令（随分享链接携带）；MC 进度界面本身无颜色概念，导出的插件不受影响。</p>';
+        html += '</fieldset>';
+
         // 战利品奖励（达成时发放物品）：条目 = 物品 + 数量区间 + 可选权重
         var loot = Array.isArray(n.meta.loot) ? n.meta.loot : [];
         html += '<fieldset><legend>战利品奖励（达成时发放物品）</legend>';
@@ -3726,27 +3792,46 @@ const FRONTEND_HTML = `<!doctype html>
       }
 
       function bindNodeForm(n) {
-        var a = S.analysis;
-        var meta = a.meta.nodes[n.id] || (a.meta.nodes[n.id] = {});
+        // 事件发生时动态解析当前代的节点与其元数据：rebuildCode() 会整体替换
+        // S.analysis（重新 analyze），闭包捕获的 n/meta 会变成孤儿对象——
+        // 同一表单会话里的第二次及以后的编辑曾全部写到孤儿上静默丢失。
+        var cur = function () { return findNode(n.id); };
+        var curMeta = function () {
+          var node = cur();
+          if (!node) { return undefined; }
+          if (!S.analysis.meta.nodes[node.id] || typeof S.analysis.meta.nodes[node.id] !== 'object') {
+            S.analysis.meta.nodes[node.id] = {};
+          }
+          return S.analysis.meta.nodes[node.id];
+        };
         Array.prototype.forEach.call($('panel').querySelectorAll('[data-k]'), function (el) {
           el.onchange = function () {
+            var node = cur();
+            var meta = curMeta();
+            if (!node || !meta) { render(); return; }
             var k = el.getAttribute('data-k');
-            if (k === 'label') { n.label = el.value; }
-            if (k === 'id') { renameNode(n, el.value); return; }
+            if (k === 'label') { node.label = el.value; }
+            if (k === 'id') { renameNode(node, el.value); return; }
             if (k === 'desc') { meta.desc = el.value; }
             if (k === 'icon') { meta.icon = el.value; }
-            if (k === 'frame') { n.shape = CORE.FRAME_SHAPE[el.value] || 'rect'; }
+            if (k === 'frame') { node.shape = CORE.FRAME_SHAPE[el.value] || 'rect'; }
             if (k === 'hidden') { meta.hidden = el.checked; }
             if (k === 'toast') { meta.toast = el.checked; }
             if (k === 'announce') { meta.announce = el.checked; }
             if (k === 'xp') { meta.xp = Math.max(0, parseInt(el.value, 10) || 0); }
-            if (k === 'parent') { reparent(n, el.value); return; }
+            if (k === 'styleFill' || k === 'styleStroke') {
+              meta.style = { ...(meta.style && typeof meta.style === 'object' ? meta.style : {}) };
+              meta.style[k === 'styleFill' ? 'fill' : 'stroke'] = el.value;
+            }
+            if (k === 'parent') { reparent(node, el.value); return; }
             rebuildCode();
             render();
           };
         });
         Array.prototype.forEach.call($('panel').querySelectorAll('[data-p]'), function (el) {
           el.onchange = function () {
+            var meta = curMeta();
+            if (!meta) { render(); return; }
             var k = el.getAttribute('data-p');
             if (!meta.params) { meta.params = {}; }
             var spec = CORE.triggerById(meta.trigger || 'manual');
@@ -3760,17 +3845,38 @@ const FRONTEND_HTML = `<!doctype html>
         });
         var triggerSel = $('panel').querySelector('[data-k="trigger"]');
         triggerSel.onchange = function () {
+          var meta = curMeta();
+          if (!meta) { render(); return; }
           meta.trigger = triggerSel.value;
           meta.params = {};
           rebuildCode();
           render();
         };
-        $('btnDelNode').onclick = function () { deleteNode(n); };
-        $('btnAddChild').onclick = function () { addNode(n); };
+        $('btnDelNode').onclick = function () {
+          var node = cur();
+          if (node) { deleteNode(node); }
+        };
+        $('btnAddChild').onclick = function () {
+          var node = cur();
+          if (node) { addNode(node); }
+        };
+        var clearStyleBtn = $('btnClearStyle');
+        if (clearStyleBtn) {
+          clearStyleBtn.onclick = function () {
+            var meta = curMeta();
+            if (!meta) { render(); return; }
+            delete meta.style;
+            rebuildCode();
+            render();
+          };
+        }
         // 战利品条目编辑：input 更新条目字段，✕ 删除行，+ 添加行
-        if (!Array.isArray(meta.loot)) { meta.loot = []; }
+        var initLoot = curMeta();
+        if (initLoot && !Array.isArray(initLoot.loot)) { initLoot.loot = []; }
         Array.prototype.forEach.call($('panel').querySelectorAll('[data-l]'), function (el) {
           el.onchange = function () {
+            var meta = curMeta();
+            if (!meta || !Array.isArray(meta.loot)) { return; }
             var i = parseInt(el.getAttribute('data-i'), 10);
             var k = el.getAttribute('data-l');
             if (!meta.loot[i]) { return; }
@@ -3782,6 +3888,8 @@ const FRONTEND_HTML = `<!doctype html>
         });
         Array.prototype.forEach.call($('panel').querySelectorAll('[data-loot-del]'), function (el) {
           el.onclick = function () {
+            var meta = curMeta();
+            if (!meta || !Array.isArray(meta.loot)) { return; }
             meta.loot.splice(parseInt(el.getAttribute('data-loot-del'), 10), 1);
             rebuildCode();
             render();
@@ -3790,6 +3898,9 @@ const FRONTEND_HTML = `<!doctype html>
         var addLootBtn = $('btnAddLoot');
         if (addLootBtn) {
           addLootBtn.onclick = function () {
+            var meta = curMeta();
+            if (!meta) { return; }
+            if (!Array.isArray(meta.loot)) { meta.loot = []; }
             meta.loot.push({ item: '', max: 1, min: 1, weight: 1 });
             rebuildCode();
             render();
@@ -4161,7 +4272,7 @@ export default {
   id: 'flow.mc-advancement',
   name: 'MC 进度设计器',
   permissions: ['import:file', 'export:format', 'ui:frontend'],
-  version: '1.6.0'
+  version: '1.7.0'
 };
 
 // 单测钩子（不改变插件运行时行为）
