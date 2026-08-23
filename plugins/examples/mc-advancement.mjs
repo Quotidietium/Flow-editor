@@ -2576,7 +2576,12 @@ public final class ${cls}Command implements BasicCommand {
     @Override
     public void execute(@NotNull CommandSourceStack stack, @NotNull String[] args) {
         CommandSender sender = stack.getSender();
-        if (args.length >= 3 && "grant".equalsIgnoreCase(args[0])) {
+        // grant 前缀即入分支（缺参给用法，而非误导性的「仅玩家可用」）
+        if (args.length >= 1 && "grant".equalsIgnoreCase(args[0])) {
+            if (args.length < 3) {
+                sender.sendMessage(Component.text("用法: /${a.meta.command} grant <在线玩家> <成就id>", NamedTextColor.RED));
+                return;
+            }
             if (!sender.hasPermission("${a.meta.namespace}.grant")) {
                 sender.sendMessage(Component.text("你没有授予成就的权限。", NamedTextColor.RED));
                 return;

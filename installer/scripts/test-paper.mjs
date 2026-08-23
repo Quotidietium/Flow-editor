@@ -139,6 +139,41 @@ try {
   check('服务器启动到 Done', done, doneLine || '超时');
   await new Promise((r) => setTimeout(r, 3000)); // 等 onEnable 与数据包日志冲刷
 
+  // ---- 控制台命令链：注册成功 + 权限放行 + 用法/仅玩家提示 ----
+  // 无在线玩家，可验证到 getPlayerExact 判空分叉（无客户端下的最深路径）。
+  // console reader 在 Done 后仍未就绪（首行会被吞）——先发原生命令 list
+  // 等它的输出出现，再发我们的命令。
+  try {
+    // console reader 在 Done 后仍未 attach（首行会被静默吞掉）——实测
+    // 固定等待 8s 后稳定可用（原生 list/tps 探针在此构建下本身会抛
+    // Command exception，不能作探针）
+    await new Promise((r) => setTimeout(r, 8000));
+    child.stdin.write('flowtest\n');
+    await waitFor(/该命令仅玩家可用/, 10_000);
+    child.stdin.write('flowtest grant GhostPlayer hello\n');
+    await waitFor(/用法: \/flowtest grant/, 10_000);
+    child.stdin.write('flowtest grant\n'); // 缺参：args.length < 3 分支
+    await new Promise((r) => setTimeout(r, 2000));
+  } catch {
+    // stdin 不可写时，下面断言会给出失败详情
+  }
+  await new Promise((r) => setTimeout(r, 1500));
+  const cmdLog = readLog();
+  check(
+    'flowtest 命令已注册（无 Unknown command）',
+    !/Unknown command[\s\S]{0,80}flowtest/.test(cmdLog) &&
+      !/flowtest[\s\S]{0,80}Unknown command/.test(cmdLog)
+  );
+  check('无参调用返回「仅玩家可用」提示', /该命令仅玩家可用/.test(cmdLog));
+  check(
+    'grant 对离线玩家走用法提示（权限链放行 + getPlayerExact 判空）',
+    /用法: \/flowtest grant <在线玩家> <成就id>/.test(cmdLog)
+  );
+  check(
+    'grant 缺参与离线玩家均给用法（两次）',
+    (cmdLog.match(/用法: \/flowtest grant/g) ?? []).length >= 2
+  );
+
   const full = readLog();
   check(
     '数据包注册为插件内置包（bootstrap 发现行）',
