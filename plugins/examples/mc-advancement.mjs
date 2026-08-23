@@ -456,6 +456,8 @@ const coreFactory = function () {
     author: 'Zurker',
     autosaveSeconds: 300,
     command: 'myach',
+    /** 'on' 时成就标题/描述走 translate 键 + 生成 lang/zh_cn.json 与 en_us.json。 */
+    localization: 'off',
     namespace: 'myach',
     nodes: {},
     packFormat: 94,
@@ -1389,14 +1391,22 @@ const coreFactory = function () {
   /** YAML 双引号字符串。 */
   const Y = (s) => `"${String(s).replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`;
 
+  /** 本地化键：`<ns>.advancement.<id>.title/.description`（on 时 title/desc 走 translate）。 */
+  const locOn = (meta) => meta.localization === 'on';
+  const locKey = (meta, id, part) => `${meta.namespace}.advancement.${id}.${part}`;
+  const locTitle = (meta, id, text) =>
+    locOn(meta) ? { translate: locKey(meta, id, 'title') } : { text };
+  const locDesc = (meta, id, text) =>
+    locOn(meta) ? { translate: locKey(meta, id, 'description') } : { text };
+
   const advJson = (meta, tab, node) => {
     const display = {
       announce_to_chat: false,
-      description: { text: node.meta.desc || defaultDesc(node) },
+      description: locDesc(meta, node.nid, node.meta.desc || defaultDesc(node)),
       frame: node.frame,
       icon: { id: node.meta.icon || defaultIcon(node.frame) },
       show_toast: node.meta.toast !== false,
-      title: { text: node.label }
+      title: locTitle(meta, node.nid, node.label)
     };
     if (node.meta.hidden) {
       display.hidden = true;
@@ -1450,37 +1460,49 @@ const coreFactory = function () {
     `# ${node.label} 达成时的战利品发放（由 advancement rewards.function 调用）\n` +
     `loot give @p loot ${meta.namespace}:${node.nid}\n`;
 
-  const rootJson = (meta, tab) =>
-    JSON.stringify(
-      {
-        criteria: { tick: { trigger: 'minecraft:tick' } },
-        display: {
-          announce_to_chat: false,
-          background: tab.meta.background || 'minecraft:textures/block/deepslate_tiles.png',
-          description: { color: 'gray', text: tab.meta.desc || `${meta.plugin} 提供的自定义成就` },
-          icon: { id: tab.meta.icon || 'minecraft:nether_star' },
-          show_toast: false,
-          title: { bold: true, color: 'gold', text: tab.name }
-        }
-      },
-      null,
-      2
-    ) + '\n';
+  const rootJson = (meta, tab) => {
+    const rootTitle = locTitle(meta, tab.rootNid, tab.name);
+    const rootDesc = locDesc(meta, tab.rootNid, tab.meta.desc || `${meta.plugin} 提供的自定义成就`);
+    return (
+      JSON.stringify(
+        {
+          criteria: { tick: { trigger: 'minecraft:tick' } },
+          display: {
+            announce_to_chat: false,
+            background: tab.meta.background || 'minecraft:textures/block/deepslate_tiles.png',
+            description: locOn(meta)
+              ? { color: 'gray', translate: rootDesc.translate }
+              : { color: 'gray', text: rootDesc.text },
+            icon: { id: tab.meta.icon || 'minecraft:nether_star' },
+            show_toast: false,
+            title: locOn(meta)
+              ? { bold: true, color: 'gold', translate: rootTitle.translate }
+              : { bold: true, color: 'gold', text: rootTitle.text }
+          }
+        },
+        null,
+        2
+      ) + '\n'
+    );
+  };
 
   const completionistJson = (meta, tab, members) => {
     const ids = members.map((m) => m.nid);
+    const cid = completionistId({ meta, nodes: members, tabs: [tab] }, tab);
+    const cTitle = locTitle(meta, cid, tab.meta.completionistName || '大满贯！');
+    const cDesc = locDesc(meta, cid, tab.meta.completionistDesc || '解锁本栏所有其他成就');
     return (
       JSON.stringify(
         {
           criteria: Object.fromEntries(ids.map((id) => [id, { trigger: 'minecraft:impossible' }])),
           display: {
             announce_to_chat: false,
-            description: { text: tab.meta.completionistDesc },
+            description: cDesc,
             frame: 'challenge',
             hidden: true,
             icon: { id: tab.meta.completionistIcon || 'minecraft:dragon_egg' },
             show_toast: true,
-            title: { text: tab.meta.completionistName || '大满贯！' }
+            title: cTitle
           },
           parent: `${meta.namespace}:${tab.rootNid}`,
           requirements: ids.map((id) => [id]),
@@ -2932,6 +2954,57 @@ ${rows.join('\n')}
         });
       }
     }
+    // 本地化：on 时输出 lang/zh_cn.json + lang/en_us.json（英文缺省回填中文，
+    // 客户端永远显示译文而非键名）
+    if (locOn(a.meta)) {
+      const zh = {};
+      const en = {};
+      const put = (id, zhTitle, enTitle, zhDesc, enDesc) => {
+        zh[locKey(a.meta, id, 'title')] = zhTitle;
+        en[locKey(a.meta, id, 'title')] = enTitle || zhTitle;
+        zh[locKey(a.meta, id, 'description')] = zhDesc;
+        en[locKey(a.meta, id, 'description')] = enDesc || zhDesc;
+      };
+      for (const tab of a.tabs) {
+        put(
+          tab.rootNid,
+          tab.name,
+          tab.meta.enTitle,
+          tab.meta.desc || `${a.meta.plugin} 提供的自定义成就`,
+          tab.meta.enDesc
+        );
+        for (const node of a.nodes.filter((n) => n.tab === tab.rootNid && n.parent !== null)) {
+          put(
+            node.nid,
+            node.label,
+            node.meta.en,
+            node.meta.desc || defaultDesc(node),
+            node.meta.enDesc
+          );
+        }
+        if (tab.meta.completionist) {
+          const members = a.nodes.filter((n) => n.tab === tab.rootNid && n.parent !== null);
+          if (members.length > 0) {
+            put(
+              completionistId(a, tab),
+              tab.meta.completionistName || '大满贯！',
+              tab.meta.completionistEn,
+              tab.meta.completionistDesc || '解锁本栏所有其他成就',
+              tab.meta.completionistEnDesc
+            );
+          }
+        }
+      }
+      const ns = a.meta.namespace;
+      files.push({
+        path: `src/main/resources/datapack/data/${ns}/lang/zh_cn.json`,
+        text: JSON.stringify(zh, null, 2) + '\n'
+      });
+      files.push({
+        path: `src/main/resources/datapack/data/${ns}/lang/en_us.json`,
+        text: JSON.stringify(en, null, 2) + '\n'
+      });
+    }
     return files;
   };
 
@@ -3173,6 +3246,35 @@ ${rows.join('\n')}
     }
     const advs = byNs.get(ns);
 
+    // 语言文件（外部包 title/description 可能是 translate 键）：zh_cn 优先，
+    // 缺失回落 en_us；都没有则显示键名尾段（不比 id 更差）
+    const loadLang = (locale) => {
+      const entry = entries.get(`${base}data/${ns}/lang/${locale}.json`);
+      if (!entry) {
+        return {};
+      }
+      try {
+        return JSON.parse(decoder.decode(entry)) ?? {};
+      } catch {
+        return {};
+      }
+    };
+    const lang = { ...loadLang('en_us'), ...loadLang('zh_cn') };
+    const resolveTitle = (display, fallback) => {
+      const title = display?.title;
+      if (typeof title?.text === 'string') {
+        return title.text;
+      }
+      if (typeof title?.translate === 'string') {
+        if (typeof lang[title.translate] === 'string') {
+          return lang[title.translate];
+        }
+        const tail = title.translate.split('.').at(-2) ?? title.translate;
+        return tail;
+      }
+      return fallback;
+    };
+
     // 大满贯识别：全部条件都是同栏其他进度 id 的 impossible 条件
     let completionist = null;
     for (const [nid, json] of advs) {
@@ -3206,7 +3308,7 @@ ${rows.join('\n')}
       const display = json.display ?? {};
       const pidRaw = typeof json.parent === 'string' ? json.parent : '';
       const pid = pidRaw.startsWith(`${ns}:`) ? pidRaw.slice(ns.length + 1) : '';
-      const label = display.title?.text ?? nid;
+      const label = resolveTitle(display, nid);
       const shape = FRAME_SHAPE_IN[display.frame ?? 'task'] ?? 'rect';
       nodes.push({ id: nid, label, shape });
       if (!meta.nodes[nid] || typeof meta.nodes[nid] !== 'object') {
@@ -3686,6 +3788,12 @@ const FRONTEND_HTML = `<!doctype html>
           + inputHtml('id', '成就 id（[a-z0-9_]，改名会级联更新）', n.id, 'text')
           + '</div>';
         html += inputHtml('desc', '描述（留空按触发方式自动生成）', n.meta.desc, 'text');
+        if (S.analysis.meta.localization === 'on') {
+          html += '<div class="row">'
+            + inputHtml('en', '英文名称（en_us 语言文件）', n.meta.en ?? '', 'text', ' placeholder="留空回填中文"')
+            + inputHtml('enDesc', '英文描述', n.meta.enDesc ?? '', 'text', ' placeholder="留空回填中文"')
+            + '</div>';
+        }
         html += '<div class="row">'
           + inputHtml('icon', '图标物品 ID', n.meta.icon, 'text', ' list="icons" placeholder="留空按框架默认"')
           + '<div><label>框架类型（= 画布节点形状）</label><select data-k="frame">'
@@ -3822,6 +3930,8 @@ const FRONTEND_HTML = `<!doctype html>
             if (k === 'label') { node.label = el.value; }
             if (k === 'id') { renameNode(node, el.value); return; }
             if (k === 'desc') { meta.desc = el.value; }
+            if (k === 'en') { meta.en = el.value; }
+            if (k === 'enDesc') { meta.enDesc = el.value; }
             if (k === 'icon') { meta.icon = el.value; }
             if (k === 'frame') { node.shape = CORE.FRAME_SHAPE[el.value] || 'rect'; }
             if (k === 'hidden') { meta.hidden = el.checked; }
@@ -4019,6 +4129,12 @@ const FRONTEND_HTML = `<!doctype html>
         html += '</fieldset>';
         html += '<fieldset><legend>成就栏设置</legend>';
         html += inputHtml('tdesc', '栏描述', v('desc'), 'text');
+        if (a.meta.localization === 'on') {
+          html += '<div class="row">'
+            + inputHtml('enTitle', '栏英文名称（en_us）', v('enTitle') ?? '', 'text', ' placeholder="留空回填中文"')
+            + inputHtml('enDesc', '栏英文描述', v('enDesc') ?? '', 'text', ' placeholder="留空回填中文"')
+            + '</div>';
+        }
         html += '<div class="row">'
           + inputHtml('ticon', '栏图标物品 ID', v('icon'), 'text', ' list="icons"')
           + inputHtml('tbg', '标签页背景纹理路径', v('background'), 'text')
@@ -4028,6 +4144,12 @@ const FRONTEND_HTML = `<!doctype html>
           + inputHtml('cname', '大满贯名称', v('completionistName'), 'text')
           + inputHtml('cdesc', '大满贯描述', v('completionistDesc'), 'text')
           + '</div>';
+        if (a.meta.localization === 'on') {
+          html += '<div class="row">'
+            + inputHtml('cEn', '大满贯英文名称', v('completionistEn') ?? '', 'text', ' placeholder="留空回填中文"')
+            + inputHtml('cEnDesc', '大满贯英文描述', v('completionistEnDesc') ?? '', 'text', ' placeholder="留空回填中文"')
+            + '</div>';
+        }
         html += '<div class="row">'
           + inputHtml('cicon', '大满贯图标', v('completionistIcon'), 'text', ' list="icons"')
           + inputHtml('cxp', '大满贯奖励经验', String(v('completionistXp')), 'number', ' min="0"')
@@ -4039,7 +4161,7 @@ const FRONTEND_HTML = `<!doctype html>
         Array.prototype.forEach.call($('panel').querySelectorAll('[data-k]'), function (el) {
           el.onchange = function () {
             var k = el.getAttribute('data-k');
-            var map = { tdesc: 'desc', ticon: 'icon', tbg: 'background', cname: 'completionistName', cdesc: 'completionistDesc', cicon: 'completionistIcon' };
+            var map = { tdesc: 'desc', ticon: 'icon', tbg: 'background', cname: 'completionistName', cdesc: 'completionistDesc', cicon: 'completionistIcon', enTitle: 'enTitle', enDesc: 'enDesc', cEn: 'completionistEn', cEnDesc: 'completionistEnDesc' };
             if (k === 'label') { root.label = el.value; }
             else if (k === 'id') { renameNode(root, el.value); return; }
             else if (k === 'completionist') { tm.completionist = el.checked; }
@@ -4090,6 +4212,12 @@ const FRONTEND_HTML = `<!doctype html>
           + '</div>';
         html += '<div class="row">'
           + inputHtml('announceFormat', '播报格式（%player%/%name%，留空不播报）', m.announceFormat, 'text')
+          + '</div>';
+        html += '<div class="row">'
+          + '<div><label>本地化（多语言进度名）</label><select data-k="localization">'
+          + '<option value="off"' + (m.localization !== 'on' ? ' selected' : '') + '>关闭（硬编码中文文本）</option>'
+          + '<option value="on"' + (m.localization === 'on' ? ' selected' : '') + '>开启（translate 键 + zh_cn/en_us 语言文件）</option>'
+          + '</select><div class="hint">开启后成就/栏表单出现英文输入，生成的插件随客户端语言显示</div></div>'
           + '</div>';
         html += '<div class="checks"><label><input type="checkbox" data-k="sound"' + (m.sound !== false ? ' checked' : '') + '/>达成时播放升级音效</label></div>';
         html += '</fieldset><button id="btnBack">← 返回</button>';
@@ -4281,7 +4409,7 @@ export default {
   id: 'flow.mc-advancement',
   name: 'MC 进度设计器',
   permissions: ['import:file', 'export:format', 'ui:frontend'],
-  version: '1.7.0'
+  version: '1.8.0'
 };
 
 // 单测钩子（不改变插件运行时行为）
