@@ -116,14 +116,21 @@ export const downloadTextFile = (filename: string, text: string, mime: string): 
   a.remove();
 };
 
-/** Pick an `<input type=file>` in the DOM (visible or hidden) for uploads. */
-export const openTextFile = (accept: string): Promise<{ name: string; text: string } | undefined> =>
+/**
+ * Pick an `<input type=file>` in the DOM (visible or hidden) for uploads.
+ * Returns both the decoded text and the raw bytes — plugin import handlers
+ * need the bytes for binary formats (zip/datapacks); text alone is lossy for
+ * any non-UTF8-safe payload.
+ */
+export const openTextFile = (
+  accept: string
+): Promise<{ bytes: Uint8Array; name: string; text: string } | undefined> =>
   new Promise((resolve) => {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = accept;
     input.style.display = 'none';
-    const finish = (value: { name: string; text: string } | undefined): void => {
+    const finish = (value: { bytes: Uint8Array; name: string; text: string } | undefined): void => {
       resolve(value);
       input.remove();
     };
@@ -137,8 +144,11 @@ export const openTextFile = (accept: string): Promise<{ name: string; text: stri
       // an eternally pending promise would leave the caller awaiting forever
       // with no feedback, and the hidden input stranded in the DOM.
       void file
-        .text()
-        .then((text) => finish({ name: file.name, text }))
+        .arrayBuffer()
+        .then((buffer) => {
+          const bytes = new Uint8Array(buffer);
+          finish({ bytes, name: file.name, text: new TextDecoder().decode(bytes) });
+        })
         .catch(() => finish(undefined));
     });
     input.addEventListener('cancel', () => finish(undefined));

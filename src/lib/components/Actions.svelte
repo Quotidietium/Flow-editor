@@ -23,12 +23,12 @@
     runPluginExport
   } from '$/plugins/registry.svelte';
   import {
-  inputState,
-  sanitizeConfig,
-  updateCode,
-  updateCodeStore,
-  validatedState
-} from '$lib/util/state.svelte';
+    inputState,
+    sanitizeConfig,
+    updateCode,
+    updateCodeStore,
+    validatedState
+  } from '$lib/util/state.svelte';
   import dayjs from 'dayjs';
   import { toBase64 } from 'js-base64';
   import DownloadIcon from '~icons/material-symbols/download';
@@ -335,14 +335,14 @@ ${svgString}`);
   };
 
   const onOpenFile = async () => {
-    const file = await openTextFile('.mmd,.md,.txt,.json,.mermaid');
+    const file = await openTextFile('.mmd,.md,.txt,.json,.mermaid,.zip');
     if (!file) {
       return;
     }
-    // Plugin import handlers get first claim (custom formats), then the
-    // built-in parser; either way the entering source passes the plugin
-    // input-transform pipeline (cleaning/format conversion).
-    const handled = runImportHandler(file.name, file.text);
+    // Plugin import handlers get first claim (custom formats, incl. binary
+    // via bytes), then the built-in parser; either way the entering source
+    // passes the plugin input-transform pipeline (cleaning/format conversion).
+    const handled = await runImportHandler(file.name, file.text, file.bytes);
     const parsed = handled ?? parseOpenedFile(file.name, file.text);
     if (!parsed) {
       notify(`无法识别文件「${file.name}」的内容`);

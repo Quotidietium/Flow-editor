@@ -95,6 +95,28 @@ const guarded = <T>(
   }
 };
 
+/** Async twin of {@link guarded} — awaits the hook so rejections are isolated too. */
+const guardedAsync = async <T>(
+  id: string,
+  run: () => T | undefined | Promise<T | undefined>,
+  fallback: T | undefined
+): Promise<T | undefined> => {
+  const rt = runtimes.get(id);
+  try {
+    const result = await run();
+    if (rt) {
+      rt.errors = 0;
+    }
+    return result;
+  } catch (error) {
+    console.error(`[plugin:${id}] hook error`, error);
+    if (rt && ++rt.errors >= 3) {
+      disablePlugin(id, '连续 3 次运行出错，已自动停用');
+    }
+    return fallback;
+  }
+};
+
 export const loadRegistry = async (): Promise<void> => {
   installed = readJSON<InstalledPlugin[]>(REGISTRY_KEY, []);
   for (const record of installed) {
@@ -290,19 +312,27 @@ export const findImportHandler = (
   return undefined;
 };
 
-export const runImportHandler = (
+/**
+ * Dispatch an opened file to the claiming plugin handler. Async: handlers may
+ * do asynchronous work (zip inflation, format probing) — the result is awaited
+ * before the caller falls back to the built-in parser. `bytes` carries the raw
+ * payload for binary formats (text decoding is lossy).
+ */
+export const runImportHandler = async (
   fileName: string,
-  text: string
-): { code: string; mermaid?: string } | undefined => {
+  text: string,
+  bytes?: Uint8Array
+): Promise<{ code: string; mermaid?: string } | undefined> => {
   const found = findImportHandler(fileName);
   if (!found) {
     return undefined;
   }
-  return guarded(
+  const result = await guardedAsync(
     found.pluginId,
-    () => found.handler.import({ name: fileName, text }, makeContext(found.pluginId)),
+    () => found.handler.import({ bytes, name: fileName, text }, makeContext(found.pluginId)),
     undefined
   );
+  return result ?? undefined;
 };
 
 export const pluginExportFormats = (): (ExportFormat & { pluginId: string })[] =>

@@ -65,11 +65,19 @@ export interface ImportHandler {
   /** Extensions without dot, e.g. ['puml', 'plantuml']. */
   extensions: string[];
   name: string;
-  /** Parse file text into editor input; return undefined to decline. */
+  /**
+   * Parse file content into editor input; return undefined to decline (the
+   * built-in parser then takes over). `bytes` is the raw payload for binary
+   * formats — `text` is a lossy UTF-8 decode and must not be round-tripped.
+   * May be async (zip inflation etc.).
+   */
   import(
-    file: { name: string; text: string },
+    file: { bytes?: Uint8Array; name: string; text: string },
     ctx: PluginContext
-  ): { code: string; mermaid?: string } | undefined;
+  ):
+    | { code: string; mermaid?: string }
+    | undefined
+    | Promise<{ code: string; mermaid?: string } | undefined>;
 }
 
 /** Custom export format appended to the 导出 menu. */

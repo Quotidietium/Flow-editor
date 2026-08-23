@@ -104,14 +104,36 @@ describe('openTextFile lifecycle', () => {
     Object.defineProperty(input, 'files', {
       value: [
         {
-          name: 'broken.mmd',
-          text: () => Promise.reject(new Error('read failed'))
+          arrayBuffer: () => Promise.reject(new Error('read failed')),
+          name: 'broken.mmd'
         }
       ]
     });
     input?.dispatchEvent(new Event('change'));
-    // A rejected file.text() used to leave the promise pending forever.
+    // A rejected file read used to leave the promise pending forever.
     await expect(pending).resolves.toBeUndefined();
     expect(document.querySelector('input[type=file]')).toBeNull();
+  });
+
+  it('returns raw bytes alongside the decoded text', async () => {
+    const pending = openTextFile('.zip');
+    const input = document.querySelector<HTMLInputElement>('input[type=file]:last-of-type');
+    const payload = new TextEncoder().encode('你好 zip');
+    Object.defineProperty(input, 'files', {
+      value: [
+        {
+          arrayBuffer: () => Promise.resolve(payload.buffer.slice(0)),
+          name: 'pack.zip',
+          text: () => Promise.resolve('')
+        }
+      ]
+    });
+    input?.dispatchEvent(new Event('change'));
+    const result = await pending;
+    // Binary formats (plugin datapack imports) need the exact bytes — a text
+    // decode is lossy and must never be the only channel.
+    expect(Array.from(result?.bytes ?? [])).toEqual(Array.from(payload));
+    expect(result?.text).toBe('你好 zip');
+    expect(result?.name).toBe('pack.zip');
   });
 });
