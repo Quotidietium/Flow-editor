@@ -1460,6 +1460,24 @@ const coreFactory = function () {
         scope: 'settings'
       });
     }
+    // 自动保存间隔：负数/零会让 Bukkit runTaskTimer 抛 IllegalArgumentException，
+    // 插件 onEnable 直接失败——任何合法回退值都可用，故钳制到 300 并告知
+    const rawAs = meta.autosaveSeconds;
+    meta.autosaveSeconds = Number.isFinite(Number(rawAs)) ? Number(rawAs) : 300;
+    if (rawAs !== undefined && rawAs !== null && String(rawAs) !== '' && !Number.isInteger(Number(rawAs))) {
+      meta.autosaveSeconds = Math.trunc(Number(rawAs)) || 300;
+      warnings.push({
+        msg: `自动保存间隔「${rawAs}」不是整数，已规范为 ${meta.autosaveSeconds} 秒`,
+        scope: 'settings'
+      });
+    }
+    if (meta.autosaveSeconds < 1) {
+      meta.autosaveSeconds = 300;
+      warnings.push({
+        msg: `自动保存间隔 ${rawAs} 无效（零/负数会让定时任务抛异常、插件无法启动），已按默认 300 秒处理`,
+        scope: 'settings'
+      });
+    }
 
     // 孤儿元数据：汇总为单条（病态输入可达数万键，逐条警告会灌爆面板）
     const orphanKeys = Object.keys(meta.nodes).filter((key) => !nidOf.has(key));
@@ -4672,7 +4690,8 @@ const FRONTEND_HTML = `<!doctype html>
             // 进旧代 meta 静默丢失。事件时取当前代。
             var cur = S.analysis.meta;
             if (k === 'sound') { cur.sound = el.checked; }
-            else if (k === 'autosaveSeconds' || k === 'packFormat') { cur[k] = parseInt(el.value, 10) || 0; }
+            else if (k === 'autosaveSeconds') { cur[k] = parseInt(el.value, 10) || 300; } // 清空回退默认，0/负值由 analyze 钳制
+            else if (k === 'packFormat') { cur[k] = parseInt(el.value, 10) || 94; }
             else { cur[k] = el.value; }
             rebuildCode();
             renderIssues();

@@ -2141,3 +2141,38 @@ describe('循环 54：校验面板定位跳转（全局/栏级问题）', () => 
     expect(html).toContain("querySelectorAll('.issue.link')");
   });
 });
+
+describe('循环 55：自动保存间隔边界（负值曾致插件 onEnable 崩溃）', () => {
+  it('autosaveSeconds=0/负值 → 钳制 300 + 警告；非整数截断；config.yml 不再输出非法值', () => {
+    const build = (v: unknown) => {
+      const meta = CORE.readMeta(CORE.starterCode()).meta;
+      meta.autosaveSeconds = v;
+      return CORE.exportZip(
+        CORE.buildCode(
+          meta,
+          'TD',
+          [
+            { id: 'root', label: '根', shape: 'rect' },
+            { id: 'a', label: '甲', shape: 'rect' }
+          ],
+          [{ from: 'root', to: 'a' }]
+        )
+      );
+    };
+    for (const bad of [0, -5]) {
+      const r = build(bad);
+      if (!r.ok) {
+        throw new Error('不应阻断导出');
+      }
+      const cfg = r.files.find((f) => f.path.endsWith('config.yml'))?.text ?? '';
+      expect(cfg).toContain('autosave-interval-seconds: 300'); // runTaskTimer 零/负周期会抛异常
+      expect(
+        r.analysis.warnings.some((w) => w.msg.includes('自动保存间隔') && w.msg.includes('无效'))
+      ).toBe(true);
+    }
+    const r2 = build(120.5);
+    const cfg2 = r2.ok ? (r2.files.find((f) => f.path.endsWith('config.yml'))?.text ?? '') : '';
+    expect(cfg2).toContain('autosave-interval-seconds: 120'); // 截断而非 120.5
+    expect(r2.analysis.warnings.some((w) => w.msg.includes('不是整数'))).toBe(true);
+  });
+});
