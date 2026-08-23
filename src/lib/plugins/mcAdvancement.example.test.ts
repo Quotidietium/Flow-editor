@@ -1959,3 +1959,32 @@ describe('插件导出钩子', () => {
     expect(typeof injected.analyze).toBe('function');
   });
 });
+
+describe('循环 50：设计文档触发器表 ↔ TRIGGERS 注册表一致性（防漂移持久防线）', () => {
+  // 循环 46-48 三度漂移（trade 缺 profession / projectile_hit 缺 projectile /
+  // break_block 缺 tool / kill 缺 cause，且循环 47/48 提交信息均声称「已同步」）：
+  // 循环 39 的一次性对照命令不可持续，此处固化为单测，改注册表必须同步文档表。
+  const doc = readFileSync(resolve(process.cwd(), 'note/mc-advancement-plugin.md'), 'utf8');
+  const rows = [...doc.matchAll(/^\|\s*\d+\s*\|\s*`([a-z_]+)`\s*\|[^|]+\|([^|]+)\|/gm)];
+
+  it('文档表行数与注册表一致（30），无缺行/多行', () => {
+    expect(rows.length).toBe(CORE.TRIGGERS.length);
+    const docIds = rows.map((m) => m[1]);
+    const regIds = CORE.TRIGGERS.map((t) => t.id);
+    expect(docIds.sort()).toEqual(regIds.sort());
+  });
+
+  it('每个触发器的全部参数键都在文档表参数列中（backtick 形式）', () => {
+    const cellOf = new Map(rows.map((m) => [m[1], m[2]] as const));
+    for (const t of CORE.TRIGGERS) {
+      const cell = cellOf.get(t.id);
+      expect(cell, `文档表缺少触发器 ${t.id} 的行`).toBeDefined();
+      for (const p of t.params) {
+        expect(
+          cell?.includes(`\`${p.key}\``),
+          `${t.id} 的参数 ${p.key} 未出现在文档表参数列（实现改了文档没改——先改 note/mc-advancement-plugin.md）`
+        ).toBe(true);
+      }
+    }
+  });
+});

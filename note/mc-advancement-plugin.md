@@ -125,38 +125,38 @@ flowchart TD
 REF 已验证此模式。触发器表同时驱动：前端下拉（**六类 optgroup 分组**）与
 参数表单、config.yml 键、Java 事件方法生成（**只生成用到的触发器分支**）。
 
-| #   | trigger id         | 名称               | 参数（config.yml 可改）                                                | Paper/Bukkit 事件                                            | 计数 |
-| --- | ------------------ | ------------------ | ---------------------------------------------------------------------- | ------------------------------------------------------------ | ---- |
-| 1   | `join`             | 加入服务器         | `firstOnly`（默认 true，`!hasPlayedBefore`）                           | `PlayerJoinEvent`                                            | 否   |
-| 2   | `break_block`      | 挖掘方块           | `material`（空=任意）、`amount`                                        | `BlockBreakEvent`（ignoreCancelled）                         | 是   |
-| 3   | `place_block`      | 放置方块           | `material`、`amount`                                                   | `BlockPlaceEvent`（ignoreCancelled）                         | 是   |
-| 4   | `consume`          | 食用/饮用          | `item`（空=任意）、`amount`                                            | `PlayerItemConsumeEvent`（ignoreCancelled）                  | 是   |
-| 5   | `kill`             | 击杀生物           | `entity`（空=任意，`hostile`=敌对类）、`amount`                        | `EntityDeathEvent`（killer 判空）                            | 是   |
-| 6   | `fish`             | 钓鱼               | `amount`                                                               | `PlayerFishEvent`（`State.CAUGHT_FISH`）                     | 是   |
-| 7   | `reach_height`     | 到达高度           | `y`（允许负值，below 模式）、`mode`（above/below）                     | `PlayerMoveEvent`（节流：每玩家 5 tick 判一次）              | 否   |
-| 8   | `craft`            | 合成物品           | `item`（空=任意）、`amount`                                            | `CraftItemEvent`（ignoreCancelled，按取出数量累计）          | 是   |
-| 9   | `enchant`          | 附魔               | `amount`                                                               | `EnchantItemEvent`                                           | 是   |
-| 10  | `trade`            | 与村民交易         | `amount`、`profession`（空=任意，如 FARMER）                           | `PlayerTradeEvent`（ignoreCancelled，Villager 收窄取职业）   | 是   |
-| 11  | `tame`             | 驯服生物           | `entity`（空=任意）、`amount`                                          | `EntityTameEvent`（owner 为玩家）                            | 是   |
-| 12  | `breed`            | 繁殖动物           | `entity`（空=任意）、`amount`                                          | `EntityBreedEvent`（breeder 为玩家）                         | 是   |
-| 13  | `sleep`            | 入睡               | `amount`                                                               | `PlayerDeepSleepEvent`                                       | 是   |
-| 14  | `death`            | 死亡               | `amount`                                                               | `PlayerDeathEvent`                                           | 是   |
-| 15  | `reach_level`      | 经验等级达标       | `level`                                                                | `PlayerLevelChangeEvent`                                     | 否   |
-| 16  | `pickup`           | 拾取物品           | `item`（空=任意）、`amount`                                            | `EntityPickupItemEvent`（按堆叠数量累计）                    | 是   |
-| 17  | `chat_keyword`     | 聊天含关键词       | `keyword`                                                              | `AsyncChatEvent`（PlainTextComponentSerializer 提取）        | 否   |
-| 18  | `advancement_done` | 完成原版进度       | `key`（任意命名空间，含本插件进度）                                    | `PlayerAdvancementDoneEvent`（key 匹配，先于本插件分支判定） | 否   |
-| 19  | `playtime`         | 累计在线时长       | `minutes`                                                              | 定时轮询 `Statistic.PLAY_ONE_MINUTE`（tick/20/60）           | 统计 |
-| 20  | `statistic`        | 原版统计达标       | `stat`（如 `walk_one_cm`）、`target`（可空 material/entity）、`amount` | 定时轮询 `Player#getStatistic`                               | 统计 |
-| 21  | `shear`            | 剪羊毛             | `entity`（空=任意）、`amount`                                          | `PlayerShearEntityEvent`（ignoreCancelled）                  | 是   |
-| 22  | `ride`             | 骑乘生物           | `entity`（空=任意）                                                    | `EntityMountEvent`（getEntity 为玩家）                       | 否   |
-| 23  | `portal`           | 进入传送门         | —                                                                      | `EntityPortalEnterEvent`                                     | 否   |
-| 24  | `damage_taken`     | 累计受伤           | `amount`                                                               | `EntityDamageEvent`（ignoreCancelled）                       | 是   |
-| 25  | `projectile_hit`   | 弹射物命中         | `amount`                                                               | `ProjectileHitEvent`（命中实体 + shooter 为玩家）            | 是   |
-| 26  | `glide`            | 开始滑翔           | —                                                                      | `EntityToggleGlideEvent`（isGliding）                        | 否   |
-| 27  | `swim`             | 开始游泳           | —                                                                      | `EntityToggleSwimEvent`（isSwimming）                        | 否   |
-| 28  | `bucket_fill`      | 装桶               | `amount`                                                               | `PlayerBucketFillEvent`（ignoreCancelled）                   | 是   |
-| 29  | `xp_gain`          | 获得经验           | `amount`（经验值总量，负变动不计）                                     | `PlayerExpChangeEvent`（getAmount>0 按量累计）               | 是   |
-| 30  | `manual`           | 仅命令授予（默认） | —                                                                      | 无事件；`/<command> grant <玩家> <成就id>`（op 权限）        | 否   |
+| #   | trigger id         | 名称               | 参数（config.yml 可改）                                                          | Paper/Bukkit 事件                                                | 计数 |
+| --- | ------------------ | ------------------ | -------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ---- |
+| 1   | `join`             | 加入服务器         | `firstOnly`（默认 true，`!hasPlayedBefore`）                                     | `PlayerJoinEvent`                                                | 否   |
+| 2   | `break_block`      | 挖掘方块           | `material`（空=任意）、`tool`（主手工具，空=任意，如 IRON_PICKAXE）、`amount`    | `BlockBreakEvent`（ignoreCancelled）                             | 是   |
+| 3   | `place_block`      | 放置方块           | `material`、`amount`                                                             | `BlockPlaceEvent`（ignoreCancelled）                             | 是   |
+| 4   | `consume`          | 食用/饮用          | `item`（空=任意）、`amount`                                                      | `PlayerItemConsumeEvent`（ignoreCancelled）                      | 是   |
+| 5   | `kill`             | 击杀生物           | `entity`（空=任意，`hostile`=敌对类）、`cause`（any/melee/projectile）、`amount` | `EntityDeathEvent`（killer 判空；DamageSource 直接实体判弹射物） | 是   |
+| 6   | `fish`             | 钓鱼               | `amount`                                                                         | `PlayerFishEvent`（`State.CAUGHT_FISH`）                         | 是   |
+| 7   | `reach_height`     | 到达高度           | `y`（允许负值，below 模式）、`mode`（above/below）                               | `PlayerMoveEvent`（节流：每玩家 5 tick 判一次）                  | 否   |
+| 8   | `craft`            | 合成物品           | `item`（空=任意）、`amount`                                                      | `CraftItemEvent`（ignoreCancelled，按取出数量累计）              | 是   |
+| 9   | `enchant`          | 附魔               | `amount`                                                                         | `EnchantItemEvent`                                               | 是   |
+| 10  | `trade`            | 与村民交易         | `amount`、`profession`（空=任意，如 FARMER）                                     | `PlayerTradeEvent`（ignoreCancelled，Villager 收窄取职业）       | 是   |
+| 11  | `tame`             | 驯服生物           | `entity`（空=任意）、`amount`                                                    | `EntityTameEvent`（owner 为玩家）                                | 是   |
+| 12  | `breed`            | 繁殖动物           | `entity`（空=任意）、`amount`                                                    | `EntityBreedEvent`（breeder 为玩家）                             | 是   |
+| 13  | `sleep`            | 入睡               | `amount`                                                                         | `PlayerDeepSleepEvent`                                           | 是   |
+| 14  | `death`            | 死亡               | `amount`                                                                         | `PlayerDeathEvent`                                               | 是   |
+| 15  | `reach_level`      | 经验等级达标       | `level`                                                                          | `PlayerLevelChangeEvent`                                         | 否   |
+| 16  | `pickup`           | 拾取物品           | `item`（空=任意）、`amount`                                                      | `EntityPickupItemEvent`（按堆叠数量累计）                        | 是   |
+| 17  | `chat_keyword`     | 聊天含关键词       | `keyword`                                                                        | `AsyncChatEvent`（PlainTextComponentSerializer 提取）            | 否   |
+| 18  | `advancement_done` | 完成原版进度       | `key`（任意命名空间，含本插件进度）                                              | `PlayerAdvancementDoneEvent`（key 匹配，先于本插件分支判定）     | 否   |
+| 19  | `playtime`         | 累计在线时长       | `minutes`                                                                        | 定时轮询 `Statistic.PLAY_ONE_MINUTE`（tick/20/60）               | 统计 |
+| 20  | `statistic`        | 原版统计达标       | `stat`（如 `walk_one_cm`）、`target`（可空 material/entity）、`amount`           | 定时轮询 `Player#getStatistic`                                   | 统计 |
+| 21  | `shear`            | 剪羊毛             | `entity`（空=任意）、`amount`                                                    | `PlayerShearEntityEvent`（ignoreCancelled）                      | 是   |
+| 22  | `ride`             | 骑乘生物           | `entity`（空=任意）                                                              | `EntityMountEvent`（getEntity 为玩家）                           | 否   |
+| 23  | `portal`           | 进入传送门         | —                                                                                | `EntityPortalEnterEvent`                                         | 否   |
+| 24  | `damage_taken`     | 累计受伤           | `amount`                                                                         | `EntityDamageEvent`（ignoreCancelled）                           | 是   |
+| 25  | `projectile_hit`   | 弹射物命中         | `amount`、`projectile`（空=任意，如 ARROW/SNOWBALL/TRIDENT）                     | `ProjectileHitEvent`（命中实体 + shooter 为玩家）                | 是   |
+| 26  | `glide`            | 开始滑翔           | —                                                                                | `EntityToggleGlideEvent`（isGliding）                            | 否   |
+| 27  | `swim`             | 开始游泳           | —                                                                                | `EntityToggleSwimEvent`（isSwimming）                            | 否   |
+| 28  | `bucket_fill`      | 装桶               | `amount`                                                                         | `PlayerBucketFillEvent`（ignoreCancelled）                       | 是   |
+| 29  | `xp_gain`          | 获得经验           | `amount`（经验值总量，负变动不计）                                               | `PlayerExpChangeEvent`（getAmount>0 按量累计）                   | 是   |
+| 30  | `manual`           | 仅命令授予（默认） | —                                                                                | 无事件；`/<command> grant <玩家> <成就id>`（op 权限）            | 否   |
 
 设计要点：
 
