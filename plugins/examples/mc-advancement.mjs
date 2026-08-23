@@ -2616,16 +2616,23 @@ ${lines.join('\n')}
 
     @Override
     public @NotNull Collection<String> suggest(@NotNull CommandSourceStack stack, @NotNull String[] args) {
+        // BasicCommand 的 suggest 返回值不做前缀过滤（客户端直接展示）——
+        // 按已输入前缀自行过滤，避免输错前缀时仍列出全部候选
+        String prefix = args.length > 0 ? args[args.length - 1].toLowerCase(java.util.Locale.ROOT) : "";
+        java.util.function.Predicate<String> matches =
+                candidate -> candidate.toLowerCase(java.util.Locale.ROOT).startsWith(prefix);
         if (args.length == 1) {
-            return List.of("grant");
+            return List.of("grant").stream().filter(matches).toList();
         }
         if (args.length == 2 && "grant".equalsIgnoreCase(args[0])) {
-            return Bukkit.getOnlinePlayers().stream().map(Player::getName).toList();
+            return Bukkit.getOnlinePlayers().stream().map(Player::getName)
+                    .filter(matches).toList();
         }
         if (args.length == 3 && "grant".equalsIgnoreCase(args[0])) {
             return java.util.Arrays.stream(Achievement.values())
                     .filter(Achievement::listed)
                     .map(Achievement::id)
+                    .filter(matches)
                     .toList();
         }
         return List.of();
@@ -4309,9 +4316,13 @@ const FRONTEND_HTML = `<!doctype html>
         Array.prototype.forEach.call($('panel').querySelectorAll('[data-k]'), function (el) {
           el.onchange = function () {
             var k = el.getAttribute('data-k');
-            if (k === 'sound') { m.sound = el.checked; }
-            else if (k === 'autosaveSeconds' || k === 'packFormat') { m[k] = parseInt(el.value, 10) || 0; }
-            else { m[k] = el.value; }
+            // 孤儿闭包家族第三处：本 handler 只 renderIssues 不整页重渲，
+            // 闭包 m 在首次编辑的 rebuildCode 后即成孤儿——第二项编辑曾写
+            // 进旧代 meta 静默丢失。事件时取当前代。
+            var cur = S.analysis.meta;
+            if (k === 'sound') { cur.sound = el.checked; }
+            else if (k === 'autosaveSeconds' || k === 'packFormat') { cur[k] = parseInt(el.value, 10) || 0; }
+            else { cur[k] = el.value; }
             rebuildCode();
             renderIssues();
           };

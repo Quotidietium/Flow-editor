@@ -560,6 +560,16 @@ describe('generateFiles：工程文件生成', () => {
     expect(comp.rewards.experience).toBe(100);
   });
 
+  it('suggest 按已输入前缀过滤（循环 26）', () => {
+    const r = CORE.exportZip(CORE.starterCode());
+    if (!r.ok) {
+      throw new Error('导出失败');
+    }
+    const cmd = r.files.find((f) => f.path.endsWith('Command.java'))?.text ?? '';
+    expect(cmd).toContain('.startsWith(prefix)');
+    expect(cmd).toContain('List.of("grant").stream().filter(matches).toList()');
+  });
+
   it('config.yml / paper-plugin.yml / pom.xml 关键内容', () => {
     const config = byPath.get('src/main/resources/config.yml') ?? '';
     expect(config).toContain('block_breaker:');
@@ -922,6 +932,56 @@ describe('subgraph 成就栏（循环 11）', () => {
     );
     const parsed = parseCode(rebuilt);
     expect(parsed.ok).toBe(true);
+  });
+});
+
+describe('组合逆向导入（循环 26）', () => {
+  it('loot + lang + subgraph 三特性同包：全部还原', async () => {
+    // 构造含全部三特性的图：subgraph 栏 + 战利品 + 本地化
+    const meta = CORE.readMeta(CORE.starterCode()).meta;
+    meta.localization = 'on';
+    meta.nodes = {
+      treasure: {
+        desc: '寻宝',
+        en: 'Treasure Hunter',
+        loot: [{ item: 'minecraft:emerald', max: 2, min: 1 }],
+        trigger: 'break_block'
+      }
+    };
+    const code = CORE.buildCode(
+      meta,
+      'TD',
+      [
+        { id: 'adv_main', label: '冒险栏', shape: 'rect' },
+        { id: 'treasure', label: '寻宝人', shape: 'round' }
+      ],
+      [{ from: 'adv_main', to: 'treasure' }],
+      [{ id: 'adv_main', label: '冒险栏', memberIds: ['adv_main', 'treasure'] }]
+    );
+    const exported = CORE.exportZip(code);
+    if (!exported.ok) {
+      throw new Error(exported.errors.map((e) => e.msg).join('; '));
+    }
+    // 剥溯源 → 外部包尽力还原路径
+    const entries = await CORE.readZipEntries(exported.bytes);
+    const stripped = CORE.buildZip(
+      [...entries.entries()]
+        .filter(([name]) => !name.endsWith('flow-editor.json'))
+        .map(([name, data]) => ({ path: name, text: new TextDecoder().decode(data) }))
+    );
+    const imported = await CORE.importDatapackZip(stripped);
+    expect(imported).toBeDefined();
+    const a = CORE.analyze(imported?.code ?? '');
+    expect(a.ok).toBe(true);
+    // subgraph 栏
+    expect(a.tabs[0].name).toBe('冒险栏');
+    expect(imported?.code).toContain('subgraph adv_main["冒险栏"]');
+    // lang：标题还原
+    expect(a.nodes.find((n) => n.id === 'treasure')?.label).toBe('寻宝人');
+    // loot：条目还原
+    expect(a.nodes.find((n) => n.id === 'treasure')?.meta.loot).toEqual([
+      { item: 'minecraft:emerald', max: 2, min: 1 }
+    ]);
   });
 });
 
