@@ -178,7 +178,13 @@ const ROUNDTRIP_CODE = [
 ].join('\n');
 
 test('MC 设计器闭环：导出的 zip 可经「打开」逆向导入回图表', async ({ editPage, page }) => {
+  test.setTimeout(60_000);
   await editPage.view.waitFor({ state: 'visible' });
+  // 预热：全量顺序下 Vite 依赖预优化可能在本用例进行到一半时触发整页
+  // reload（Execution context destroyed by navigation）——先主动重载一次，
+  // 把冷启动重载吸收在本用例开头（既有 gotcha：cold-start reload warm-up）
+  await page.reload();
+  await page.locator('#view').waitFor({ state: 'visible' });
   await installDesigner(page);
   await page.getByTestId('plugin-manager').getByRole('button', { name: '关闭' }).click();
   await expect(page.getByTestId('plugin-manager')).toHaveCount(0, { timeout: 10_000 });
