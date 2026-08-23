@@ -2980,14 +2980,19 @@ permissions:
       if (spec.params.length === 0) {
         continue;
       }
+      // 逐键注释：每行标注所属成就名与参数含义，管理员改配置无需查文档
+      lines.push(`  # ${node.label}（${spec.name}）`);
       lines.push(`  ${node.nid}:`);
       for (const p of spec.params) {
         const v = node.params[p.key];
         if (p.type === 'bool') {
+          lines.push(`    # ${p.label}`);
           lines.push(`    ${p.key}: ${v ? 'true' : 'false'}`);
         } else if (p.type === 'int') {
+          lines.push(`    # ${p.label}`);
           lines.push(`    ${p.key}: ${Number(v) || p.def}`);
         } else {
+          lines.push(`    # ${p.label}`);
           lines.push(`    ${p.key}: ${Y(v ?? '')}`);
         }
       }

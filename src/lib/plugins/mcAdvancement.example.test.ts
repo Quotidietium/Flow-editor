@@ -935,6 +935,43 @@ describe('subgraph 成就栏（循环 11）', () => {
   });
 });
 
+describe('循环 43-45 补测（此前 anchor 失配未落盘）', () => {
+  it('43：完成度汇总 + 树行 title tooltip', () => {
+    const r = CORE.exportZip(CORE.starterCode());
+    if (!r.ok) {
+      throw new Error('导出失败');
+    }
+    const cmd = r.files.find((f) => f.path.endsWith('Command.java'))?.text ?? '';
+    expect(cmd).toContain('int doneCount = 0;');
+    expect(cmd).toContain('"完成度： " + doneCount + " / " + total');
+    const html = decodeURIComponent(
+      plugin.frontend.url.replace('data:text/html;charset=utf-8,', '')
+    );
+    expect(html).toContain('title=' + String.raw`"' + esc(n.label`);
+  });
+
+  it('44：降级提示（registered < total 时玩家可见）', () => {
+    const r = CORE.exportZip(CORE.starterCode());
+    if (!r.ok) {
+      throw new Error('导出失败');
+    }
+    const cmd = r.files.find((f) => f.path.endsWith('Command.java'))?.text ?? '';
+    expect(cmd).toContain('service.registeredCount()');
+    expect(cmd).toContain('未能从数据包加载');
+  });
+
+  it('45：config.yml 逐键注释（成就名+参数含义）', () => {
+    const r = CORE.exportZip(CORE.starterCode());
+    if (!r.ok) {
+      throw new Error('导出失败');
+    }
+    const config = r.files.find((f) => f.path.endsWith('config.yml'))?.text ?? '';
+    expect(config).toContain('# 你好，世界！（加入服务器）');
+    expect(config).toContain('# 仅首次加入');
+    expect(config).toContain('# 累计数量');
+  });
+});
+
 describe('循环 42', () => {
   it('countUp 溢出语义安全（Java int 绕回为负 → 永不误授）', () => {
     const r = CORE.exportZip(CORE.starterCode());
