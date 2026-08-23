@@ -2693,6 +2693,12 @@ ${lines.join('\n')}
         player.sendMessage(Component.text(
                 "完成度： " + doneCount + " / " + total + "（" + (total == 0 ? 0 : doneCount * 100 / total) + "%）",
                 NamedTextColor.YELLOW));
+        long registered = service.registeredCount();
+        if (registered < total) {
+            player.sendMessage(Component.text(
+                    "注意： " + (total - registered) + " 个成就未能从数据包加载，请联系管理员检查服务器日志",
+                    NamedTextColor.RED));
+        }
     }
 
     @Override
