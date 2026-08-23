@@ -421,11 +421,35 @@ const coreFactory = function () {
     desc: '',
     hidden: false,
     icon: '',
+    /** 战利品奖励条目：{item, min, max, weight?}——生成 loot_table+function。 */
+    loot: [],
     params: {},
     toast: true,
     trigger: 'manual',
     xp: 0
   };
+
+  /** 规整一条 loot 记录；非法返回 null。 */
+  const cleanLootEntry = (raw) => {
+    if (!raw || typeof raw !== 'object') {
+      return null;
+    }
+    const item = String(raw.item ?? '').trim();
+    const min = Math.max(1, Math.floor(Number(raw.min ?? 1)) || 1);
+    const max = Math.max(min, Math.floor(Number(raw.max ?? min)) || min);
+    if (!item) {
+      return null;
+    }
+    const entry = { item, max, min };
+    const weight = Math.floor(Number(raw.weight ?? 1));
+    if (Number.isFinite(weight) && weight > 0 && weight !== 1) {
+      entry.weight = weight;
+    }
+    return entry;
+  };
+
+  const nodeLoot = (node) =>
+    (Array.isArray(node.meta?.loot) ? node.meta.loot : []).map(cleanLootEntry).filter(Boolean);
 
   const defaultMeta = () => ({
     announceFormat: '[成就] %player% 达成了 [%name%]',
@@ -1165,6 +1189,25 @@ const coreFactory = function () {
           nodeId
         });
       }
+      const lootList = Array.isArray(nm.loot) ? nm.loot : [];
+      let emptyLoot = 0;
+      for (const raw of lootList) {
+        const item = String(raw?.item ?? '').trim();
+        if (!item) {
+          emptyLoot++;
+        } else if (!/^(minecraft:)?[a-z0-9_.]+$/.test(item)) {
+          warnings.push({
+            msg: `成就「${node.label}」的战利品物品「${item}」不是合法物品 ID 格式，导出时可能无法发放`,
+            nodeId
+          });
+        }
+      }
+      if (emptyLoot > 0) {
+        warnings.push({
+          msg: `成就「${node.label}」有 ${emptyLoot} 条未填物品的战利品条目，导出时忽略`,
+          nodeId
+        });
+      }
       nodes.push({
         frame: SHAPE_FRAME[node.shape] ?? 'task',
         id: nodeId,
@@ -1311,11 +1354,48 @@ const coreFactory = function () {
       parent: `${meta.namespace}:${node.parent ?? tab.rootNid}`
     };
     const xp = Number(node.meta.xp) || 0;
+    const loot = nodeLoot(node);
     if (xp > 0) {
       out.rewards = { experience: xp };
     }
+    if (loot.length > 0) {
+      // 1.21 advancement 语义：rewards.function 指向数据包函数（旧的
+      // rewards.loot 已移除）；函数体内用 loot give 发放战利品表内容
+      out.rewards = { ...(out.rewards ?? {}), function: `${meta.namespace}:${node.nid}` };
+    }
     return JSON.stringify(out, null, 2) + '\n';
   };
+
+  /** 战利品表 JSON（单池；条目=物品+set_count 数量区间，可加权）。 */
+  const lootTableJson = (node) =>
+    JSON.stringify(
+      {
+        pools: [
+          {
+            entries: nodeLoot(node).map((entry) => ({
+              functions: [
+                {
+                  count: { max: entry.max, min: entry.min },
+                  function: 'minecraft:set_count'
+                }
+              ],
+              name: entry.item,
+              type: 'minecraft:item',
+              ...(entry.weight ? { weight: entry.weight } : {})
+            })),
+            rolls: 1
+          }
+        ],
+        type: 'minecraft:chest'
+      },
+      null,
+      2
+    ) + '\n';
+
+  /** 发放函数：进度达成时由 rewards.function 调用。 */
+  const lootFunctionMc = (meta, node) =>
+    `# ${node.label} 达成时的战利品发放（由 advancement rewards.function 调用）\n` +
+    `loot give @p loot ${meta.namespace}:${node.nid}\n`;
 
   const rootJson = (meta, tab) =>
     JSON.stringify(
@@ -2780,6 +2860,17 @@ ${rows.join('\n')}
           path: `src/main/resources/datapack/data/${a.meta.namespace}/advancement/${node.nid}.json`,
           text: advJson(a.meta, tab, node)
         });
+        // 战利品奖励：loot_table + 发放函数（advancement rewards.function 引用）
+        if (nodeLoot(node).length > 0) {
+          files.push({
+            path: `src/main/resources/datapack/data/${a.meta.namespace}/loot_table/${node.nid}.json`,
+            text: lootTableJson(node)
+          });
+          files.push({
+            path: `src/main/resources/datapack/data/${a.meta.namespace}/function/${node.nid}.mcfunction`,
+            text: lootFunctionMc(a.meta, node)
+          });
+        }
       }
       if (tab.meta.completionist && members.length > 0) {
         files.push({
@@ -3066,11 +3157,32 @@ ${rows.join('\n')}
       const shape = FRAME_SHAPE_IN[display.frame ?? 'task'] ?? 'rect';
       nodes.push({ id: nid, label, shape });
       if (!meta.nodes[nid] || typeof meta.nodes[nid] !== 'object') {
+        // 战利品还原：从 loot_table JSON 反推条目（advancement 只有函数引用）
+        let loot = [];
+        const lootEntry = entries.get(`${base}data/${ns}/loot_table/${nid}.json`);
+        if (lootEntry) {
+          try {
+            const table = JSON.parse(decoder.decode(lootEntry));
+            loot = (table.pools?.[0]?.entries ?? [])
+              .filter((e) => e?.type === 'minecraft:item' && typeof e.name === 'string')
+              .map((e) => ({
+                item: e.name,
+                max: Math.max(1, Math.floor(Number(e.functions?.[0]?.count?.max ?? 1)) || 1),
+                min: Math.max(1, Math.floor(Number(e.functions?.[0]?.count?.min ?? 1)) || 1),
+                ...(Number(e.weight) > 0 && Number(e.weight) !== 1
+                  ? { weight: Math.floor(Number(e.weight)) }
+                  : {})
+              }));
+          } catch {
+            warnings.push(`loot_table/${nid}.json 无法解析，战利品未还原`);
+          }
+        }
         meta.nodes[nid] = {
           announce: true,
           desc: display.description?.text ?? '',
           hidden: display.hidden === true,
           icon: display.icon?.id ?? '',
+          loot,
           params: {},
           toast: display.show_toast !== false,
           trigger: 'manual',
@@ -3529,6 +3641,25 @@ const FRONTEND_HTML = `<!doctype html>
         html += inputHtml('xp', '奖励经验值（0 = 无奖励）', String(n.meta.xp || 0), 'number', ' min="0"');
         html += '</fieldset>';
 
+        // 战利品奖励（达成时发放物品）：条目 = 物品 + 数量区间 + 可选权重
+        var loot = Array.isArray(n.meta.loot) ? n.meta.loot : [];
+        html += '<fieldset><legend>战利品奖励（达成时发放物品）</legend>';
+        if (loot.length === 0) {
+          html += '<p class="hint">未配置。添加后将生成数据包 loot_table 与发放函数' +
+            '（advancement rewards.function，1.21 语义），与经验奖励可并存。</p>';
+        }
+        loot.forEach(function (entry, i) {
+          html += '<div class="row" data-loot="' + i + '" style="align-items:flex-end;margin-bottom:6px">'
+            + '<div><label>物品 ID</label><input type="text" data-l="item" data-i="' + i + '" value="' + esc(entry.item ?? '') + '" list="icons" placeholder="minecraft:diamond" /></div>'
+            + '<div><label>数量下限</label><input type="number" data-l="min" data-i="' + i + '" value="' + esc(entry.min ?? 1) + '" min="1" style="width:100%" /></div>'
+            + '<div><label>数量上限</label><input type="number" data-l="max" data-i="' + i + '" value="' + esc(entry.max ?? entry.min ?? 1) + '" min="1" style="width:100%" /></div>'
+            + '<div><label>权重</label><input type="number" data-l="weight" data-i="' + i + '" value="' + esc(entry.weight ?? 1) + '" min="1" style="width:100%" /></div>'
+            + '<div><button type="button" class="danger" data-loot-del="' + i + '">✕</button></div>'
+            + '</div>';
+        });
+        html += '<button type="button" id="btnAddLoot">+ 添加物品</button>';
+        html += '</fieldset>';
+
         html += '<fieldset><legend>触发方式</legend>';
         var triggerGroups = {};
         CORE.TRIGGERS.forEach(function (t) {
@@ -3636,6 +3767,34 @@ const FRONTEND_HTML = `<!doctype html>
         };
         $('btnDelNode').onclick = function () { deleteNode(n); };
         $('btnAddChild').onclick = function () { addNode(n); };
+        // 战利品条目编辑：input 更新条目字段，✕ 删除行，+ 添加行
+        if (!Array.isArray(meta.loot)) { meta.loot = []; }
+        Array.prototype.forEach.call($('panel').querySelectorAll('[data-l]'), function (el) {
+          el.onchange = function () {
+            var i = parseInt(el.getAttribute('data-i'), 10);
+            var k = el.getAttribute('data-l');
+            if (!meta.loot[i]) { return; }
+            if (k === 'item') { meta.loot[i].item = el.value.trim(); }
+            else { meta.loot[i][k] = Math.max(1, parseInt(el.value, 10) || 1); }
+            rebuildCode();
+            renderIssues();
+          };
+        });
+        Array.prototype.forEach.call($('panel').querySelectorAll('[data-loot-del]'), function (el) {
+          el.onclick = function () {
+            meta.loot.splice(parseInt(el.getAttribute('data-loot-del'), 10), 1);
+            rebuildCode();
+            render();
+          };
+        });
+        var addLootBtn = $('btnAddLoot');
+        if (addLootBtn) {
+          addLootBtn.onclick = function () {
+            meta.loot.push({ item: '', max: 1, min: 1, weight: 1 });
+            rebuildCode();
+            render();
+          };
+        }
       }
 
       function renameNode(n, newId) {
@@ -4002,7 +4161,7 @@ export default {
   id: 'flow.mc-advancement',
   name: 'MC 进度设计器',
   permissions: ['import:file', 'export:format', 'ui:frontend'],
-  version: '1.5.0'
+  version: '1.6.0'
 };
 
 // 单测钩子（不改变插件运行时行为）

@@ -27,7 +27,8 @@ const MAX_FILES = 200;
 const MAX_FILE_BYTES = 1024 * 1024;
 const MAX_TOTAL_BYTES = 8 * 1024 * 1024;
 const COMPILE_TIMEOUT_MS = 120_000;
-const PATH_RE = /^src\/main\/(java|resources)\/[A-Za-z0-9_./-]+\.(java|yml|yaml|json|mcmeta)$/;
+const PATH_RE =
+  /^src\/main\/(java|resources)\/[A-Za-z0-9_./-]+\.(java|yml|yaml|json|mcmeta|mcfunction)$/;
 const FILENAME_RE = /^[A-Za-z0-9_.-]+\.jar$/;
 
 const fail = (code, message, detail) => ({ error: { code, detail, message }, ok: false });

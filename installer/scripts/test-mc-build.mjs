@@ -51,6 +51,11 @@ for (const t of CORE.TRIGGERS) {
   if (t.id === 'chat_keyword') params.keyword = '萌新报到';
   meta.nodes[id] = { params, trigger: t.id };
 }
+// 战利品奖励条目（验证 .mcfunction/loot_table 进 jar）
+meta.nodes.t_kill = {
+  ...meta.nodes.t_kill,
+  loot: [{ item: 'minecraft:diamond', max: 3, min: 1, weight: 2 }]
+};
 const request = CORE.buildJarRequest(CORE.buildCode(meta, 'TD', nodes, edges));
 if (!request.ok) {
   console.error('样本生成失败', request.errors);
@@ -177,6 +182,11 @@ if (!result.ok && (result.error.code === 'JDK_NOT_FOUND' || result.error.code ==
     );
     check('jar 含数据包根进度', names.includes('datapack/data/myach/advancement/root.json'));
     check('jar 含插件清单', names.includes('paper-plugin.yml'));
+    check(
+      'jar 含战利品表与发放函数',
+      names.includes('datapack/data/myach/loot_table/t_kill.json') &&
+        names.includes('datapack/data/myach/function/t_kill.mcfunction')
+    );
 
     const yml = entries.get('paper-plugin.yml')?.toString('utf8') ?? '';
     check(
