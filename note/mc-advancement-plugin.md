@@ -276,7 +276,7 @@ MyAchievements/
 - ~~classDef 样式对话框~~ → **2.0.135 以节点级 style 指令实现**（§13）；
   不引入 classDef/class：仅多节点共享样式时才省行，编辑器场景不划算，
   解析器继续按不支持跳过。
-- 服务端侧本地化文件（成就名硬编码中文，与 REF 一致）。
+- ~~服务端侧本地化文件~~ → **2.0.136 已实现**（可选开关，见 §14）；仍不做：更多语种（按需在 lang/ 目录手动加文件即可，键名体系已定）。
 - Spigot 兼容（paper-plugin.yml 为 Paper 专属，与 REF 取舍一致）。
 - ~~导入既有数据包 zip 逆向成图~~ → **2.0.132 已实现**（见 §10）。
 
@@ -419,3 +419,15 @@ would create a cycle`（画布静默保留旧图）——生成侧已排除该�
 - `parseFlow` 解析 style 行（仅 fill/stroke 两键，其余视觉键忽略）；
   合并次序：溯源元数据 > 代码 style 行；非法颜色值警告。
 - 取舍：不用 classDef/class（共享样式才省行；两行指令往返语义更绕）。
+
+## 14. 本地化（2.0.136）
+
+`meta.localization: 'on'`（默认 off，兼容既有工程）：
+
+- advancement title/description → `{"translate": "<ns>.advancement.<id>.…"}`
+- 生成 `lang/zh_cn.json` + `lang/en_us.json`（键=栏根/成就/大满贯 ×
+  title/description）；英文取表单英文输入，**缺省回填中文**（客户端永不
+  显示键名）
+- 外部数据包导入：translate 标题经 zh_cn（回落 en_us）还原可读名称
+- 键体系 `<ns>.advancement.<id>.<part>` 与 vanilla 惯例同形；新增语种=
+  手动在 lang/ 加同键文件
