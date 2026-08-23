@@ -159,6 +159,10 @@ try {
     await waitFor(/用法: \/flowtest grant/, 10_000);
     child.stdin.write('flowtest grant\n'); // 缺参：args.length < 3 分支
     await new Promise((r) => setTimeout(r, 2000));
+    // revoke 子命令：对称撤销链（注册/权限/判空用法）
+    child.stdin.write('flowtest revoke GhostPlayer t_fish\n');
+    await waitFor(/用法: \/flowtest revoke <在线玩家> <成就id>/, 10_000);
+    await new Promise((r) => setTimeout(r, 1000));
   } catch {
     // stdin 不可写时，下面断言会给出失败详情
   }
@@ -177,6 +181,10 @@ try {
   check(
     'grant 缺参与离线玩家均给用法（两次）',
     (cmdLog.match(/用法: \/flowtest grant/g) ?? []).length >= 2
+  );
+  check(
+    'revoke 对离线玩家走用法提示（对称撤销链可用）',
+    /用法: \/flowtest revoke <在线玩家> <成就id>/.test(cmdLog)
   );
 
   // ---- /reload 路径：DATAPACK_DISCOVERY 重放 + onDisable 落盘 + 二次加载 ----

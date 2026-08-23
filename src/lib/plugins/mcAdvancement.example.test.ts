@@ -567,7 +567,7 @@ describe('generateFiles：工程文件生成', () => {
     }
     const cmd = r.files.find((f) => f.path.endsWith('Command.java'))?.text ?? '';
     expect(cmd).toContain('.startsWith(prefix)');
-    expect(cmd).toContain('List.of("grant").stream().filter(matches).toList()');
+    expect(cmd).toContain('List.of("grant", "revoke").stream().filter(matches).toList()');
   });
 
   it('config.yml / paper-plugin.yml / pom.xml 关键内容', () => {
@@ -932,6 +932,25 @@ describe('subgraph 成就栏（循环 11）', () => {
     );
     const parsed = parseCode(rebuilt);
     expect(parsed.ok).toBe(true);
+  });
+});
+
+describe('revoke 撤销命令（循环 41）', () => {
+  it('生成的 Java 含对称 revoke 分支与 Service.revoke', () => {
+    const r = CORE.exportZip(CORE.starterCode());
+    if (!r.ok) {
+      throw new Error('导出失败');
+    }
+    const cmd = r.files.find((f) => f.path.endsWith('Command.java'))?.text ?? '';
+    const svc = r.files.find((f) => f.path.endsWith('AchievementService.java'))?.text ?? '';
+    expect(cmd).toContain('"revoke".equalsIgnoreCase(args[0])');
+    expect(cmd).toContain('用法: /myach revoke <在线玩家> <成就id>');
+    expect(cmd).toContain('service.revoke(target, achievement)');
+    expect(cmd).toContain('List.of("grant", "revoke").stream().filter(matches).toList()');
+    expect(cmd).toContain('grant/revoke 子命令除外');
+    expect(svc).toContain('progress.revokeCriteria(criterion)');
+    const yml = r.files.find((f) => f.path.endsWith('paper-plugin.yml'))?.text ?? '';
+    expect(yml).toContain('grant/revoke 手动授予与撤销成就');
   });
 });
 

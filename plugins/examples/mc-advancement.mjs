@@ -1857,6 +1857,18 @@ public final class AchievementService {
         }
     }
 
+    /** 撤销整项成就（收回全部已授条件）——/cmd revoke 用。 */
+    public void revoke(Player player, Achievement achievement) {
+        Advancement advancement = advancement(achievement);
+        if (advancement == null) {
+            return;
+        }
+        AdvancementProgress progress = player.getAdvancementProgress(advancement);
+        for (String criterion : new ArrayList<>(progress.getAwardedCriteria())) {
+            progress.revokeCriteria(criterion);
+        }
+    }
+
     /** 只授予单个条件，用于汇总成就这类由多项条件汇总而成的成就。 */
     public void awardCriterion(Player player, Achievement achievement, String criterion) {
         Advancement advancement = advancement(achievement);
@@ -2593,7 +2605,7 @@ import java.util.Collection;
 import java.util.List;
 
 /**
- * /${a.meta.command}：查看成就进度；/${a.meta.command} grant <玩家> <成就id>：手动授予。
+ * /${a.meta.command}：查看成就进度；/${a.meta.command} grant|revoke <玩家> <成就id>：手动授予/撤销。
  * 本文件由 Flow 编辑器「MC 进度设计器」插件生成。
  */
 public final class ${cls}Command implements BasicCommand {
@@ -2632,8 +2644,29 @@ public final class ${cls}Command implements BasicCommand {
                     "已授予「" + achievement.displayName() + "」给 " + target.getName(), NamedTextColor.GREEN));
             return;
         }
+        // revoke：撤销误授（与 grant 对称；共享同一权限）
+        if (args.length >= 1 && "revoke".equalsIgnoreCase(args[0])) {
+            if (args.length < 3) {
+                sender.sendMessage(Component.text("用法: /${a.meta.command} revoke <在线玩家> <成就id>", NamedTextColor.RED));
+                return;
+            }
+            if (!sender.hasPermission("${a.meta.namespace}.grant")) {
+                sender.sendMessage(Component.text("你没有撤销成就的权限。", NamedTextColor.RED));
+                return;
+            }
+            Player target = Bukkit.getPlayerExact(args[1]);
+            Achievement achievement = Achievement.byId(args[2]);
+            if (target == null || achievement == null || !achievement.listed()) {
+                sender.sendMessage(Component.text("用法: /${a.meta.command} revoke <在线玩家> <成就id>", NamedTextColor.RED));
+                return;
+            }
+            service.revoke(target, achievement);
+            sender.sendMessage(Component.text(
+                    "已撤销 " + target.getName() + " 的「" + achievement.displayName() + "」", NamedTextColor.GREEN));
+            return;
+        }
         if (!(sender instanceof Player player)) {
-            sender.sendMessage(Component.text("该命令仅玩家可用（grant 子命令除外）。", NamedTextColor.RED));
+            sender.sendMessage(Component.text("该命令仅玩家可用（grant/revoke 子命令除外）。", NamedTextColor.RED));
             return;
         }
         player.sendMessage(Component.text("—— ${a.meta.plugin} 成就进度 ——", NamedTextColor.GOLD, TextDecoration.BOLD));
@@ -2648,13 +2681,13 @@ ${lines.join('\n')}
         java.util.function.Predicate<String> matches =
                 candidate -> candidate.toLowerCase(java.util.Locale.ROOT).startsWith(prefix);
         if (args.length == 1) {
-            return List.of("grant").stream().filter(matches).toList();
+            return java.util.List.of("grant", "revoke").stream().filter(matches).toList();
         }
-        if (args.length == 2 && "grant".equalsIgnoreCase(args[0])) {
+        if (args.length == 2 && ("grant".equalsIgnoreCase(args[0]) || "revoke".equalsIgnoreCase(args[0]))) {
             return Bukkit.getOnlinePlayers().stream().map(Player::getName)
                     .filter(matches).toList();
         }
-        if (args.length == 3 && "grant".equalsIgnoreCase(args[0])) {
+        if (args.length == 3 && ("grant".equalsIgnoreCase(args[0]) || "revoke".equalsIgnoreCase(args[0]))) {
             return java.util.Arrays.stream(Achievement.values())
                     .filter(Achievement::listed)
                     .map(Achievement::id)
@@ -2901,7 +2934,7 @@ authors: [${a.meta.author.replaceAll(/[[\],]/g, '') || 'Zurker'}]
 # 显式声明 grant 命令的权限（未声明的权限对权限插件不可见）
 permissions:
   ${a.meta.namespace}.grant:
-    description: 使用 /${a.meta.command} grant 手动授予成就
+    description: 使用 /${a.meta.command} grant/revoke 手动授予与撤销成就
     default: op
 `;
 
