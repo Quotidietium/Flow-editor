@@ -265,6 +265,95 @@ const coreFactory = function () {
       stat: true
     },
     {
+      counted: true,
+      desc: '累计剪羊毛指定次数',
+      event: 'shear',
+      id: 'shear',
+      name: '剪羊毛',
+      params: [
+        {
+          def: '',
+          key: 'entity',
+          label: '生物类型（留空=任意）',
+          ph: 'minecraft:sheep',
+          type: 'text'
+        },
+        { def: 10, key: 'amount', label: '累计数量', min: 1, type: 'int' }
+      ]
+    },
+    {
+      counted: false,
+      desc: '骑乘任意生物（骑马/骑猪等）时达成',
+      event: 'mount',
+      id: 'ride',
+      name: '骑乘生物',
+      params: [
+        {
+          def: '',
+          key: 'entity',
+          label: '生物类型（留空=任意）',
+          ph: 'minecraft:horse',
+          type: 'text'
+        }
+      ]
+    },
+    {
+      counted: false,
+      desc: '进入下界/末地传送门时达成',
+      event: 'portal',
+      id: 'portal',
+      name: '进入传送门',
+      params: []
+    },
+    {
+      counted: true,
+      desc: '累计受伤指定次数',
+      event: 'damage',
+      id: 'damage_taken',
+      name: '累计受伤',
+      params: [{ def: 100, key: 'amount', label: '累计次数', min: 1, type: 'int' }]
+    },
+    {
+      counted: true,
+      desc: '弹射物累计命中生物（射箭/雪球/三叉戟等）',
+      event: 'projectile',
+      id: 'projectile_hit',
+      name: '弹射物命中',
+      params: [{ def: 30, key: 'amount', label: '累计命中数', min: 1, type: 'int' }]
+    },
+    {
+      counted: false,
+      desc: '开始滑翔（穿戴鞘翅飞行）时达成',
+      event: 'glide',
+      id: 'glide',
+      name: '开始滑翔',
+      params: []
+    },
+    {
+      counted: false,
+      desc: '开始游泳时达成',
+      event: 'swim',
+      id: 'swim',
+      name: '开始游泳',
+      params: []
+    },
+    {
+      counted: true,
+      desc: '累计用桶装取液体（水/岩浆等）',
+      event: 'bucket',
+      id: 'bucket_fill',
+      name: '装桶',
+      params: [{ def: 10, key: 'amount', label: '累计次数', min: 1, type: 'int' }]
+    },
+    {
+      counted: true,
+      desc: '累计获得经验值总量（附魔/熔炼/击杀经验等）',
+      event: 'xp',
+      id: 'xp_gain',
+      name: '获得经验',
+      params: [{ def: 1000, key: 'amount', label: '累计经验值', min: 1, type: 'int' }]
+    },
+    {
       counted: false,
       desc: '只能由管理员用 /<命令> grant 手动授予',
       event: 'manual',
@@ -273,6 +362,24 @@ const coreFactory = function () {
       params: []
     }
   ];
+
+  /** 下拉分组（前端 optgroup 用）；未列出的归「其他」。 */
+  const TRIGGER_GROUPS = {
+    日常: ['join', 'consume', 'sleep', 'chat_keyword', 'trade', 'playtime'],
+    收集与建造: ['break_block', 'place_block', 'craft', 'pickup', 'enchant', 'bucket_fill'],
+    战斗与冒险: ['kill', 'death', 'damage_taken', 'projectile_hit', 'tame', 'breed', 'ride'],
+    探索与世界: ['reach_height', 'portal', 'glide', 'swim', 'fish', 'shear'],
+    技能与进度: ['reach_level', 'xp_gain', 'advancement_done', 'statistic'],
+    手动: ['manual']
+  };
+  const triggerGroup = (id) => {
+    for (const [group, ids] of Object.entries(TRIGGER_GROUPS)) {
+      if (ids.includes(id)) {
+        return group;
+      }
+    }
+    return '其他';
+  };
 
   const triggerById = (id) => TRIGGERS.find((t) => t.id === id) ?? TRIGGERS.at(-1);
 
@@ -1138,6 +1245,33 @@ const coreFactory = function () {
       case 'join': {
         return p.firstOnly === false ? '加入服务器' : '第一次加入服务器';
       }
+      case 'shear': {
+        return `累计剪羊毛 ${p.amount} 次${p.entity ? `（${p.entity}）` : ''}`;
+      }
+      case 'ride': {
+        return p.entity ? `骑乘${p.entity}` : '骑乘任意生物';
+      }
+      case 'portal': {
+        return '进入下界或末地传送门';
+      }
+      case 'damage_taken': {
+        return `累计受伤 ${p.amount} 次`;
+      }
+      case 'projectile_hit': {
+        return `弹射物累计命中生物 ${p.amount} 次`;
+      }
+      case 'glide': {
+        return '开始滑翔';
+      }
+      case 'swim': {
+        return '开始游泳';
+      }
+      case 'bucket_fill': {
+        return `累计用桶装取液体 ${p.amount} 次`;
+      }
+      case 'xp_gain': {
+        return `累计获得 ${p.amount} 点经验`;
+      }
       default: {
         return '由管理员手动授予';
       }
@@ -1485,6 +1619,15 @@ public final class ProgressStore {
     if (has('chat_keyword'))
       imports.add('net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer');
     if (has('reach_height')) imports.add('org.bukkit.Location');
+    if (has('shear')) imports.add('org.bukkit.event.player.PlayerShearEntityEvent');
+    if (has('ride')) imports.add('org.bukkit.event.entity.EntityMountEvent');
+    if (has('portal')) imports.add('org.bukkit.event.entity.EntityPortalEnterEvent');
+    if (has('damage_taken')) imports.add('org.bukkit.event.entity.EntityDamageEvent');
+    if (has('projectile_hit')) imports.add('org.bukkit.event.entity.ProjectileHitEvent');
+    if (has('glide')) imports.add('org.bukkit.event.entity.EntityToggleGlideEvent');
+    if (has('swim')) imports.add('org.bukkit.event.entity.EntityToggleSwimEvent');
+    if (has('bucket_fill')) imports.add('org.bukkit.event.player.PlayerBucketFillEvent');
+    if (has('xp_gain')) imports.add('org.bukkit.event.player.PlayerExpChangeEvent');
     if (
       used
         .get('kill')
@@ -1495,7 +1638,7 @@ public final class ProgressStore {
     if (['break_block', 'place_block', 'consume', 'craft', 'pickup'].some((id) => has(id))) {
       imports.add('org.bukkit.Material');
     }
-    if (['kill', 'tame', 'breed'].some((id) => has(id))) {
+    if (['kill', 'tame', 'breed', 'shear', 'ride'].some((id) => has(id))) {
       imports.add('org.bukkit.entity.EntityType');
     }
     imports.add('org.bukkit.Sound');
@@ -1515,7 +1658,7 @@ public final class ProgressStore {
 ${perNode(
   'join',
   () => `        if (!service.isDone(player, §N§)
-                && (!flag(§N§, "first-only", true) || !player.hasPlayedBefore())) {
+                && (!flag(§N§, "firstOnly", true) || !player.hasPlayedBefore())) {
             service.award(player, §N§);
         }`
 )}
@@ -1713,6 +1856,128 @@ ${perNode(
                 service.award(player, §N§);
             }
         }`
+)}
+    }`);
+    }
+    if (has('shear')) {
+      blocks.push(`    @EventHandler(ignoreCancelled = true)
+    public void onShear(PlayerShearEntityEvent event) {
+        Player player = event.getPlayer();
+${perNode(
+  'shear',
+  (
+    n
+  ) => `        if (!entityMiss(param(§N§, "entity"), event.getEntity().getType(), event.getEntity())) {
+            countUp(player, §N§, 1, ${Number(n.params.amount) || 10});
+        }`
+)}
+    }`);
+    }
+    if (has('ride')) {
+      blocks.push(`    @EventHandler(ignoreCancelled = true)
+    public void onMount(EntityMountEvent event) {
+        if (!(event.getEntity() instanceof Player player)) {
+            return;
+        }
+${perNode(
+  'ride',
+  () => `        if (!entityMiss(param(§N§, "entity"), event.getMount().getType(), event.getMount())
+                && !service.isDone(player, §N§)) {
+            service.award(player, §N§);
+        }`
+)}
+    }`);
+    }
+    if (has('portal')) {
+      blocks.push(`    @EventHandler
+    public void onPortalEnter(EntityPortalEnterEvent event) {
+        if (!(event.getEntity() instanceof Player player)) {
+            return;
+        }
+${perNode(
+  'portal',
+  () => `        if (!service.isDone(player, §N§)) {
+            service.award(player, §N§);
+        }`
+)}
+    }`);
+    }
+    if (has('damage_taken')) {
+      blocks.push(`    @EventHandler(ignoreCancelled = true)
+    public void onDamage(EntityDamageEvent event) {
+        if (!(event.getEntity() instanceof Player player)) {
+            return;
+        }
+${perNode(
+  'damage_taken',
+  (n) => `        countUp(player, §N§, 1, ${Number(n.params.amount) || 100});`
+)}
+    }`);
+    }
+    if (has('projectile_hit')) {
+      blocks.push(`    @EventHandler(ignoreCancelled = true)
+    public void onProjectileHit(ProjectileHitEvent event) {
+        if (event.getHitEntity() == null) {
+            return;
+        }
+        if (!(event.getEntity().getShooter() instanceof Player player)) {
+            return;
+        }
+${perNode(
+  'projectile_hit',
+  (n) => `        countUp(player, §N§, 1, ${Number(n.params.amount) || 30});`
+)}
+    }`);
+    }
+    if (has('glide')) {
+      blocks.push(`    @EventHandler(ignoreCancelled = true)
+    public void onGlide(EntityToggleGlideEvent event) {
+        if (!event.isGliding() || !(event.getEntity() instanceof Player player)) {
+            return;
+        }
+${perNode(
+  'glide',
+  () => `        if (!service.isDone(player, §N§)) {
+            service.award(player, §N§);
+        }`
+)}
+    }`);
+    }
+    if (has('swim')) {
+      blocks.push(`    @EventHandler(ignoreCancelled = true)
+    public void onSwim(EntityToggleSwimEvent event) {
+        if (!event.isSwimming() || !(event.getEntity() instanceof Player player)) {
+            return;
+        }
+${perNode(
+  'swim',
+  () => `        if (!service.isDone(player, §N§)) {
+            service.award(player, §N§);
+        }`
+)}
+    }`);
+    }
+    if (has('bucket_fill')) {
+      blocks.push(`    @EventHandler(ignoreCancelled = true)
+    public void onBucketFill(PlayerBucketFillEvent event) {
+        Player player = event.getPlayer();
+${perNode(
+  'bucket_fill',
+  (n) => `        countUp(player, §N§, 1, ${Number(n.params.amount) || 10});`
+)}
+    }`);
+    }
+    if (has('xp_gain')) {
+      blocks.push(`    @EventHandler(ignoreCancelled = true)
+    public void onExpChange(PlayerExpChangeEvent event) {
+        int gained = event.getAmount();
+        if (gained <= 0) {
+            return;
+        }
+        Player player = event.getPlayer();
+${perNode(
+  'xp_gain',
+  (n) => `        countUp(player, §N§, gained, ${Number(n.params.amount) || 1000});`
 )}
     }`);
     }
@@ -2532,6 +2797,7 @@ ${rows.join('\n')}
     starterCode,
     tabMeta,
     triggerById,
+    triggerGroup,
     triggerParams
   };
 };
@@ -2796,9 +3062,18 @@ const FRONTEND_HTML = `<!doctype html>
         html += '</fieldset>';
 
         html += '<fieldset><legend>触发方式</legend>';
+        var triggerGroups = {};
+        CORE.TRIGGERS.forEach(function (t) {
+          var g = CORE.triggerGroup(t.id);
+          (triggerGroups[g] = triggerGroups[g] || []).push(t);
+        });
         html += '<label>触发器</label><select data-k="trigger">'
-          + CORE.TRIGGERS.map(function (t) {
-            return '<option value="' + t.id + '"' + (spec.id === t.id ? ' selected' : '') + '>' + t.name + '</option>';
+          + Object.keys(triggerGroups).map(function (g) {
+            return '<optgroup label="' + esc(g) + '">'
+              + triggerGroups[g].map(function (t) {
+                return '<option value="' + t.id + '"' + (spec.id === t.id ? ' selected' : '') + '>' + esc(t.name) + '</option>';
+              }).join('')
+              + '</optgroup>';
           }).join('')
           + '</select><div class="hint">' + esc(spec.desc) + '</div>';
         spec.params.forEach(function (p) {
@@ -3116,11 +3391,20 @@ const FRONTEND_HTML = `<!doctype html>
       }
 
       function exportJarFile() {
+        var btn = $('btnJar');
+        if (btn.disabled) {
+          return; // 编译进行中，防连点
+        }
+        btn.disabled = true;
         setStatus('正在编译（调用本机 JDK）…');
+        var done = function (msg) {
+          setStatus(msg);
+          btn.disabled = false;
+        };
         save().then(function () {
           var request = CORE.buildJarRequest(S.code);
           if (!request.ok) {
-            setStatus('无法编译：' + (request.errors[0] ? request.errors[0].msg : '未知错误'));
+            done('无法编译：' + (request.errors[0] ? request.errors[0].msg : '未知错误'));
             return;
           }
           tool('mc_build', { filename: request.filename, files: request.files }, 90000).then(function (text) {
@@ -3132,13 +3416,13 @@ const FRONTEND_HTML = `<!doctype html>
             link.download = payload.filename;
             link.click();
             setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
-            setStatus('已编译并导出 ' + payload.filename + '（' + (payload.jdkVersion || '') + '）——直接放入服务器 plugins/ 即可');
+            done('已编译并导出 ' + payload.filename + '（' + (payload.jdkVersion || '') + '）——直接放入服务器 plugins/ 即可');
           }).catch(function (error) {
             var msg = String(error && error.message ? error.message : error);
             if (/JDK|Java|javac/i.test(msg)) {
-              setStatus(msg + ' ［提示：编译功能要求您自行安装 JDK 21+（如 Eclipse Temurin），本应用不捆绑 Java］');
+              done(msg + ' ［提示：编译功能要求您自行安装 JDK 21+（如 Eclipse Temurin），本应用不捆绑 Java］');
             } else {
-              setStatus('编译失败：' + msg);
+              done('编译失败：' + msg);
             }
           });
         });

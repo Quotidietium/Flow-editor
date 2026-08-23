@@ -29,7 +29,27 @@ interface Analysis {
   tabs: { members: string[]; name: string; rootId: string; rootNid: string }[];
   warnings: Issue[];
 }
+interface TriggerParam {
+  def: string | number | boolean;
+  key: string;
+  label: string;
+  min?: number;
+  ph?: string;
+  type: 'bool' | 'int' | 'select' | 'text';
+}
+interface TriggerSpec {
+  counted: boolean;
+  desc: string;
+  event: string;
+  id: string;
+  name: string;
+  params: TriggerParam[];
+}
+
 interface Core {
+  TRIGGERS: TriggerSpec[];
+  triggerById(id: string): TriggerSpec;
+  triggerGroup(id: string): string;
   analyze(code: string): Analysis;
   buildCode(meta: unknown, direction: string, nodes: unknown[], edges: unknown[]): string;
   buildJarRequest(
@@ -135,6 +155,76 @@ const readZip = (bytes: Uint8Array): { data: string; name: string }[] => {
 };
 
 describe('parseFlow：流程图解析', () => {
+  it('触发器注册表：30 种、分组覆盖全部、无重名', () => {
+    expect(CORE.TRIGGERS).toHaveLength(30);
+    const ids = CORE.TRIGGERS.map((t) => t.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const id of ids) {
+      expect(CORE.triggerGroup(id)).not.toBe('其他');
+    }
+  });
+
+  it('新触发器（循环2 新增 9 种）生成对应 Java 分支与 config 键', () => {
+    const meta = CORE.readMeta(CORE.starterCode()).meta;
+    const newIds = [
+      'shear',
+      'ride',
+      'portal',
+      'damage_taken',
+      'projectile_hit',
+      'glide',
+      'swim',
+      'bucket_fill',
+      'xp_gain'
+    ];
+    const nodes = [{ id: 'root', label: '根', shape: 'rect' }];
+    const edges: { from: string; to: string }[] = [];
+    meta.nodes = {};
+    let prev = 'root';
+    for (const tid of newIds) {
+      nodes.push({ id: `t_${tid}`, label: tid, shape: 'rect' });
+      edges.push({ from: prev, to: `t_${tid}` });
+      prev = `t_${tid}`;
+      const params: Record<string, unknown> = {};
+      for (const p of CORE.triggerById(tid).params) {
+        params[p.key] = p.def;
+      }
+      meta.nodes[`t_${tid}`] = { params, trigger: tid };
+    }
+    const r = CORE.exportZip(CORE.buildCode(meta, 'TD', nodes, edges));
+    if (!r.ok) {
+      throw new Error(r.errors.map((e) => e.msg).join('; '));
+    }
+    const listener = r.files.find((f) => f.path.endsWith('AchievementListener.java'))?.text ?? '';
+    for (const marker of [
+      'PlayerShearEntityEvent',
+      'EntityMountEvent',
+      'EntityPortalEnterEvent',
+      'EntityDamageEvent',
+      'ProjectileHitEvent',
+      'EntityToggleGlideEvent',
+      'EntityToggleSwimEvent',
+      'PlayerBucketFillEvent',
+      'PlayerExpChangeEvent'
+    ]) {
+      expect(listener).toContain(marker);
+    }
+    const config = r.files.find((f) => f.path.endsWith('config.yml'))?.text ?? '';
+    expect(config).toContain('amount: 1000'); // xp_gain 默认
+  });
+
+  it('join 的 config 键与 Java 读取键一致（firstOnly，非 first-only）', () => {
+    const r = CORE.exportZip(CORE.starterCode());
+    if (!r.ok) {
+      throw new Error('starter 导出失败');
+    }
+    const config = r.files.find((f) => f.path.endsWith('config.yml'))?.text ?? '';
+    const listener = r.files.find((f) => f.path.endsWith('AchievementListener.java'))?.text ?? '';
+    expect(config).toContain('firstOnly: true');
+    expect(listener).toContain('"firstOnly"');
+    expect(listener).not.toContain('"first-only"');
+  });
+
   it('解析可视化编辑器规范输出（形状/引号/链式/标签边）', () => {
     const flow = CORE.parseFlow(`flowchart TD
     root["示例成就"]
