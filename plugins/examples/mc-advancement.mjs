@@ -2855,6 +2855,7 @@ authors: [${a.meta.author.replaceAll(/[[\],]/g, '') || 'Zurker'}]
 
   const readmeMd = (a) => {
     const rows = [];
+    const localized = locOn(a.meta);
     for (const tab of a.tabs) {
       for (const node of a.nodes) {
         if (node.tab !== tab.rootNid || node.parent === null) {
@@ -2862,7 +2863,9 @@ authors: [${a.meta.author.replaceAll(/[[\],]/g, '') || 'Zurker'}]
         }
         const cell = (s) => String(s).replaceAll('|', '／');
         rows.push(
-          `| ${cell(tab.name)} | ${cell(node.label)} | ${cell(node.meta.desc || defaultDesc(node))} | ${FRAME_NAME[node.frame]} |`
+          localized
+            ? `| ${cell(tab.name)} | ${cell(node.label)} | ${cell(node.meta.en || node.label)} | ${cell(node.meta.desc || defaultDesc(node))} | ${FRAME_NAME[node.frame]} |`
+            : `| ${cell(tab.name)} | ${cell(node.label)} | ${cell(node.meta.desc || defaultDesc(node))} | ${FRAME_NAME[node.frame]} |`
         );
       }
     }
@@ -2885,8 +2888,7 @@ mvn package
 
 ## 成就列表
 
-| 成就栏 | 成就 | 达成条件 | 框架 |
-| --- | --- | --- | --- |
+${localized ? '| 成就栏 | 成就 | 英文名称 | 达成条件 | 框架 |\n| --- | --- | --- | --- | --- |' : '| 成就栏 | 成就 | 达成条件 | 框架 |\n| --- | --- | --- | --- |'}
 ${rows.join('\n')}
 
 阈值可在 \`plugins/${a.meta.plugin}/config.yml\` 中调整（重启或 /reload 生效）。

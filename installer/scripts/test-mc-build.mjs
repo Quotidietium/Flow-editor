@@ -56,6 +56,9 @@ meta.nodes.t_kill = {
   ...meta.nodes.t_kill,
   loot: [{ item: 'minecraft:diamond', max: 3, min: 1, weight: 2 }]
 };
+// 开启本地化：样本覆盖 lang 文件生成路径（javac 无关，验证 jar 分发完整）
+meta.localization = 'on';
+meta.nodes.t_kill = { ...meta.nodes.t_kill, en: 'Monster Hunter' };
 const request = CORE.buildJarRequest(CORE.buildCode(meta, 'TD', nodes, edges));
 if (!request.ok) {
   console.error('样本生成失败', request.errors);
@@ -186,6 +189,17 @@ if (!result.ok && (result.error.code === 'JDK_NOT_FOUND' || result.error.code ==
       'jar 含战利品表与发放函数',
       names.includes('datapack/data/myach/loot_table/t_kill.json') &&
         names.includes('datapack/data/myach/function/t_kill.mcfunction')
+    );
+    check(
+      'jar 含本地化语言文件（zh_cn + en_us）',
+      names.includes('datapack/data/myach/lang/zh_cn.json') &&
+        names.includes('datapack/data/myach/lang/en_us.json')
+    );
+    const langEn = entries.get('datapack/data/myach/lang/en_us.json')?.toString('utf8') ?? '';
+    check(
+      'en_us 含显式英文与回填键',
+      langEn.includes('Monster Hunter') && langEn.includes('t_join'),
+      langEn.slice(0, 60)
     );
 
     const yml = entries.get('paper-plugin.yml')?.toString('utf8') ?? '';

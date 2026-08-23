@@ -943,6 +943,10 @@ describe('本地化 lang（循环 17）', () => {
     expect(en['myach.advancement.root.title']).toBe('Demo Tab'); // 栏英文
     expect(zh['myach.advancement.root_completionist.title']).toBe('大满贯！');
     expect(en['myach.advancement.root_completionist.title']).toBe('大满贯！'); // 回填
+    // 生成 README 附英文名称列（on 时）
+    const readme = byPath.get('README.md') ?? '';
+    expect(readme).toContain('| 成就栏 | 成就 | 英文名称 | 达成条件 | 框架 |');
+    expect(readme).toContain('Mountain Mover');
     // 键覆盖全部成就（含栏根、大满贯）
     expect(Object.keys(zh).length).toBeGreaterThanOrEqual(8);
   });
