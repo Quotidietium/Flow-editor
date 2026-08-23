@@ -10,6 +10,8 @@ import { generateCode, parseCode } from '../util/visualEditor/model';
 interface Issue {
   msg: string;
   nodeId?: string;
+  scope?: string;
+  tabId?: string;
 }
 interface AnalysisNode {
   frame: string;
@@ -2103,5 +2105,39 @@ describe('循环 53：int 参数非整数显式报错（此前 2.5 放行，Java
     expect(r2.errors.some((e) => e.msg.includes('需要是整数'))).toBe(true);
     const r3 = build({ amount: 10, y: -32 }, 'reach_height');
     expect(r3.errors.length).toBe(0);
+  });
+});
+
+describe('循环 54：校验面板定位跳转（全局/栏级问题）', () => {
+  it('设置级问题带 scope:settings；栏级问题带 tabId', () => {
+    const meta = CORE.readMeta(CORE.starterCode()).meta;
+    meta.command = 'kill'; // 原版命令冲突 → 设置级
+    meta.tabs.root.background = 'not-a-texture-path'; // 栏级
+    const r = CORE.analyze(
+      CORE.buildCode(
+        meta,
+        'TD',
+        [
+          { id: 'root', label: '根', shape: 'rect' },
+          { id: 'a', label: '甲', shape: 'rect' }
+        ],
+        [{ from: 'root', to: 'a' }]
+      )
+    );
+    const cmdWarn = r.warnings.find((w) => w.msg.includes('与原版命令同名'));
+    expect(cmdWarn?.scope).toBe('settings');
+    const bgWarn = r.warnings.find((w) => w.msg.includes('背景纹理'));
+    expect((bgWarn as { tabId?: string } | undefined)?.tabId).toBe('root');
+  });
+
+  it('前端脚本：可定位 issue 才可点（.issue.link），settings/tab 跳转分支在册', () => {
+    const html = decodeURIComponent(
+      plugin.frontend.url.replace('data:text/html;charset=utf-8,', '')
+    );
+    expect(html).toContain('.issue.link { cursor: pointer; }');
+    expect(html).not.toContain('.issue { padding: 2px 0; cursor: pointer; }'); // 假可点光标已移除
+    expect(html).toContain('data-s'); // 设置跳转分支
+    expect(html).toContain("S.sel = { id: tabId, type: 'tab' }"); // 栏跳转
+    expect(html).toContain("querySelectorAll('.issue.link')");
   });
 });

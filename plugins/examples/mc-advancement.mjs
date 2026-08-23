@@ -1392,27 +1392,31 @@ const coreFactory = function () {
       }
     }
 
-    // 全局设置校验（先比对再规范化，产生告警而非静默改写）
+    // 全局设置校验（先比对再规范化，产生告警而非静默改写）。
+    // scope:'settings' 供前端校验面板「点击定位到插件设置表单」。
     const rawNs = String(meta.namespace ?? '');
     meta.namespace = normNamespace(meta.namespace);
     if (rawNs && rawNs !== meta.namespace) {
-      warnings.push({ msg: `命名空间「${rawNs}」已规范为「${meta.namespace}」` });
+      warnings.push({ msg: `命名空间「${rawNs}」已规范为「${meta.namespace}」`, scope: 'settings' });
     }
     if (['bukkit', 'minecraft', 'mojang', 'paper', 'spigot'].includes(meta.namespace)) {
       errors.push({
-        msg: `命名空间「${meta.namespace}」是保留命名空间，会与原版/服务端冲突，请换一个`
+        msg: `命名空间「${meta.namespace}」是保留命名空间，会与原版/服务端冲突，请换一个`,
+        scope: 'settings'
       });
     }
     const rawPlugin = String(meta.plugin ?? '');
     meta.plugin = normPluginName(meta.plugin);
     if (rawPlugin && rawPlugin !== meta.plugin) {
       warnings.push({
-        msg: `插件名「${rawPlugin}」含非法字符，已规范为「${meta.plugin}」（仅限字母/数字/下划线）`
+        msg: `插件名「${rawPlugin}」含非法字符，已规范为「${meta.plugin}」（仅限字母/数字/下划线）`,
+        scope: 'settings'
       });
     }
     if (meta.version && !/^[A-Za-z0-9._-]+$/.test(String(meta.version))) {
       warnings.push({
-        msg: `版本号「${meta.version}」含非法字符，将作为 jar 文件名时建议只用字母/数字/._-`
+        msg: `版本号「${meta.version}」含非法字符，将作为 jar 文件名时建议只用字母/数字/._-`,
+        scope: 'settings'
       });
     }
     const rawPkg = String(meta.packageName ?? '');
@@ -1422,18 +1426,21 @@ const coreFactory = function () {
     // 包名/命令规范化告警（与命名空间/插件名同等待遇——此前静默改写无感知）
     if (rawPkg && rawPkg !== meta.packageName) {
       warnings.push({
-        msg: `包名「${rawPkg}」已规范为「${meta.packageName}」（小写字母/数字/下划线，至少两段，段首须字母）`
+        msg: `包名「${rawPkg}」已规范为「${meta.packageName}」（小写字母/数字/下划线，至少两段，段首须字母）`,
+        scope: 'settings'
       });
     }
     if (rawCmd && rawCmd !== meta.command) {
       warnings.push({
-        msg: `命令「/${rawCmd}」已规范为「/${meta.command}」（小写字母开头，仅限字母/数字/_/-）`
+        msg: `命令「/${rawCmd}」已规范为「/${meta.command}」（小写字母开头，仅限字母/数字/_/-）`,
+        scope: 'settings'
       });
     }
     // 插件命令与原版命令同名会遮蔽原版行为（玩家 /kill 变成进度查询）——提示换名
     if (VANILLA_COMMANDS.has(meta.command)) {
       warnings.push({
-        msg: `命令 /${meta.command} 与原版命令同名，会遮蔽原版行为（玩家执行 /${meta.command} 将变成进度查询），建议换个命令名`
+        msg: `命令 /${meta.command} 与原版命令同名，会遮蔽原版行为（玩家执行 /${meta.command} 将变成进度查询），建议换个命令名`,
+        scope: 'settings'
       });
     }
     const rawPf = meta.packFormat;
@@ -1443,12 +1450,14 @@ const coreFactory = function () {
     if (rawPf !== undefined && rawPf !== null && String(rawPf) !== '' && !Number.isInteger(Number(rawPf))) {
       meta.packFormat = Math.trunc(Number(rawPf)) || 94;
       warnings.push({
-        msg: `数据包格式版本「${rawPf}」不是整数，已规范为 ${meta.packFormat}（pack.mcmeta 要求整数）`
+        msg: `数据包格式版本「${rawPf}」不是整数，已规范为 ${meta.packFormat}（pack.mcmeta 要求整数）`,
+        scope: 'settings'
       });
     }
     if (meta.packFormat < 1) {
       warnings.push({
-        msg: `数据包格式版本 ${meta.packFormat} 无效（应为正整数，Paper 1.21.11 = 94）——数据包可能无法加载`
+        msg: `数据包格式版本 ${meta.packFormat} 无效（应为正整数，Paper 1.21.11 = 94）——数据包可能无法加载`,
+        scope: 'settings'
       });
     }
 
@@ -1483,19 +1492,24 @@ const coreFactory = function () {
       );
       if (enUsers.length > 0) {
         warnings.push({
-          msg: `${enUsers.length} 个成就填了英文名称/描述，但本地化未开启（插件设置 → 本地化）——导出时将被忽略`
+          msg: `${enUsers.length} 个成就填了英文名称/描述，但本地化未开启（插件设置 → 本地化）——导出时将被忽略`,
+          scope: 'settings'
         });
       }
     }
     for (const tab of tabs) {
       const memberCount = tab.members.length - 1;
       if (tab.meta.completionist && memberCount === 0) {
-        warnings.push({ msg: `成就栏「${tab.name}」开启了大满贯但栏内没有非根成就，跳过生成` });
+        warnings.push({
+          msg: `成就栏「${tab.name}」开启了大满贯但栏内没有非根成就，跳过生成`,
+          tabId: tab.rootId
+        });
       }
       const bg = String(tab.meta.background ?? '').trim();
       if (bg && !/^minecraft:textures\/[a-z0-9_/.-]+\.png$/.test(bg)) {
         warnings.push({
-          msg: `成就栏「${tab.name}」的背景纹理「${bg}」不是 textures/…png 路径格式，游戏里可能显示为紫黑棋盘`
+          msg: `成就栏「${tab.name}」的背景纹理「${bg}」不是 textures/…png 路径格式，游戏里可能显示为紫黑棋盘`,
+          tabId: tab.rootId
         });
       }
     }
@@ -3887,7 +3901,9 @@ const FRONTEND_HTML = `<!doctype html>
       .checks label { margin: 0; }
       .hint { opacity: 0.55; font-size: 12px; margin-top: 3px; }
       #issues { border-top: 1px solid #2a2a32; padding: 8px 16px; max-height: 130px; overflow: auto; }
-      .issue { padding: 2px 0; cursor: pointer; }
+      .issue { padding: 2px 0; }
+      .issue.link { cursor: pointer; }
+      .issue.link:hover { text-decoration: underline; }
       .issue.error { color: #f08c8c; }
       .issue.warn { color: #e8c87a; }
       .ok { color: #8ce8a0; }
@@ -4668,8 +4684,15 @@ const FRONTEND_HTML = `<!doctype html>
       function renderIssues() {
         var a = S.analysis;
         var html = '';
-        a.errors.forEach(function (i) { html += '<div class="issue error" data-n="' + esc(i.nodeId || '') + '">✗ ' + esc(i.msg) + '</div>'; });
-        a.warnings.forEach(function (i) { html += '<div class="issue warn" data-n="' + esc(i.nodeId || '') + '">⚠ ' + esc(i.msg) + '</div>'; });
+        var issueRow = function (cls, i) {
+          // 可定位的才给 pointer 光标与点击（全局说明类问题点了没反应是假可点）
+          var actionable = i.nodeId || i.scope === 'settings' || i.tabId;
+          return '<div class="issue ' + cls + (actionable ? ' link' : '') + '" data-n="' + esc(i.nodeId || '') + '"'
+            + (i.scope === 'settings' ? ' data-s="1"' : '') + (i.tabId ? ' data-t="' + esc(i.tabId) + '"' : '')
+            + '>' + (cls === 'error' ? '✗ ' : '⚠ ') + esc(i.msg) + '</div>';
+        };
+        a.errors.forEach(function (i) { html += issueRow('error', i); });
+        a.warnings.forEach(function (i) { html += issueRow('warn', i); });
         if (!html) { html = '<div class="issue ok">✓ 校验通过，可以导出</div>'; }
         $('issues').innerHTML = html;
         $('btnExport').disabled = a.errors.length > 0;
@@ -4677,11 +4700,27 @@ const FRONTEND_HTML = `<!doctype html>
         if (jarBtn) {
           jarBtn.disabled = a.errors.length > 0; // 与导出按钮同态（编译必失败）
         }
-        Array.prototype.forEach.call($('issues').querySelectorAll('[data-n]'), function (el) {
-          var nid = el.getAttribute('data-n');
-          if (!nid) { return; }
+        Array.prototype.forEach.call($('issues').querySelectorAll('.issue.link'), function (el) {
           el.onclick = function () {
-            if (findNode(nid)) { S.settings = false; S.sel = { id: nid, type: 'node' }; render(); }
+            var nid = el.getAttribute('data-n');
+            if (nid && findNode(nid)) {
+              S.settings = false;
+              S.sel = { id: nid, type: 'node' };
+              render();
+              return;
+            }
+            var tabId = el.getAttribute('data-t');
+            if (tabId && S.analysis.tabs.some(function (t) { return t.rootId === tabId; })) {
+              S.settings = false;
+              S.sel = { id: tabId, type: 'tab' }; // 栏级问题 → 跳栏设置
+              render();
+              return;
+            }
+            if (el.getAttribute('data-s')) {
+              S.settings = true; // 设置级问题 → 跳插件设置表单
+              S.sel = null;
+              render();
+            }
           };
         });
       }
