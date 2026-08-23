@@ -2765,6 +2765,15 @@ ${rows.join('\n')}
       p += 46 + nameLen + extraLen + commentLen;
     }
     await Promise.all(inflaters);
+    // 膨胀护栏：与 serde 20MB 上限同类的防线——恶意 zip 可用 KB 级压缩
+    // 膨胀出 GB 级条目（DecompressionStream 无原生上限）。超限整体放弃。
+    let total = 0;
+    for (const data of entries.values()) {
+      total += data.length;
+      if (total > 32 * 1024 * 1024) {
+        throw new Error('ZIP_TOO_LARGE');
+      }
+    }
     return entries;
   };
 

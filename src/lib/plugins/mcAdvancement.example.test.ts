@@ -758,6 +758,16 @@ describe('importDatapackZip：逆向导入', () => {
     expect([...entries.keys()].sort()).toEqual(['a.txt', 'dir/b.json']);
     expect(new TextDecoder().decode(entries.get('a.txt') ?? new Uint8Array())).toBe('你好');
   });
+
+  it('readZipEntries 拒绝膨胀超限的 zip（32MB 护栏）', async () => {
+    const huge = CORE.buildZip([
+      // 单条 33MB store 条目：任何真实成就数据包都远小于此
+      { path: 'bomb.bin', text: 'x'.repeat(33 * 1024 * 1024) }
+    ]);
+    await expect(CORE.readZipEntries(huge)).rejects.toThrow('ZIP_TOO_LARGE');
+    // 超限 zip 整体放弃导入（放行给内置解析器）
+    expect(await CORE.importDatapackZip(huge)).toBeUndefined();
+  });
 });
 
 describe('buildJarRequest：桌面版离线编译请求', () => {
