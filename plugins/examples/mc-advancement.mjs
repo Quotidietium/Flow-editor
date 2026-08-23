@@ -1266,6 +1266,18 @@ const coreFactory = function () {
             });
           }
         }
+        // reach_height 越界：原版 overworld -64~320（下界/末地更窄）；
+        // 自定义维度世界高度可调，故为建议性警告而非「永不」断言
+        if (p.key === 'y' && nm.trigger === 'reach_height') {
+          const yv = Number(nm.params.y);
+          const mode = String(nm.params.mode ?? 'above');
+          if (Number.isInteger(yv) && ((mode === 'above' && yv > 320) || (mode === 'below' && yv < -64))) {
+            warnings.push({
+              msg: `成就「${node.label}」的高度条件（${mode === 'above' ? '≥' : '≤'} ${yv}）超出原版世界范围（overworld -64~320，下界/末地更窄）——除非服务器使用自定义维度高度，该成就可能永远无法达成`,
+              nodeId
+            });
+          }
+        }
       }
       const icon = String(nm.icon ?? '').trim();
       if (icon && !/^(minecraft:)?[a-z0-9_.]+$/.test(icon)) {

@@ -2367,3 +2367,30 @@ describe('循环 68：statistic 统计项 datalist', () => {
     expect(html).toContain(`' list="stats"'`);
   });
 });
+
+describe('循环 69：reach_height 越界建议性警告', () => {
+  it('above 999 越界警告（措辞含「自定义维度」免责）；below -32 合法无警告；默认 300 无警告', () => {
+    const build = (y: unknown, mode: string) =>
+      CORE.analyze(
+        CORE.buildCode(
+          (() => {
+            const m = CORE.readMeta(CORE.starterCode()).meta;
+            m.nodes = { a: { params: { mode, y }, trigger: 'reach_height' } };
+            return m;
+          })(),
+          'TD',
+          [
+            { id: 'root', label: '根', shape: 'rect' },
+            { id: 'a', label: '甲', shape: 'rect' }
+          ],
+          [{ from: 'root', to: 'a' }]
+        )
+      );
+    const r1 = build(999, 'above');
+    expect(r1.warnings.some((w) => w.msg.includes('≥ 999') && w.msg.includes('自定义维度'))).toBe(
+      true
+    );
+    expect(build(-32, 'below').warnings.some((w) => w.msg.includes('高度条件'))).toBe(false);
+    expect(build(300, 'above').warnings.some((w) => w.msg.includes('高度条件'))).toBe(false);
+  });
+});
