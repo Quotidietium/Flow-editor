@@ -935,6 +935,65 @@ describe('subgraph 成就栏（循环 11）', () => {
   });
 });
 
+describe('循环 34 三项核验', () => {
+  it('statWatches 在 onEnable 无条件重建（/reload 后随新 config 重填）', () => {
+    const meta = CORE.readMeta(CORE.starterCode()).meta;
+    meta.nodes = { farmer: { params: { minutes: 30 }, trigger: 'playtime' } };
+    const r = CORE.exportZip(
+      CORE.buildCode(
+        meta,
+        'TD',
+        [
+          { id: 'root', label: '根', shape: 'rect' },
+          { id: 'farmer', label: '老', shape: 'rect' }
+        ],
+        [{ from: 'root', to: 'farmer' }]
+      )
+    );
+    if (!r.ok) {
+      throw new Error('导出失败');
+    }
+    const main = r.files.find((f) => f.path.endsWith('Plugin.java'))?.text ?? '';
+    expect(main).toContain('statWatches = new java.util.ArrayList<>();'); // onEnable 内重建
+  });
+
+  it('lang 键随根改名重建（旧键不残留）', () => {
+    const meta = CORE.readMeta(CORE.starterCode()).meta;
+    meta.localization = 'on';
+    const code = CORE.buildCode(
+      meta,
+      'TD',
+      [
+        { id: 'root', label: '旧栏', shape: 'rect' },
+        { id: 'a', label: '甲', shape: 'rect' }
+      ],
+      [{ from: 'root', to: 'a' }]
+    );
+    // 模拟改名：root → new_root（元数据键迁移 + 节点更名后重建代码）
+    const parsed = CORE.analyze(code);
+    if (!parsed.ok) {
+      throw new Error('预分析失败');
+    }
+    parsed.meta.nodes = { ...parsed.meta.nodes };
+    const renamed = CORE.buildCode(
+      parsed.meta,
+      'TD',
+      [
+        { id: 'new_root', label: '新栏', shape: 'rect' },
+        { id: 'a', label: '甲', shape: 'rect' }
+      ],
+      [{ from: 'new_root', to: 'a' }]
+    );
+    const r = CORE.exportZip(renamed);
+    if (!r.ok) {
+      throw new Error('重导出失败');
+    }
+    const zh = r.files.find((f) => f.path.endsWith('zh_cn.json'))?.text ?? '';
+    expect(zh).not.toContain('"myach.advancement.root.title"'); // 旧键不残留
+    expect(zh).toContain('"myach.advancement.new_root.title"');
+  });
+});
+
 describe('AsyncChat 闭包提取与覆盖确认（循环 32）', () => {
   it('message/player 在 runTask 之前提取（不捕获可变 event）', () => {
     const meta = CORE.readMeta(CORE.starterCode()).meta;
