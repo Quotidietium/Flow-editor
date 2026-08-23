@@ -3821,6 +3821,33 @@ const CORE = coreFactory();
 // 插件前端（整页替换 UI）：属性面板 + 成就栏管理 + 校验 + 导出。
 // 核心逻辑经 coreFactory.toString() 注入，与 export 钩子共享同一实现。
 // ============================================================================
+
+/** 图标输入 datalist 常用项（成就/栏/大满贯图标与战利品物品共享）。 */
+const ICON_ITEMS = [
+  'nether_star', 'dragon_egg', 'elytra', 'compass', 'recovery_compass', 'map',
+  'heart_of_the_sea', 'totem_of_undying', 'bell', 'conduit', 'enchanted_golden_apple',
+  'golden_apple', 'diamond', 'emerald', 'netherite_ingot', 'diamond_sword',
+  'netherite_sword', 'bow', 'crossbow', 'trident', 'arrow', 'diamond_pickaxe',
+  'netherite_pickaxe', 'iron_pickaxe', 'fishing_rod', 'shears', 'flint_and_steel',
+  'bucket', 'water_bucket', 'lava_bucket', 'milk_bucket', 'torch', 'lantern',
+  'crafting_table', 'furnace', 'anvil', 'enchanting_table', 'book', 'enchanted_book',
+  'experience_bottle', 'shield', 'saddle', 'name_tag', 'lead', 'golden_horse_armor',
+  'bread', 'cooked_beef', 'golden_carrot', 'wheat', 'carrot', 'sweet_berries',
+  'obsidian', 'chest', 'ender_chest', 'grass_block', 'oak_log', 'cobblestone',
+  'redstone', 'lapis_lazuli', 'quartz', 'amethyst_shard', 'echo_shard',
+  'blaze_rod', 'ender_pearl', 'ender_eye', 'ghast_tear', 'shulker_shell',
+  'prismarine_shard', 'slime_ball', 'magma_cream', 'phantom_membrane'
+];
+const ICON_OPTIONS = ICON_ITEMS.map((i) => `<option value="minecraft:${i}">`).join('');
+
+/** 标签页背景纹理 datalist 候选（常用方块贴图路径，留空=深板岩砖默认）。 */
+const BG_TEXTURES = [
+  'deepslate_tiles', 'deepslate', 'stone', 'cobblestone', 'stone_bricks',
+  'dark_oak_planks', 'netherrack', 'soul_sand', 'obsidian', 'end_stone',
+  'quartz_block_side', 'amethyst_block', 'prismarine', 'glowstone', 'snow'
+];
+const BG_OPTIONS = BG_TEXTURES.map((b) => `<option value="minecraft:textures/block/${b}.png">`).join('');
+
 const FRONTEND_HTML = `<!doctype html>
 <html lang="zh-CN">
   <head>
@@ -3883,7 +3910,10 @@ const FRONTEND_HTML = `<!doctype html>
     </main>
     <div id="issues"></div>
     <datalist id="icons">
-      <!--ICONS-->
+      ${ICON_OPTIONS}
+    </datalist>
+    <datalist id="backgrounds">
+      ${BG_OPTIONS}
     </datalist>
     <script>
       var CORE = (${coreFactory.toString()})();
@@ -4518,7 +4548,7 @@ const FRONTEND_HTML = `<!doctype html>
         }
         html += '<div class="row">'
           + inputHtml('ticon', '栏图标物品 ID', v('icon'), 'text', ' list="icons"')
-          + inputHtml('tbg', '标签页背景纹理路径', v('background'), 'text')
+          + inputHtml('tbg', '标签页背景纹理路径', v('background'), 'text', ' list="backgrounds" placeholder="minecraft:textures/block/deepslate_tiles.png（留空默认）"')
           + '</div>';
         html += '<div class="checks"><label><input type="checkbox" data-k="completionist"' + (v('completionist') !== false ? ' checked' : '') + '/>自动生成「大满贯」汇总成就</label></div>';
         html += '<div class="row">'

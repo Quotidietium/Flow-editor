@@ -2047,3 +2047,34 @@ describe('循环 51：全局设置校验完善（命令/包名/packFormat）', (
     expect(r2.meta.packFormat).toBe(0); // 不静默改值，仅提示
   });
 });
+
+describe('循环 52：图标 datalist 修复（占位符从未被替换）', () => {
+  it('四个图标/物品输入的 datalist 有实际选项，占位符注释不再存在', () => {
+    const html = decodeURIComponent(
+      plugin.frontend.url.replace('data:text/html;charset=utf-8,', '')
+    );
+    expect(html).not.toContain('<!--ICONS-->'); // 旧缺陷：占位符从未被替换，datalist 为空
+    const options = [...html.matchAll(/<option value="minecraft:([a-z_]+)">/g)];
+    expect(options.length).toBeGreaterThanOrEqual(60);
+    // 框架默认图标与栏/大满贯默认图标都在候选中（book/compass/dragon_egg/nether_star）
+    const vals = new Set(options.map((m) => m[1]));
+    for (const want of ['book', 'compass', 'dragon_egg', 'nether_star']) {
+      expect(vals.has(want), `datalist 缺少默认图标 ${want}`).toBe(true);
+    }
+    // datalist 挂载点：成就图标 / 战利品物品 / 栏图标 / 大满贯图标
+    expect((html.match(/list="icons"/g) ?? []).length).toBe(4);
+  });
+});
+
+describe('循环 52（续）：背景纹理 datalist 与提示', () => {
+  it('背景输入有 datalist 候选与格式 placeholder', () => {
+    const html = decodeURIComponent(
+      plugin.frontend.url.replace('data:text/html;charset=utf-8,', '')
+    );
+    const bgs = [...html.matchAll(/<option value="(minecraft:textures\/block\/[a-z_]+\.png)">/g)];
+    expect(bgs.length).toBeGreaterThanOrEqual(15);
+    expect(html).toContain(
+      'list="backgrounds" placeholder="minecraft:textures/block/deepslate_tiles.png（留空默认）"'
+    );
+  });
+});
