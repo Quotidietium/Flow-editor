@@ -2257,3 +2257,28 @@ describe('循环 58：issue 行键盘可达（与树行同模式）+ 插件版�
     expect(plugin.version).toBe('1.9.0');
   });
 });
+
+describe('循环 61：生成 README 修正（版本硬编码 + revoke 缺席）', () => {
+  it('自定义版本进 README 产物文件名；命令列表含 revoke', () => {
+    const meta = CORE.readMeta(CORE.starterCode()).meta;
+    meta.version = '2.3.1';
+    const r = CORE.exportZip(
+      CORE.buildCode(
+        meta,
+        'TD',
+        [
+          { id: 'root', label: '根', shape: 'rect' },
+          { id: 'a', label: '甲', shape: 'rect' }
+        ],
+        [{ from: 'root', to: 'a' }]
+      )
+    );
+    if (!r.ok) {
+      throw new Error('导出失败');
+    }
+    const readme = r.files.find((f) => f.path === 'README.md')?.text ?? '';
+    expect(readme).toContain('target/MyAchievements-2.3.1.jar'); // 曾硬编码 1.0.0
+    expect(readme).not.toContain('-1.0.0.jar');
+    expect(readme).toContain('revoke <玩家> <成就id>'); // 循环 41 的 revoke 曾未入 README
+  });
+});

@@ -3254,7 +3254,7 @@ ${a.tabs.map((t) => `「${t.name}」`).join('、')}。
 
 \`\`\`bash
 mvn package
-# 产物: target/${a.meta.plugin}-1.0.0.jar
+# 产物: target/${a.meta.plugin}-${a.meta.version || '1.0.0'}.jar
 \`\`\`
 
 要求 JDK 21+。把产物 jar 放入服务器的 \`plugins/\` 目录并重启即可；
@@ -3272,6 +3272,7 @@ ${rows.join('\n')}
 
 - \`/${a.meta.command}\`：查看个人成就进度与各项计数。
 - \`/${a.meta.command} grant <玩家> <成就id>\`：手动授予（需要 \`${a.meta.namespace}.grant\` 权限，默认 OP）。
+- \`/${a.meta.command} revoke <玩家> <成就id>\`：撤销误授（与 grant 同权限）。
 `;
   };
 
