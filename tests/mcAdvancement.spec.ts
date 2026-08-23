@@ -308,3 +308,46 @@ test.describe('窄视口', () => {
     await expect(frame.locator('select[data-k="trigger"]')).toBeVisible();
   });
 });
+
+test('MC 设计器：校验面板问题点击/键盘定位（循环 54/58）', async ({ editPage, page }) => {
+  await editPage.view.waitFor({ state: 'visible' });
+  await installDesigner(page);
+  page.on('dialog', (dialog) => void dialog.accept());
+
+  await page.getByRole('button', { name: /打开 MC 进度设计器/ }).click();
+  await expect(page.getByTestId('plugin-manager')).toHaveCount(0, { timeout: 10_000 });
+  const frame = page.frameLocator('iframe[title="插件前端"]');
+  await frame.getByText('MC 进度设计器').first().waitFor({ timeout: 10_000 });
+
+  // 初始化示例后校验通过（无 issue 可点）
+  await frame.getByRole('button', { name: '初始化示例' }).click();
+  await frame.getByText('✓ 校验通过，可以导出').waitFor({ timeout: 10_000 });
+
+  // 设置命令为 kill → 出现原版命令遮蔽警告（设置级 scope）
+  await frame.getByRole('button', { name: '插件设置' }).click();
+  await frame.locator('input[data-k="command"]').fill('kill');
+  await frame.locator('input[data-k="command"]').blur(); // 触发 onchange
+  await frame.getByText('与原版命令同名').waitFor({ timeout: 5_000 });
+  await frame.getByRole('button', { name: '← 返回' }).click();
+  await expect(frame.getByText('成就属性')).toHaveCount(0); // 回到树视图
+
+  // 点击警告 → 跳回设置表单（修复入口直达）
+  await frame.getByText('与原版命令同名').click();
+  await expect(frame.getByRole('button', { name: '← 返回' })).toBeVisible();
+
+  // 改回合法命令 → 警告消失（不整页重渲也即时刷新）
+  await frame.locator('input[data-k="command"]').fill('myach');
+  await frame.locator('input[data-k="command"]').blur();
+  await expect(frame.getByText('与原版命令同名')).toHaveCount(0, { timeout: 5_000 });
+  await frame.getByRole('button', { name: '← 返回' }).click();
+
+  // 再造一个设置级警告，验证键盘 Enter 同样触发定位
+  await frame.getByRole('button', { name: '插件设置' }).click();
+  await frame.locator('input[data-k="command"]').fill('tp');
+  await frame.locator('input[data-k="command"]').blur();
+  await frame.getByRole('button', { name: '← 返回' }).click();
+  const issueRow = frame.locator('.issue.link', { hasText: '与原版命令同名' });
+  await issueRow.focus();
+  await issueRow.press('Enter');
+  await expect(frame.getByRole('button', { name: '← 返回' })).toBeVisible();
+});
