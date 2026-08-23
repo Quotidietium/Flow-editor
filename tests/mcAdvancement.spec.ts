@@ -157,3 +157,59 @@ test('MC 插件 zip 经导出菜单一键下载', async ({ editPage, page }) => 
   expect(bytes[1]).toBe(0x4b);
   expect(bytes.length).toBeGreaterThan(5000);
 });
+
+test('MC 设计器闭环：导出的 zip 可经「打开」逆向导入回图表', async ({ editPage, page }) => {
+  await editPage.view.waitFor({ state: 'visible' });
+  await installDesigner(page);
+  await page.getByTestId('plugin-manager').getByRole('button', { name: '关闭' }).click();
+  await expect(page.getByTestId('plugin-manager')).toHaveCount(0, { timeout: 10_000 });
+  page.on('dialog', (dialog) => void dialog.accept());
+
+  // 造一张带可辨识元数据的成就图并导出
+  await page.evaluate(async () => {
+    await window.__FLOW_EDITOR_API__?.setCode(
+      [
+        '---',
+        '{"mcadv":{"plugin":"RoundTrip","namespace":"rt","command":"rt"}}',
+        '---',
+        'flowchart TD',
+        '    rt_main["回环测试栏"]',
+        '    rt_fish("钓鱼佬")',
+        '    rt_main --> rt_fish'
+      ].join('\n')
+    );
+  });
+  await expect
+    .poll(() => page.evaluate(() => window.__FLOW_EDITOR_STATE__?.().code ?? ''))
+    .toContain('rt_fish');
+  await editPage.ensureActionsOpen();
+  await page.getByTestId('export-menu').click();
+  const dlPromise = page.waitForEvent('download');
+  await page.getByTestId('plugin-export-mc-plugin').click();
+  const dl = await dlPromise;
+  expect(dl.suggestedFilename()).toBe('RoundTrip.zip');
+  const zipPath = join(process.cwd(), 'test-results', 'roundtrip.zip');
+  await dl.saveAs(zipPath);
+
+  // 清空图表后用「打开」回导该 zip
+  await page.evaluate(async () => {
+    await window.__FLOW_EDITOR_API__?.setCode('flowchart TD\n    blank[空白]\n');
+  });
+  await editPage.ensureActionsOpen();
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByTestId('open-file').click();
+  const fileChooser = await chooser;
+  await fileChooser.setFiles(zipPath);
+
+  // 插件 import 钩子接管 zip：结构与溯源元数据（插件名/命名空间）完整回来
+  await expect
+    .poll(() => page.evaluate(() => window.__FLOW_EDITOR_STATE__?.().code ?? ''), {
+      timeout: 10_000
+    })
+    .toContain('rt_fish');
+  const code = await page.evaluate(() => window.__FLOW_EDITOR_STATE__?.().code ?? '');
+  expect(code).toContain('回环测试栏');
+  expect(code).toContain('"plugin": "RoundTrip"'); // flow-editor.json 溯源还原
+  expect(code).toContain('flowchart TD');
+  await expect(page.locator('#container')).toContainText('回环测试栏');
+});

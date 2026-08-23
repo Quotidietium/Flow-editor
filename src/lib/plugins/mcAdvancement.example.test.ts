@@ -15,10 +15,12 @@ interface AnalysisNode {
   frame: string;
   id: string;
   label: string;
+  meta: { desc?: string; icon?: string; trigger?: string; xp?: number };
   nid: string;
+  params: Record<string, unknown>;
   parent: null | string;
   shape: string;
-  tab: string;
+  tab: null | string;
 }
 interface Analysis {
   edges: { from: string; label?: string; to: string }[];
@@ -58,6 +60,8 @@ interface Core {
     | { analysis: Analysis; filename: string; files: { path: string; text: string }[]; ok: true }
     | { errors: Issue[]; ok: false };
   buildZip(files: { path: string; text: string }[]): Uint8Array;
+  importDatapackZip(bytes: Uint8Array): Promise<{ code: string; warnings: string[] } | undefined>;
+  readZipEntries(bytes: Uint8Array): Promise<Map<string, Uint8Array>>;
   exportZip(code: string):
     | {
         analysis: Analysis;
@@ -652,6 +656,107 @@ describe('与可视化编辑器模型互操作', () => {
     ]);
     // 画布编辑（生成）后再导出仍应成功
     expect(CORE.exportZip(regenerated).ok).toBe(true);
+  });
+});
+
+describe('importDatapackZip：逆向导入', () => {
+  it('自家导出的 Maven zip 完整往返（触发器/参数/栏设置无损）', async () => {
+    const meta = CORE.readMeta(CORE.starterCode()).meta;
+    meta.version = '3.2.1';
+    meta.nodes = {
+      fisher: {
+        desc: '钓鱼佬',
+        icon: 'minecraft:fishing_rod',
+        params: { amount: 7 },
+        trigger: 'fish',
+        xp: 5
+      }
+    };
+    const original = CORE.buildCode(
+      meta,
+      'TD',
+      [
+        { id: 'root', label: '往返栏', shape: 'rect' },
+        { id: 'fisher', label: '姜太公', shape: 'round' }
+      ],
+      [{ from: 'root', to: 'fisher' }]
+    );
+    const exported = CORE.exportZip(original);
+    if (!exported.ok) {
+      throw new Error('导出失败');
+    }
+    const imported = await CORE.importDatapackZip(exported.bytes);
+    expect(imported).toBeDefined();
+    const a = CORE.analyze(imported?.code ?? '');
+    expect(a.ok).toBe(true);
+    expect(a.tabs).toHaveLength(1);
+    expect(a.tabs[0].name).toBe('往返栏');
+    const fisher = a.nodes.find((n) => n.id === 'fisher');
+    expect(fisher?.meta.trigger).toBe('fish'); // 触发器经溯源还原
+    expect(fisher?.params.amount).toBe(7); // 参数无损
+    expect(fisher?.meta.xp).toBe(5);
+    expect(fisher?.frame).toBe('goal'); // 形状由 frame 反推
+    expect(a.meta.version).toBe('3.2.1'); // 全局设置无损
+  });
+
+  it('外部数据包尽力还原（结构/显示/奖励可恢复，触发器退化为命令授予）', async () => {
+    const root = {
+      criteria: { tick: { trigger: 'minecraft:tick' } },
+      display: {
+        background: 'minecraft:textures/block/stone.png',
+        description: { text: '外部栏' },
+        icon: { id: 'minecraft:compass' },
+        title: { text: '外部成就栏' }
+      }
+    };
+    const child = {
+      criteria: { done: { trigger: 'minecraft:impossible' } },
+      display: {
+        description: { text: '外部子成就' },
+        frame: 'challenge',
+        icon: { id: 'minecraft:diamond' },
+        title: { text: '外部挑战' }
+      },
+      parent: 'foreign:root',
+      rewards: { experience: 42 }
+    };
+    const bytes = CORE.buildZip([
+      { path: 'pack.mcmeta', text: '{"pack":{"pack_format":94}}' },
+      { path: 'data/foreign/advancement/root.json', text: JSON.stringify(root) },
+      { path: 'data/foreign/advancement/challenge.json', text: JSON.stringify(child) }
+    ]);
+    const imported = await CORE.importDatapackZip(bytes);
+    expect(imported).toBeDefined();
+    const a = CORE.analyze(imported?.code ?? '');
+    expect(a.ok).toBe(true);
+    expect(a.meta.namespace).toBe('foreign');
+    expect(a.tabs).toHaveLength(1);
+    expect(a.tabs[0].name).toBe('外部成就栏');
+    const node = a.nodes.find((n) => n.id === 'challenge');
+    expect(node?.parent).toBe('root');
+    expect(node?.frame).toBe('challenge');
+    expect(node?.meta.desc).toBe('外部子成就');
+    expect(node?.meta.icon).toBe('minecraft:diamond');
+    expect(node?.meta.xp).toBe(42);
+    expect(node?.meta.trigger).toBe('manual'); // impossible 无法反推
+    const tabMeta = (a.meta.tabs as Record<string, { background?: string }>).root;
+    expect(tabMeta?.background).toBe('minecraft:textures/block/stone.png');
+  });
+
+  it('非数据包 zip 返回 undefined（放行给内置解析器）', async () => {
+    const bytes = CORE.buildZip([{ path: 'hello.txt', text: 'hi' }]);
+    expect(await CORE.importDatapackZip(bytes)).toBeUndefined();
+    expect(await CORE.importDatapackZip(new Uint8Array([1, 2, 3]))).toBeUndefined();
+  });
+
+  it('readZipEntries 解析自家 store zip 的全部条目', async () => {
+    const bytes = CORE.buildZip([
+      { path: 'a.txt', text: '你好' },
+      { path: 'dir/b.json', text: '{"x":1}' }
+    ]);
+    const entries = await CORE.readZipEntries(bytes);
+    expect([...entries.keys()].sort()).toEqual(['a.txt', 'dir/b.json']);
+    expect(new TextDecoder().decode(entries.get('a.txt') ?? new Uint8Array())).toBe('你好');
   });
 });
 

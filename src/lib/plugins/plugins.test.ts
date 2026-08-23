@@ -43,6 +43,40 @@ describe('plugin hook dispatch', () => {
     expect(runInputTransforms('X', 'url')).toBe('X-a');
   });
 
+  it('runImportHandler awaits async handlers and passes raw bytes', async () => {
+    registerPluginInstance(
+      basePlugin({
+        id: 'p-bin',
+        import: {
+          extensions: ['zip'],
+          import: async (file) => {
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            return { code: `binary:${file.bytes?.length ?? -1}` };
+          },
+          name: 'bin'
+        }
+      })
+    );
+    const handled = await runImportHandler('pack.zip', 'garbled text', new Uint8Array(4));
+    expect(handled).toEqual({ code: 'binary:4' });
+  });
+
+  it('runImportHandler isolates async rejections (falls back, no throw)', async () => {
+    registerPluginInstance(
+      basePlugin({
+        id: 'p-reject',
+        import: {
+          extensions: ['xyz'],
+          import: async () => {
+            throw new Error('boom');
+          },
+          name: 'reject'
+        }
+      })
+    );
+    await expect(runImportHandler('a.xyz', '')).resolves.toBeUndefined();
+  });
+
   it('isolates a throwing transform and keeps the pipeline running', () => {
     registerPluginInstance(
       basePlugin({
@@ -87,7 +121,7 @@ describe('plugin hook dispatch', () => {
     consoleError.mockRestore();
   });
 
-  it('dispatches file imports by extension', () => {
+  it('dispatches file imports by extension', async () => {
     registerPluginInstance(
       basePlugin({
         id: 'importer',
@@ -98,10 +132,10 @@ describe('plugin hook dispatch', () => {
         }
       })
     );
-    expect(runImportHandler('a.puml', 'A')).toMatchObject({
+    await expect(runImportHandler('a.puml', 'A')).resolves.toMatchObject({
       code: expect.stringContaining('Converted')
     });
-    expect(runImportHandler('a.mmd', 'A')).toBeUndefined();
+    await expect(runImportHandler('a.mmd', 'A')).resolves.toBeUndefined();
   });
 
   it('registers and runs custom export formats', () => {
