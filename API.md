@@ -313,7 +313,10 @@ loadRegistry(): Promise<void>          // 启动恢复（edit 页在 initHandler
 installPlugin(source): Promise<{ok, error?}>     // .mjs 源安装（blob import 校验）
 uninstallPlugin(id) / disablePlugin(id, reason?) / enablePlugin(id)
 runInputTransforms(code, source): string         // 链式（file/bridge/url 三入口均接线）
-findImportHandler(fileName) / runImportHandler(fileName, text)
+findImportHandler(fileName)
+runImportHandler(fileName, text, bytes?): Promise<{code, mermaid?}|undefined>
+       // 异步：handler 可为 async（rejection 同样隔离三振）；bytes=原始
+       // Uint8Array（二进制格式；text 是有损 UTF-8 解码，2.0.132 起）
 pluginExportFormats(): (ExportFormat & {pluginId})[]
 runPluginExport(format): payload | undefined
 pluginFrontends(): { id, name, sandbox?, url }[]

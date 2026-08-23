@@ -74,12 +74,15 @@ inputTransform: {
 import: {
   extensions: ['puml', 'plantuml'],
   name: 'PlantUML',
-  import(file, ctx) { return { code: 'flowchart TD\n …', mermaid: '…' } }  // 返回 undefined 表示放弃
+  import(file, ctx) { return { code: 'flowchart TD\n …', mermaid: '…' } }  // 返回 undefined 表示放弃；可 async
 }
 ```
 
 「打开」按钮按扩展名分派：插件处理器优先，内置 `.mmd/.md/.json` 兜底，
-之后统一过 2.1 输入管道。
+之后统一过 2.1 输入管道。`import` 可为异步（zip 解压、格式探测等），
+rejection 与同步异常同样被隔离（三振停用）。**二进制格式**（2.0.132 起）
+用 `file.bytes`（原始 `Uint8Array`）——`file.text` 是有损 UTF-8 解码，
+不可回转；示例见 MC 进度设计器的 zip 逆向导入。
 
 ### 2.3 导出格式 `export`（含私有格式 / MC 插件等）
 

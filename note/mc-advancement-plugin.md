@@ -275,7 +275,7 @@ MyAchievements/
   属数据包工程范畴，超出图表可表达范围；config.yml 注释给出扩展指引）。
 - 服务端侧本地化文件（成就名硬编码中文，与 REF 一致）。
 - Spigot 兼容（paper-plugin.yml 为 Paper 专属，与 REF 取舍一致）。
-- 导入既有数据包 zip 逆向成图（解析 zip + advancement JSON 逆向，后续方向）。
+- ~~导入既有数据包 zip 逆向成图~~ → **2.0.132 已实现**（见 §10）。
 
 ## 9. 桌面版离线编译链（2.0.130）
 
@@ -333,3 +333,35 @@ GPL-3.0 / MIT / Apache-2.0 / BSD-3-Clause）。**不含任何 Mojang 代码或�
   真实编译 + jar 结构/版本置换断言，build.ps1 打包前必跑）；
   `smoke.mjs` 新增 mc_build 端到端探针（HTTP→页面桥→IPC→javac，无 JDK
   机器按引导文案跳过）。
+
+## 10. 逆向导入（2.0.132）
+
+「打开」接管 `.zip`：识别 **MC 数据包布局**（`pack.mcmeta` +
+`data/<ns>/advancement/*.json`）或**本插件导出的 Maven 工程 zip**
+（`src/main/resources/datapack/…`），反推为成就图代码。非数据包 zip
+返回 undefined 放行给内置解析器。
+
+**往返两级**：
+
+- **自家导出 → 完整还原**：导出时在数据包根写入 `flow-editor.json`
+  （`{mcadv}` 溯源元数据；Minecraft 忽略数据包根的未知文件）。导入时
+  触发器/参数/栏设置/全局设置全部无损恢复（单测断言触发器 fish、
+  参数 amount、版本号逐字段等价）。
+- **外部数据包 → 尽力还原**：结构（parent 树）、名称/描述/图标/框架/
+  隐藏/toast/经验奖励、栏背景从 advancement JSON 恢复；`impossible`
+  条件无法反推触发方式 → 退化为「仅命令授予」；大满贯按「全部条件是
+  同栏其他进度 id」启发式识别；多命名空间取最大者并提示。
+
+**平台配套**（本功能暴露的通用缺口，属插件 API 能力扩展）：
+
+- `import` 钩子现可 **async**（rejection 与同步异常同样走三振隔离）；
+- `file.bytes`（原始 `Uint8Array`）随打开事件下发——zip 等二进制格式
+  此前根本无法经文本通道无损进入插件（`fileIO.openTextFile` 改为
+  arrayBuffer 读取 + 双通道下发）。
+
+zip 解析在插件内自包含实现：中央目录遍历，store 条目直读、deflate 条目
+走浏览器 `DecompressionStream('deflate-raw')`（自家导出为 store 模式，
+任意压缩数据包亦可导入）。
+
+安全：zip 条目按名白名单消费（只读 advancement/pack.mcmeta/
+flow-editor.json），重建只产生文本代码进状态网关，无任何求值面。
