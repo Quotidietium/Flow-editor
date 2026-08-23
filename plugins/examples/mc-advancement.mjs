@@ -3787,11 +3787,13 @@ const FRONTEND_HTML = `<!doctype html>
         renderIssues();
       }
 
+      var treeFilter = '';
+
       function renderTree() {
         var a = S.analysis;
-        var html = '';
+        var html = '<input type="text" id="treeSearch" placeholder="搜索成就…" value="' + esc(treeFilter) + '" style="width:100%;margin-bottom:8px;padding:5px 8px;background:#15151a;color:#e8e8ec;border:1px solid #3a3a46;border-radius:6px" />';
         if (a.tabs.length === 0) {
-          html = '<p class="hint">尚无成就栏。点「初始化示例」或在主界面画布上画出成就树后点「重新读取」。</p>';
+          html += '<p class="hint">尚无成就栏。点「初始化示例」或在主界面画布上画出成就树后点「重新读取」。</p>';
         }
         a.tabs.forEach(function (tab) {
           var selTab = S.sel && S.sel.type === 'tab' && S.sel.id === tab.rootId;
@@ -3807,6 +3809,10 @@ const FRONTEND_HTML = `<!doctype html>
             var parentId = (S.analysis.edges.find(function (e) { return e.to === id; }) || {}).from;
             depth[id] = (depth[parentId] === undefined ? 0 : depth[parentId]) + 1;
             var sel = S.sel && S.sel.type === 'node' && S.sel.id === id;
+            if (treeFilter) {
+              var hay = (n.label + ' ' + id + ' ' + n.meta.trigger).toLowerCase();
+              if (hay.indexOf(treeFilter.toLowerCase()) === -1) { return; }
+            }
             html += '<div class="node-row' + (sel ? ' sel' : '') + '" data-node="' + esc(id) + '" role="button" tabindex="0" aria-pressed="' + (sel ? 'true' : 'false') + '" style="padding-left:' + (22 + (depth[id] - 1) * 16) + 'px">'
               + esc(n.label) + '<span class="frame">' + (CORE.FRAME_NAME[n.frame] || '') + ' · ' + esc(n.meta.trigger) + '</span></div>';
           });
@@ -3818,6 +3824,10 @@ const FRONTEND_HTML = `<!doctype html>
           html += '<div class="tab-block"><div class="tab-head" style="color:#f08c8c">⚠ 结构异常（未入栏，需修复后才能导出）</div>';
           orphans.forEach(function (n) {
             var sel = S.sel && S.sel.type === 'node' && S.sel.id === n.id;
+            if (treeFilter) {
+              var hay = (n.label + ' ' + n.id).toLowerCase();
+              if (hay.indexOf(treeFilter.toLowerCase()) === -1) { return; }
+            }
             html += '<div class="node-row' + (sel ? ' sel' : '') + '" data-node="' + esc(n.id) + '" role="button" tabindex="0" aria-pressed="' + (sel ? 'true' : 'false') + '">'
               + esc(n.label) + '<span class="frame">' + esc(n.id) + '</span></div>';
           });
@@ -3841,6 +3851,21 @@ const FRONTEND_HTML = `<!doctype html>
           };
         });
         $('btnAddTab').onclick = addTab;
+        var searchBox = $('treeSearch');
+        if (searchBox) {
+          searchBox.oninput = function () {
+            treeFilter = searchBox.value;
+            renderTree();
+            var fresh = $('treeSearch');
+            if (fresh) {
+              fresh.focus();
+              fresh.setSelectionRange(fresh.value.length, fresh.value.length);
+            }
+          };
+          if (treeFilter) {
+            searchBox.focus();
+          }
+        }
       }
 
       function renderPanel() {

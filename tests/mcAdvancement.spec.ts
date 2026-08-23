@@ -123,6 +123,18 @@ test('MC 设计器识别多成就栏图（两个连通分量 = 两个标签页�
   await expect(frame.getByText('栏根节点')).toBeVisible();
   await expect(frame.locator('select[data-k="trigger"]')).toHaveCount(0);
 
+  // 树搜索过滤：输入关键词即时过滤节点行（大图找成就）
+  await frame.locator('#treeSearch').fill('mine');
+  await expect(frame.locator('.node-row')).toHaveCount(1);
+  await expect(frame.locator('.node-row')).toContainText('挖矿达人');
+  await frame.locator('#treeSearch').fill('fight');
+  await expect(frame.locator('.node-row')).toHaveCount(1);
+  await expect(frame.locator('.node-row')).toContainText('战斗狂人');
+  await frame.locator('#treeSearch').fill('zzz-no-match');
+  await expect(frame.locator('.node-row')).toHaveCount(0);
+  await frame.locator('#treeSearch').fill('');
+  await expect(frame.locator('.node-row')).toHaveCount(3);
+
   // 写回编辑器：成就栏输出为 subgraph 分组语法（2.0.133）
   await frame.getByRole('button', { name: '写回编辑器' }).click();
   await expect
