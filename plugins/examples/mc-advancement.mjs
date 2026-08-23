@@ -2664,7 +2664,7 @@ ${statNodes
       : `        addStatWatch(statWatches, Achievement.${enumName(n.nid)}, ${J(String(n.params.stat ?? 'walk_one_cm'))}, ${Number(n.params.amount) || 1});`
   )
   .join('\n')}
-        getServer().getScheduler().runTaskTimer(this, this::pollStatistics, 400L, 400L);
+        statTask = getServer().getScheduler().runTaskTimer(this, this::pollStatistics, 400L, 400L);
 `
         : '';
     const statMembers =
@@ -2749,6 +2749,11 @@ import java.util.logging.Level;
  * 本文件由 Flow 编辑器「MC 进度设计器」插件生成。
  */
 public final class ${cls}Plugin extends JavaPlugin {
+    // 定时任务句柄：onDisable 显式取消（同步任务虽会被 Bukkit 随插件禁用
+    // 自动取消，防御式持有句柄可在 reload 竞态窗口内确保不泄漏）
+    private org.bukkit.scheduler.BukkitTask statTask;
+    private org.bukkit.scheduler.BukkitTask saveTask;
+
 ${statMembers}
     private ProgressStore progressStore;
     private AchievementService achievementService;
@@ -2770,7 +2775,7 @@ ${statMembers}
                 new ${cls}Command(this, achievementService, progressStore)));
 
         long intervalSeconds = getConfig().getLong("autosave-interval-seconds", 300);
-        getServer().getScheduler().runTaskTimer(this, progressStore::saveIfDirty,
+        saveTask = getServer().getScheduler().runTaskTimer(this, progressStore::saveIfDirty,
                 intervalSeconds * 20L, intervalSeconds * 20L);
 ${statBlock}
         long registered = achievementService.registeredCount();
@@ -2784,6 +2789,12 @@ ${statBlock}
 
     @Override
     public void onDisable() {
+        if (statTask != null) {
+            statTask.cancel();
+        }
+        if (saveTask != null) {
+            saveTask.cancel();
+        }
         if (progressStore != null) {
             try {
                 progressStore.save();
@@ -4146,6 +4157,12 @@ const FRONTEND_HTML = `<!doctype html>
           nid: nid, params: {}, parent: parentNode.nid, shape: 'rect', tab: parentNode.tab
         });
         a.edges.push({ from: parentNode.id, to: id });
+        // subgraph 模式：新节点必须同步进所属栏的 members——否则
+        // rebuildCode 的分组不含它，写回后被挤出到独立的分量栏
+        var hostTab = a.tabs.find(function (t) { return t.rootNid === parentNode.tab; });
+        if (hostTab && hostTab.members.indexOf(id) === -1) {
+          hostTab.members.push(id);
+        }
         S.sel = { id: id, type: 'node' };
         rebuildCode();
         render();

@@ -935,6 +935,31 @@ describe('subgraph 成就栏（循环 11）', () => {
   });
 });
 
+describe('addNode 入组与任务取消（循环 27）', () => {
+  it('生成的 Java 持有任务句柄并在 onDisable 取消', () => {
+    const meta = CORE.readMeta(CORE.starterCode()).meta;
+    meta.nodes = { farmer: { params: { minutes: 60 }, trigger: 'playtime' } };
+    const code = CORE.buildCode(
+      meta,
+      'TD',
+      [
+        { id: 'root', label: '根', shape: 'rect' },
+        { id: 'farmer', label: '老玩家', shape: 'rect' }
+      ],
+      [{ from: 'root', to: 'farmer' }]
+    );
+    const r = CORE.exportZip(code);
+    if (!r.ok) {
+      throw new Error('导出失败');
+    }
+    const main = r.files.find((f) => f.path.endsWith('Plugin.java'))?.text ?? '';
+    expect(main).toContain('private org.bukkit.scheduler.BukkitTask statTask;');
+    expect(main).toContain('statTask = getServer().getScheduler().runTaskTimer');
+    expect(main).toContain('saveTask = getServer().getScheduler().runTaskTimer');
+    expect(main.match(/\.cancel\(\);/g)?.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
 describe('组合逆向导入（循环 26）', () => {
   it('loot + lang + subgraph 三特性同包：全部还原', async () => {
     // 构造含全部三特性的图：subgraph 栏 + 战利品 + 本地化
