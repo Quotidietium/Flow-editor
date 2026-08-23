@@ -2065,6 +2065,12 @@ describe('循环 52：图标 datalist 修复（占位符从未被替换）', () 
     }
     // datalist 挂载点：成就图标 / 战利品物品 / 栏图标 / 大满贯图标
     expect((html.match(/list="icons"/g) ?? []).length).toBe(4);
+    // 循环 65 整合：单一静态源——运行时 ICON_SUGGESTIONS 覆盖已删除
+    //（旧覆盖曾把静态 68 项换成 25 项小表；且旧数组 8 个独有项已并入）
+    expect(html).not.toContain('ICON_SUGGESTIONS.map');
+    for (const old of ['beacon', 'cake', 'tnt', 'clock']) {
+      expect(vals.has(old), `旧候选 ${old} 并入后不得丢失`).toBe(true);
+    }
   });
 });
 

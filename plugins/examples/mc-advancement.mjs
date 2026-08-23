@@ -416,34 +416,6 @@ const coreFactory = function () {
   const triggerById = (id) => TRIGGERS.find((t) => t.id === id) ?? TRIGGERS.at(-1);
 
   /** 常用图标候选（前端 datalist）。 */
-  const ICON_SUGGESTIONS = [
-    'minecraft:book',
-    'minecraft:compass',
-    'minecraft:nether_star',
-    'minecraft:dragon_egg',
-    'minecraft:iron_pickaxe',
-    'minecraft:diamond_sword',
-    'minecraft:golden_apple',
-    'minecraft:cooked_beef',
-    'minecraft:fishing_rod',
-    'minecraft:elytra',
-    'minecraft:beacon',
-    'minecraft:cake',
-    'minecraft:emerald',
-    'minecraft:wolf_spawn_egg',
-    'minecraft:hay_block',
-    'minecraft:red_bed',
-    'minecraft:skeleton_skull',
-    'minecraft:enchanting_table',
-    'minecraft:crafting_table',
-    'minecraft:experience_bottle',
-    'minecraft:chest',
-    'minecraft:clock',
-    'minecraft:map',
-    'minecraft:tnt',
-    'minecraft:torch'
-  ];
-
   const SHAPE_FRAME = { diamond: 'challenge', rect: 'task', round: 'goal', stadium: 'task' };
   const FRAME_SHAPE = { challenge: 'diamond', goal: 'round', task: 'rect' };
   const FRAME_NAME = { challenge: '挑战', goal: '目标', task: '任务' };
@@ -3874,7 +3846,6 @@ ${rows.join('\n')}
     DEFAULT_NODE_META,
     FRAME_NAME,
     FRAME_SHAPE,
-    ICON_SUGGESTIONS,
     SHAPE_FRAME,
     TRIGGERS,
     analyze,
@@ -3906,7 +3877,9 @@ const CORE = coreFactory();
 // 核心逻辑经 coreFactory.toString() 注入，与 export 钩子共享同一实现。
 // ============================================================================
 
-/** 图标输入 datalist 常用项（成就/栏/大满贯图标与战利品物品共享）。 */
+/** 图标输入 datalist 常用项（成就/栏/大满贯图标与战利品物品共享）。
+ *  唯一来源：内嵌 HTML 静态注入（循环 65 整合——此前 core 的
+ *  ICON_SUGGESTIONS 运行时覆盖与此处双轨冲突）。 */
 const ICON_ITEMS = [
   'nether_star', 'dragon_egg', 'elytra', 'compass', 'recovery_compass', 'map',
   'heart_of_the_sea', 'totem_of_undying', 'bell', 'conduit', 'enchanted_golden_apple',
@@ -3920,7 +3893,9 @@ const ICON_ITEMS = [
   'obsidian', 'chest', 'ender_chest', 'grass_block', 'oak_log', 'cobblestone',
   'redstone', 'lapis_lazuli', 'quartz', 'amethyst_shard', 'echo_shard',
   'blaze_rod', 'ender_pearl', 'ender_eye', 'ghast_tear', 'shulker_shell',
-  'prismarine_shard', 'slime_ball', 'magma_cream', 'phantom_membrane'
+  'prismarine_shard', 'slime_ball', 'magma_cream', 'phantom_membrane',
+  'beacon', 'cake', 'wolf_spawn_egg', 'hay_block', 'red_bed', 'skeleton_skull',
+  'clock', 'tnt'
 ];
 const ICON_OPTIONS = ICON_ITEMS.map((i) => `<option value="minecraft:${i}">`).join('');
 
@@ -4890,8 +4865,6 @@ const FRONTEND_HTML = `<!doctype html>
         btn.onclick = function () { S.settings = true; render(); };
         document.querySelector('header').insertBefore(btn, $('status'));
       })();
-      // 图标 datalist
-      $('icons').innerHTML = CORE.ICON_SUGGESTIONS.map(function (i) { return '<option value="' + i + '"></option>'; }).join('');
 
       call('initialize', {}).then(function (info) {
         // 桌面版（capabilities.experimental['flow-editor/mcBuild']）才显示编译按钮
