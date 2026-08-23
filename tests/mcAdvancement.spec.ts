@@ -130,6 +130,18 @@ test('MC 设计器识别多成就栏图（两个连通分量 = 两个标签页�
     .toContain('subgraph r1["冒险栏"]');
   const written = await page.evaluate(() => window.__FLOW_EDITOR_STATE__?.().code ?? '');
   expect(written).toContain('subgraph r2["生活栏"]');
+
+  // 根节点改名：subgraph 组 id 必须跟随（改名后根掉出分组的缺陷已修）
+  await frame.locator('input[data-k="id"]').fill('life_root');
+  await frame.getByRole('button', { name: '写回编辑器' }).click();
+  await expect
+    .poll(() => page.evaluate(() => window.__FLOW_EDITOR_STATE__?.().code ?? ''))
+    .toContain('subgraph life_root["生活栏"]');
+  // 重新读取并写回：分组结构与成员计数保持（改名未破坏栏）
+  await frame.getByRole('button', { name: '重新读取' }).click();
+  await frame.getByText('🏆 生活栏').waitFor({ timeout: 10_000 });
+  await expect(frame.locator('.badge', { hasText: '1 成就' })).toBeVisible();
+  await expect(frame.getByText('✓ 校验通过，可以导出')).toBeVisible();
 });
 
 test('MC 设计器：面板打开期间的外部修改受冲突保护', async ({ editPage, page }) => {

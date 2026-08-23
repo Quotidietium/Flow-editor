@@ -4098,8 +4098,17 @@ const FRONTEND_HTML = `<!doctype html>
           if (e.to === n.id) { e.to = id; }
         });
         if (a.meta.nodes[n.id]) { a.meta.nodes[id] = a.meta.nodes[n.id]; delete a.meta.nodes[n.id]; }
-        var tab = a.tabs.find(function (t) { return t.rootId === n.id; });
-        if (tab && a.meta.tabs[n.id]) { a.meta.tabs[id] = a.meta.tabs[n.id]; delete a.meta.tabs[n.id]; }
+        // 根节点改名：tab.rootId 与成员表必须同步——否则 rebuildCode 用旧
+        // rootId 生成 subgraph，根掉出分组、显示退化为平铺连通分量
+        a.tabs.forEach(function (t) {
+          if (t.rootId === n.id) {
+            t.rootId = id;
+            t.rootNid = CORE.normId(id);
+            t.members = t.members.map(function (m) { return m === n.id ? id : m; });
+          }
+        });
+        var tabMeta0 = a.meta.tabs[n.id];
+        if (tabMeta0) { a.meta.tabs[id] = tabMeta0; delete a.meta.tabs[n.id]; }
         n.id = id;
         S.sel = { id: id, type: 'node' };
         rebuildCode();
@@ -4219,8 +4228,21 @@ const FRONTEND_HTML = `<!doctype html>
         html += '<button id="btnAddToTab">+ 在此栏添加成就</button> ';
         html += '<button class="danger" id="btnDelTab">删除整个成就栏</button>';
         $('panel').innerHTML = html;
+        // 事件时动态解析当前代（孤儿闭包家族第二例：写回触发 rebuildCode
+        // 整替 S.analysis 后，闭包里的 root/tm 成孤儿——改名曾写进旧代对象）
+        var curTabMeta = function () {
+          var curTab = S.analysis.tabs.find(function (t) { return t.rootId === rootId; });
+          if (!curTab) { return undefined; }
+          if (!S.analysis.meta.tabs[rootId] || typeof S.analysis.meta.tabs[rootId] !== 'object') {
+            S.analysis.meta.tabs[rootId] = {};
+          }
+          return S.analysis.meta.tabs[rootId];
+        };
         Array.prototype.forEach.call($('panel').querySelectorAll('[data-k]'), function (el) {
           el.onchange = function () {
+            var tm = curTabMeta();
+            var root = findNode(rootId);
+            if (!tm || !root) { render(); return; }
             var k = el.getAttribute('data-k');
             var map = { tdesc: 'desc', ticon: 'icon', tbg: 'background', cname: 'completionistName', cdesc: 'completionistDesc', cicon: 'completionistIcon', enTitle: 'enTitle', enDesc: 'enDesc', cEn: 'completionistEn', cEnDesc: 'completionistEnDesc' };
             if (k === 'label') { root.label = el.value; }
@@ -4237,6 +4259,9 @@ const FRONTEND_HTML = `<!doctype html>
           if (root) { addNode(root); }
         };
         $('btnDelTab').onclick = function () {
+          var a = S.analysis;
+          var tab = a.tabs.find(function (t) { return t.rootId === rootId; });
+          if (!tab) { return; }
           if (!confirm('删除整个成就栏「' + tab.name + '」及其全部 ' + (tab.members.length - 1) + ' 个成就？')) { return; }
           var ids = {};
           tab.members.forEach(function (id) { ids[id] = true; });
@@ -4244,8 +4269,6 @@ const FRONTEND_HTML = `<!doctype html>
           a.edges = a.edges.filter(function (e) { return !ids[e.from] && !ids[e.to]; });
           tab.members.forEach(function (id) { delete a.meta.nodes[id]; });
           delete a.meta.tabs[rootId];
-          S.analysis.nodes = a.nodes;
-          S.analysis.edges = a.edges;
           S.sel = null;
           rebuildCode();
           render();
