@@ -1077,10 +1077,31 @@ const coreFactory = function () {
         warnings.push({ msg: `frontmatter 中存在已删除节点「${key}」的元数据，导出时忽略` });
       }
     }
+    // 成就名称可用性：空名在游戏进度界面显示为空白；同名成就玩家无法区分
+    const seenLabels = new Map();
+    for (const node of nodes) {
+      const label = String(node.label ?? '').trim();
+      if (!label) {
+        warnings.push({ msg: `成就「${node.id}」没有名称，游戏里将显示为空白`, nodeId: node.id });
+      } else if (seenLabels.has(label)) {
+        warnings.push({
+          msg: `成就「${seenLabels.get(label)}」与「${node.id}」同名（${label}），玩家将无法区分`,
+          nodeId: node.id
+        });
+      } else {
+        seenLabels.set(label, node.id);
+      }
+    }
     for (const tab of tabs) {
       const memberCount = tab.members.length - 1;
       if (tab.meta.completionist && memberCount === 0) {
         warnings.push({ msg: `成就栏「${tab.name}」开启了大满贯但栏内没有非根成就，跳过生成` });
+      }
+      const bg = String(tab.meta.background ?? '').trim();
+      if (bg && !/^minecraft:textures\/[a-z0-9_/.-]+\.png$/.test(bg)) {
+        warnings.push({
+          msg: `成就栏「${tab.name}」的背景纹理「${bg}」不是 textures/…png 路径格式，游戏里可能显示为紫黑棋盘`
+        });
       }
     }
 
@@ -3260,7 +3281,17 @@ const FRONTEND_HTML = `<!doctype html>
         if (!tab) { S.sel = null; renderPanel(); return; }
         var tm = a.meta.tabs[rootId] || (a.meta.tabs[rootId] = {});
         var v = function (k) { return tm[k] === undefined ? tab.meta[k] : tm[k]; };
-        var html = '<fieldset><legend>成就栏设置（栏名 = 根节点标签，请在主界面画布改名）</legend>';
+        var root = findNode(rootId);
+        var html = '<fieldset><legend>栏根节点（成就栏本身，服务端自动授予）</legend>';
+        if (root) {
+          html += '<div class="row">'
+            + inputHtml('label', '成就栏名称', root.label, 'text')
+            + inputHtml('id', '根节点 id', root.id, 'text')
+            + '</div>';
+        }
+        html += '<p class="hint">触发方式、框架类型、父级承接等只作用于普通成就，对栏根不适用。</p>';
+        html += '</fieldset>';
+        html += '<fieldset><legend>成就栏设置</legend>';
         html += inputHtml('tdesc', '栏描述', v('desc'), 'text');
         html += '<div class="row">'
           + inputHtml('ticon', '栏图标物品 ID', v('icon'), 'text', ' list="icons"')
@@ -3283,7 +3314,9 @@ const FRONTEND_HTML = `<!doctype html>
           el.onchange = function () {
             var k = el.getAttribute('data-k');
             var map = { tdesc: 'desc', ticon: 'icon', tbg: 'background', cname: 'completionistName', cdesc: 'completionistDesc', cicon: 'completionistIcon' };
-            if (k === 'completionist') { tm.completionist = el.checked; }
+            if (k === 'label') { root.label = el.value; }
+            else if (k === 'id') { renameNode(root, el.value); return; }
+            else if (k === 'completionist') { tm.completionist = el.checked; }
             else if (k === 'cxp') { tm.completionistXp = Math.max(0, parseInt(el.value, 10) || 0); }
             else { tm[map[k]] = el.value; }
             rebuildCode();

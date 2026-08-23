@@ -58,6 +58,39 @@ test('MC 设计器前端：初始化示例 → 编辑触发器 → 写回编辑�
   await expect(page.locator('#container')).toContainText('愚公移山', { timeout: 10_000 });
 });
 
+test('MC 设计器识别多成就栏图（两个连通分量 = 两个标签页）', async ({ editPage, page }) => {
+  await editPage.view.waitFor({ state: 'visible' });
+  await installDesigner(page);
+  page.on('dialog', (dialog) => void dialog.accept());
+
+  // 双栏成就图：两组互不相连的树
+  await page.evaluate(async () => {
+    await window.__FLOW_EDITOR_API__?.setCode(
+      'flowchart TD\n r1[冒险栏]\n r1 --> mine[挖矿达人]\n r1 --> fight[战斗狂人]\n r2[生活栏]\n r2 --> cook[干饭人]\n'
+    );
+  });
+  await expect
+    .poll(() => page.evaluate(() => window.__FLOW_EDITOR_STATE__?.().code ?? ''))
+    .toContain('r2[生活栏]');
+
+  await page.getByRole('button', { name: /打开 MC 进度设计器/ }).click();
+  await expect(page.getByTestId('plugin-manager')).toHaveCount(0, { timeout: 10_000 });
+  const frame = page.frameLocator('iframe[title="插件前端"]');
+  await frame.getByRole('button', { name: '重新读取' }).click();
+  await frame.getByText('🏆 冒险栏').waitFor({ timeout: 10_000 });
+
+  // 两个栏头 + 各自的成员计数徽章；校验通过
+  await expect(frame.getByText('🏆 生活栏')).toBeVisible();
+  await expect(frame.locator('.badge', { hasText: '2 成就' })).toBeVisible();
+  await expect(frame.locator('.badge', { hasText: '1 成就' })).toBeVisible();
+  await expect(frame.getByText('✓ 校验通过，可以导出')).toBeVisible();
+
+  // 选中生活栏根节点 → 面板显示栏根形态（无触发器选择）
+  await frame.getByText('🏆 生活栏').click();
+  await expect(frame.getByText('栏根节点')).toBeVisible();
+  await expect(frame.locator('select[data-k="trigger"]')).toHaveCount(0);
+});
+
 test('MC 插件 zip 经导出菜单一键下载', async ({ editPage, page }) => {
   await editPage.view.waitFor({ state: 'visible' });
   await installDesigner(page);

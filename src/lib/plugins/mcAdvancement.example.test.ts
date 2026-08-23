@@ -412,6 +412,21 @@ describe('analyze：校验与建树', () => {
     expect(stray?.tab).toBeNull();
   });
 
+  it('空名称 / 重复名称 / 非法背景纹理产生警告', () => {
+    const code =
+      'flowchart TD\n r1[栏一]\n r2[栏二]\n a[同名]\n b[同名]\n c[]\n r1 --> a\n r1 --> b\n r2 --> c\n';
+    const a = CORE.analyze(code);
+    expect(a.ok).toBe(true); // 警告不阻断
+    expect(a.warnings.some((w) => w.msg.includes('显示为空白'))).toBe(true);
+    expect(a.warnings.some((w) => w.msg.includes('无法区分'))).toBe(true);
+
+    const meta = CORE.readMeta(CORE.starterCode()).meta;
+    meta.tabs = { root: { background: 'not a texture path' } };
+    const bgCode = CORE.buildCode(meta, 'TD', [{ id: 'root', label: '根', shape: 'rect' }], []);
+    const bgA = CORE.analyze(bgCode);
+    expect(bgA.warnings.some((w) => w.msg.includes('背景纹理'))).toBe(true);
+  });
+
   it('advancement_done 触发检查在命名空间分支之前（可指向本插件进度）', () => {
     const meta = CORE.readMeta(CORE.starterCode()).meta;
     meta.nodes = {
