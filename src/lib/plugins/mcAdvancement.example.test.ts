@@ -935,6 +935,23 @@ describe('subgraph 成就栏（循环 11）', () => {
   });
 });
 
+describe('循环 37', () => {
+  it('save 失败时 dirty 保持（仅成功后才清）', () => {
+    const r = CORE.exportZip(CORE.starterCode());
+    if (!r.ok) {
+      throw new Error('导出失败');
+    }
+    const store = r.files.find((f) => f.path.endsWith('ProgressStore.java'))?.text ?? '';
+    // dirty = false 必须位于 yaml.save(file) 之后（try 块内成功路径）
+    const savePos = store.indexOf('yaml.save(file);');
+    const dirtyPos = store.indexOf('dirty = false;');
+    expect(savePos).toBeGreaterThan(-1);
+    expect(dirtyPos).toBeGreaterThan(savePos);
+    // catch 存在（失败不清 dirty，saveIfDirty 下轮重试）
+    expect(store).toContain('} catch (IOException | RuntimeException e) {');
+  });
+});
+
 describe('多命名空间溯源缺失回落（循环 35）', () => {
   it('溯源 ns 不在包内 → 回落最大命名空间并警告', async () => {
     const meta = CORE.readMeta(CORE.starterCode()).meta;

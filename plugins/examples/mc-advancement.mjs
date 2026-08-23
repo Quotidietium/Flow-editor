@@ -3810,7 +3810,8 @@ const FRONTEND_HTML = `<!doctype html>
             depth[id] = (depth[parentId] === undefined ? 0 : depth[parentId]) + 1;
             var sel = S.sel && S.sel.type === 'node' && S.sel.id === id;
             if (treeFilter) {
-              var hay = (n.label + ' ' + id + ' ' + n.meta.trigger).toLowerCase();
+              var paramText = Object.keys(n.meta.params || {}).map(function (k) { return String(n.meta.params[k]); }).join(' ');
+              var hay = (n.label + ' ' + id + ' ' + n.meta.trigger + ' ' + paramText).toLowerCase();
               if (hay.indexOf(treeFilter.toLowerCase()) === -1) { return; }
             }
             html += '<div class="node-row' + (sel ? ' sel' : '') + '" data-node="' + esc(id) + '" role="button" tabindex="0" aria-pressed="' + (sel ? 'true' : 'false') + '" style="padding-left:' + (22 + (depth[id] - 1) * 16) + 'px">'
