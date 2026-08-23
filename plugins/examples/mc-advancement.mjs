@@ -4442,6 +4442,10 @@ const FRONTEND_HTML = `<!doctype html>
         if (!html) { html = '<div class="issue ok">✓ 校验通过，可以导出</div>'; }
         $('issues').innerHTML = html;
         $('btnExport').disabled = a.errors.length > 0;
+        var jarBtn = $('btnJar');
+        if (jarBtn) {
+          jarBtn.disabled = a.errors.length > 0; // 与导出按钮同态（编译必失败）
+        }
         Array.prototype.forEach.call($('issues').querySelectorAll('[data-n]'), function (el) {
           var nid = el.getAttribute('data-n');
           if (!nid) { return; }

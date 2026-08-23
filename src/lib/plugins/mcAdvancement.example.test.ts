@@ -935,6 +935,49 @@ describe('subgraph 成就栏（循环 11）', () => {
   });
 });
 
+describe('多命名空间溯源缺失回落（循环 35）', () => {
+  it('溯源 ns 不在包内 → 回落最大命名空间并警告', async () => {
+    const meta = CORE.readMeta(CORE.starterCode()).meta;
+    meta.namespace = 'ghost_ns'; // 溯源指向不存在的 ns
+    const exported = CORE.exportZip(CORE.starterCode());
+    if (!exported.ok) {
+      throw new Error('导出失败');
+    }
+    const entries = await CORE.readZipEntries(exported.bytes);
+    // 构造双 ns 数据包：把 myach 复制为 big_ns（多条目）+ tiny_ns（1 条）
+    const files = [...entries.entries()].map(([name, data]) => ({
+      path: name,
+      text: new TextDecoder().decode(data)
+    }));
+    const tiny = files.filter(
+      (f) => f.path.endsWith('advancement/root.json') && f.path.includes('myach')
+    );
+    const pack = files.concat([
+      ...files
+        .filter((f) => f.path.includes('/myach/'))
+        .map((f) => ({ ...f, path: f.path.replace('myach', 'big_ns') })),
+      ...tiny.map((f) => ({ ...f, path: f.path.replace('myach', 'tiny_ns') }))
+    ]);
+    // big_ns 加一条额外进度使其严格最大（否则与 myach 平手回落插入序）
+    const extra = pack.find(
+      (f) => f.path.endsWith('advancement/root.json') && f.path.includes('myach')
+    );
+    if (extra) {
+      pack.push({
+        ...extra,
+        path: extra.path.replace('myach', 'big_ns').replace('root.json', 'bonus.json'),
+        text: extra.text.replace('"minecraft:tick"', '"minecraft:impossible"')
+      });
+    }
+    const stripped = CORE.buildZip(pack.filter((f) => !f.path.endsWith('flow-editor.json')));
+    const imported = await CORE.importDatapackZip(stripped);
+    expect(imported).toBeDefined();
+    const a = CORE.analyze(imported?.code ?? '');
+    expect(a.ok).toBe(true);
+    expect(a.meta.namespace).toBe('big_ns'); // 最大者胜出
+  });
+});
+
 describe('循环 34 三项核验', () => {
   it('statWatches 在 onEnable 无条件重建（/reload 后随新 config 重填）', () => {
     const meta = CORE.readMeta(CORE.starterCode()).meta;
