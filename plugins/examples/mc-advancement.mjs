@@ -1294,6 +1294,18 @@ const coreFactory = function () {
       }
     }
 
+    // Windows 保留名：con/nul/aux/prn/com1-9/lpt1-9 作为文件名在 Windows
+    // 上无法创建（con.json 等）——桌面编译链写临时目录会直接失败
+    const RESERVED_WIN = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+    for (const [nodeId, nid0] of nidOf) {
+      if (nid0 && RESERVED_WIN.test(nid0)) {
+        errors.push({
+          msg: `节点「${nodeId}」的成就 id「${nid0}」是 Windows 保留名，无法生成文件，请改名`,
+          nodeId
+        });
+      }
+    }
+
     // 枚举名冲突（nid 唯一但 Java 枚举常量可能同名：'1abc' 与 'a_1abc' 都映射 A_1ABC）
     const enumOwner = new Map();
     for (const [nodeId, nid] of nidOf) {
@@ -4133,10 +4145,43 @@ const FRONTEND_HTML = `<!doctype html>
         render();
       }
 
+      // 把一组节点（含其分析态 tab 字段）迁移到目标栏的 members——
+      // subgraph 模式下 reparent/delete 的分组一致性关键路径（循环 28）
+      function moveToTab(ids, targetRootNid) {
+        var a = S.analysis;
+        var target = a.tabs.find(function (t) { return t.rootNid === targetRootNid; });
+        if (!target) { return; }
+        a.tabs.forEach(function (t) {
+          if (t.rootNid === targetRootNid) { return; }
+          t.members = t.members.filter(function (m) { return ids.indexOf(m) === -1; });
+        });
+        ids.forEach(function (id) {
+          if (target.members.indexOf(id) === -1) { target.members.push(id); }
+          var node = a.nodes.find(function (x) { return x.id === id; });
+          if (node) { node.tab = targetRootNid; }
+        });
+      }
+
       function reparent(n, newParentId) {
         var a = S.analysis;
         a.edges = a.edges.filter(function (e) { return e.to !== n.id; });
         a.edges.push({ from: newParentId, to: n.id });
+        // 跨栏改挂：节点及其全部后代必须随迁（否则新边成为跨组边被忽略）
+        var newParent = a.nodes.find(function (x) { return x.id === newParentId; });
+        if (newParent && newParent.tab !== n.tab) {
+          var descendants = [n.id];
+          var queue = [n.id];
+          while (queue.length > 0) {
+            var cur = queue.shift();
+            a.edges.forEach(function (e) {
+              if (e.from === cur && descendants.indexOf(e.to) === -1) {
+                descendants.push(e.to);
+                queue.push(e.to);
+              }
+            });
+          }
+          moveToTab(descendants, newParent.tab);
+        }
         rebuildCode();
         render();
       }
@@ -4183,7 +4228,10 @@ const FRONTEND_HTML = `<!doctype html>
         }
         a.nodes = a.nodes.filter(function (o) { return o.id !== n.id; });
         delete a.meta.nodes[n.id];
-        S.analysis.nodes = a.nodes;
+        // 从宿主栏 members 移除被删 id（subgraph 模式分组一致性）
+        a.tabs.forEach(function (t) {
+          t.members = t.members.filter(function (m) { return m !== n.id; });
+        });
         S.sel = null;
         rebuildCode();
         render();

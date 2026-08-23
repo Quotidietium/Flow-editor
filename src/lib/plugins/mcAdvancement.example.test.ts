@@ -935,6 +935,24 @@ describe('subgraph 成就栏（循环 11）', () => {
   });
 });
 
+describe('delete/reparent 同步与保留名（循环 28）', () => {
+  it('Windows 保留名 id 报错（con/nul/com1）', () => {
+    const a = CORE.analyze('flowchart TD\n r[根]\n r --> con\n r --> nul[甲]\n con[乙]\n');
+    expect(a.ok).toBe(false);
+    const reserved = a.errors.filter((e) => e.msg.includes('Windows 保留名'));
+    expect(reserved.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('ProgressStore.load 对损坏 YAML 容错（catch IllegalArgumentException 覆盖 InvalidConfigurationException）', () => {
+    const r = CORE.exportZip(CORE.starterCode());
+    if (!r.ok) {
+      throw new Error('导出失败');
+    }
+    const store = r.files.find((f) => f.path.endsWith('ProgressStore.java'))?.text ?? '';
+    expect(store).toContain('catch (IllegalArgumentException e)');
+  });
+});
+
 describe('addNode 入组与任务取消（循环 27）', () => {
   it('生成的 Java 持有任务句柄并在 onDisable 取消', () => {
     const meta = CORE.readMeta(CORE.starterCode()).meta;
