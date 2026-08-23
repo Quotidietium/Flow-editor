@@ -4867,7 +4867,15 @@ const FRONTEND_HTML = `<!doctype html>
         });
       }
 
-      $('btnReload').onclick = load;
+      $('btnReload').onclick = function () {
+        // 面板有未写回的修改时先确认——重新读取会静默丢弃它们
+        if (S.code && S.code !== lastSynced) {
+          if (!confirm('面板中有未写回编辑器的修改，重新读取将丢弃这些修改。继续？')) {
+            return;
+          }
+        }
+        load();
+      };
       $('btnSave').onclick = save;
       $('btnExport').onclick = exportZipFile;
       $('btnJar').onclick = exportJarFile;

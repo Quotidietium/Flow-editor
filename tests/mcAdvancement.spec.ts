@@ -351,3 +351,34 @@ test('MC 设计器：校验面板问题点击/键盘定位（循环 54/58）', a
   await issueRow.press('Enter');
   await expect(frame.getByRole('button', { name: '← 返回' })).toBeVisible();
 });
+
+test('MC 设计器：重新读取丢弃未写回修改前先确认（循环 64）', async ({ editPage, page }) => {
+  await editPage.view.waitFor({ state: 'visible' });
+  await installDesigner(page);
+
+  // 记录 confirm 对话框（初始化示例与重新读取都会弹；区分靠消息文本）
+  const confirms: string[] = [];
+  page.on('dialog', (dialog) => {
+    confirms.push(dialog.message());
+    void dialog.accept();
+  });
+
+  await page.getByRole('button', { name: /打开 MC 进度设计器/ }).click();
+  await expect(page.getByTestId('plugin-manager')).toHaveCount(0, { timeout: 10_000 });
+  const frame = page.frameLocator('iframe[title="插件前端"]');
+  await frame.getByText('MC 进度设计器').first().waitFor({ timeout: 10_000 });
+
+  await frame.getByRole('button', { name: '初始化示例' }).click();
+  await frame.getByText('✓ 校验通过，可以导出').waitFor({ timeout: 10_000 });
+
+  // 面板内改一个字段（未写回编辑器）→ 重新读取必须先弹「丢弃修改」确认
+  await frame.getByText('愚公移山').click();
+  await frame.locator('input[data-k="desc"]').fill('未写回的描述修改');
+  await frame.getByRole('button', { name: '重新读取' }).click();
+  await expect.poll(() => confirms.some((m) => m.includes('未写回编辑器的修改'))).toBe(true);
+  // 接受后确实重读：重新选中节点，描述已回到原始值（修改被丢弃）
+  await frame.getByText('✓ 校验通过，可以导出').waitFor({ timeout: 5_000 });
+  await frame.getByText('愚公移山').click();
+  await expect(frame.locator('input[data-k="desc"]')).toBeVisible();
+  await expect(frame.locator('input[data-k="desc"]')).not.toHaveValue('未写回的描述修改');
+});
