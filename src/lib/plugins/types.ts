@@ -87,12 +87,16 @@ export interface ExportFormat {
   label: string;
   /**
    * Produce the export payload. Receiving the rendered SVG string keeps the
-   * plugin independent from the DOM.
+   * plugin independent from the DOM. May be async (e.g. desktop IPC builds);
+   * returning undefined after ctx.notify() surfaces the reason as a toast.
    */
   run(
     input: { code: string; svg: string | undefined; config: string },
     ctx: PluginContext
-  ): { blob?: Blob; text?: string; mime: string; filename: string } | undefined;
+  ):
+    | { blob?: Blob; text?: string; mime: string; filename: string }
+    | undefined
+    | Promise<{ blob?: Blob; text?: string; mime: string; filename: string } | undefined>;
 }
 
 /** Theme override: CSS custom properties and/or arbitrary CSS. */
@@ -121,7 +125,13 @@ export interface FrontendHook {
 export interface FlowPlugin extends PluginManifest {
   inputTransform?: InputTransformHook;
   import?: ImportHandler;
+  /** Single custom export format appended to the 导出 menu. */
   export?: ExportFormat;
+  /**
+   * Multiple export formats (2.0.137): each becomes its own 导出 menu item.
+   * Takes precedence over the legacy single `export` when both are present.
+   */
+  exports?: ExportFormat[];
   theme?: ThemeHook;
   frontend?: FrontendHook;
   /** Called once when the plugin activates. */
@@ -137,4 +147,10 @@ export interface InstalledPlugin {
   source: string;
   enabled: boolean;
   installedAt: string;
+  /**
+   * Built-in plugin (2.0.138): seeded from the bundle at load, source
+   * refreshed on app upgrade (the user's enabled choice is preserved),
+   * and it cannot be uninstalled — only disabled.
+   */
+  builtin?: boolean;
 }

@@ -11,12 +11,10 @@ test.use({ viewport: { height: 1080, width: 1920 } });
 
 const EXAMPLES = join(process.cwd(), 'plugins', 'examples');
 
+// 2.0.138 起 MC 进度设计器为内置插件（默认安装）；管理器打开即见卡片。
+// 文件安装同 id 插件的路径由 plugins.spec 覆盖（会被「已安装」拒绝）。
 const installDesigner = async (page: import('@playwright/test').Page) => {
   await page.getByTestId('plugin-manager-open').click();
-  const chooserPromise = page.waitForEvent('filechooser');
-  await page.getByTestId('plugin-install').click();
-  const chooser = await chooserPromise;
-  await chooser.setFiles(join(EXAMPLES, 'mc-advancement.mjs'));
   await page.getByTestId('plugin-card-flow.mc-advancement').waitFor({ timeout: 10_000 });
 };
 
@@ -411,4 +409,61 @@ test('MC 设计器：节点 id 非法字符被闸门拦截（循环 67）', asyn
   await expect
     .poll(() => page.evaluate(() => window.__FLOW_EDITOR_STATE__?.().code ?? ''))
     .toContain('yugong');
+});
+
+test('MC 插件 JAR 导出项：菜单可见，网页版点击给出桌面版引导（2.0.137）', async ({
+  editPage,
+  page
+}) => {
+  await editPage.view.waitFor({ state: 'visible' });
+  await installDesigner(page);
+  page.on('dialog', (dialog) => void dialog.accept());
+
+  // 准备一张合法成就图（经设计器初始化示例并写回）
+  await page.getByRole('button', { name: /打开 MC 进度设计器/ }).click();
+  await expect(page.getByTestId('plugin-manager')).toHaveCount(0, { timeout: 10_000 });
+  const frame = page.frameLocator('iframe[title="插件前端"]');
+  await frame.getByRole('button', { name: '初始化示例' }).click();
+  await frame.getByText('🏆 示例成就').waitFor({ timeout: 10_000 });
+  await frame.getByRole('button', { name: '写回编辑器' }).click();
+  await expect
+    .poll(() => page.evaluate(() => window.__FLOW_EDITOR_STATE__?.().code ?? ''))
+    .toContain('mcadv');
+  await page.getByTestId('plugin-frontend-exit').click();
+
+  // 导出菜单出现两个插件导出项（zip 在前保持原 testid，jar 新增）
+  await editPage.ensureActionsOpen();
+  await page.getByTestId('export-menu').click();
+  await expect(page.getByTestId('plugin-export-mc-plugin')).toBeVisible();
+  const jarItem = page.getByTestId('plugin-export-mc-plugin-jar');
+  await expect(jarItem).toBeVisible();
+  await expect(jarItem).toContainText('编译 .jar');
+
+  // 网页版（Playwright 环境）没有桌面桥：点击 → 引导提示（不下载、不崩溃）
+  await jarItem.click();
+  await expect(page.getByText('仅在桌面版可用').first()).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText(/mvn package/).first()).toBeVisible();
+});
+
+test('MC 进度设计器默认安装（内置，2.0.138）：徽章在册、无卸载按钮、可直接打开', async ({
+  editPage,
+  page
+}) => {
+  await editPage.view.waitFor({ state: 'visible' });
+  await page.getByTestId('plugin-manager-open').click();
+  const card = page.getByTestId('plugin-card-flow.mc-advancement');
+  await card.waitFor({ timeout: 10_000 });
+  // 内置徽章 + 无卸载按钮（两步确认入口不存在）
+  await expect(card.getByText('内置', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('plugin-uninstall-flow.mc-advancement')).toHaveCount(0);
+  // 详情页：同样无卸载、提示仅可停用
+  await page.getByTestId('plugin-info-flow.mc-advancement').click();
+  await expect(page.getByText('内置插件（仅可停用）')).toBeVisible();
+  await expect(page.getByTestId('plugin-uninstall-flow.mc-advancement')).toHaveCount(0);
+  // 无需任何安装动作即可打开设计器（内置默认启用）
+  await page.getByRole('button', { name: /打开 MC 进度设计器/ }).click();
+  await expect(page.getByTestId('plugin-manager')).toHaveCount(0, { timeout: 10_000 });
+  const frame = page.frameLocator('iframe[title="插件前端"]');
+  await frame.getByText('MC 进度设计器').first().waitFor({ timeout: 10_000 });
+  await page.getByTestId('plugin-frontend-exit').click();
 });

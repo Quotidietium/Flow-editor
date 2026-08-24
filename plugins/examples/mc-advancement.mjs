@@ -4921,28 +4921,79 @@ export default {
     '元数据（触发方式/图标/奖励等）存于 frontmatter 并经前端面板编辑；一键导出 Maven 工程 zip；' +
     '打开 zip 可逆向导入回图表（自家导出完整还原，外部数据包尽力还原）；' +
     '桌面版还可离线编译为可安装的 .jar（内置 Paper 编译工具链，需本机自装 JDK 21+，应用不捆绑 Java）。',
-  export: {
-    id: 'mc-plugin',
-    label: 'MC 成就插件（Maven 工程 .zip）',
-    run({ code }, ctx) {
-      const result = CORE.exportZip(code);
-      if (!result.ok) {
-        const first = result.errors[0]?.msg ?? '图表不符合成就图结构';
+  // 2.0.137 起一个插件可注册多个导出项（exports 数组，平台优先于单 export）：
+  // ① Maven 工程 zip（全平台）；② 桌面版一键编译 .jar（装好 JDK 21+ 即用）
+  exports: [
+    {
+      id: 'mc-plugin',
+      label: 'MC 成就插件（Maven 工程 .zip）',
+      run({ code }, ctx) {
+        const result = CORE.exportZip(code);
+        if (!result.ok) {
+          const first = result.errors[0]?.msg ?? '图表不符合成就图结构';
+          ctx.notify(
+            `无法导出 MC 插件：${first}${result.errors.length > 1 ? `（另有 ${result.errors.length - 1} 个问题，详见设计器面板）` : ''}`
+          );
+          return undefined;
+        }
         ctx.notify(
-          `无法导出 MC 插件：${first}${result.errors.length > 1 ? `（另有 ${result.errors.length - 1} 个问题，详见设计器面板）` : ''}`
+          `已生成 ${result.filename}：${result.analysis.tabs.length} 个成就栏 / ${result.analysis.nodes.length} 个成就 / ${result.files.length} 个文件`
         );
-        return undefined;
+        return {
+          blob: new Blob([result.bytes], { type: 'application/zip' }),
+          filename: result.filename,
+          mime: 'application/zip'
+        };
       }
-      ctx.notify(
-        `已生成 ${result.filename}：${result.analysis.tabs.length} 个成就栏 / ${result.analysis.nodes.length} 个成就 / ${result.files.length} 个文件`
-      );
-      return {
-        blob: new Blob([result.bytes], { type: 'application/zip' }),
-        filename: result.filename,
-        mime: 'application/zip'
-      };
+    },
+    {
+      id: 'mc-plugin-jar',
+      label: 'MC 成就插件（编译 .jar·桌面版+JDK21+）',
+      // 导出钩子运行在宿主页：直接调用桌面 preload 暴露的编译 IPC
+      //（window.__FLOW_DESKTOP__.mcBuild，与前端面板按钮同一后端），
+      // 无需绕 postMessage 桥。异步 run（平台 2.0.137 支持）。
+      async run({ code }, ctx) {
+        const desktop =
+          (typeof window !== 'undefined' && window.__FLOW_DESKTOP__?.mcBuild) || null;
+        if (!desktop) {
+          ctx.notify(
+            'JAR 编译仅在桌面版可用（网页无法运行 javac）——可先导出 Maven 工程 zip，用本机 mvn package 构建'
+          );
+          return undefined;
+        }
+        const request = CORE.buildJarRequest(code);
+        if (!request.ok) {
+          const first = request.errors[0]?.msg ?? '图表不符合成就图结构';
+          ctx.notify(`无法编译：${first}（详见设计器面板校验）`);
+          return undefined;
+        }
+        try {
+          const result = await desktop.build({ files: request.files, filename: request.filename });
+          if (!result.ok) {
+            // JDK_NOT_FOUND / JDK_TOO_OLD 等结构化错误：主进程已给出引导文案
+            ctx.notify(result.error?.message ?? '编译失败，请查看桌面版控制台日志');
+            return undefined;
+          }
+          const binary = atob(result.jarBase64);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+          }
+          ctx.notify(
+            `已编译 ${result.filename}（JDK ${result.jdkVersion ?? '?'}）——放入服务器 plugins/ 目录即可`
+          );
+          return {
+            blob: new Blob([bytes], { type: 'application/java-archive' }),
+            filename: result.filename,
+            mime: 'application/java-archive'
+          };
+        } catch (error) {
+          ctx.notify(`编译异常：${error?.message ?? String(error)}`);
+          return undefined;
+        }
+      }
     }
-  },
+  ],
   frontend: {
     sandbox:
       'allow-scripts allow-same-origin allow-forms allow-popups allow-downloads allow-modals',
@@ -4974,7 +5025,7 @@ export default {
   id: 'flow.mc-advancement',
   name: 'MC 进度设计器',
   permissions: ['import:file', 'export:format', 'ui:frontend'],
-  version: '1.9.0'
+  version: '1.10.0'
 };
 
 // 单测钩子（不改变插件运行时行为）

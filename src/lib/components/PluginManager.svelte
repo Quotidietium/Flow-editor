@@ -349,14 +349,21 @@
               onclick={() => onExport(detailPlugin.manifest.id)}>
               <DownloadIcon /> 导出 .mjs
             </Button>
-            <Button
-              size="sm"
-              variant={confirmingUninstall === detailPlugin.manifest.id ? 'destructive' : 'outline'}
-              data-testid="plugin-uninstall-{detailPlugin.manifest.id}"
-              onclick={() => onUninstall(detailPlugin.manifest.id)}>
-              <TrashIcon />
-              {confirmingUninstall === detailPlugin.manifest.id ? '确认卸载？' : '卸载'}
-            </Button>
+            {#if !detailPlugin.builtin}
+              <Button
+                size="sm"
+                variant={confirmingUninstall === detailPlugin.manifest.id
+                  ? 'destructive'
+                  : 'outline'}
+                data-testid="plugin-uninstall-{detailPlugin.manifest.id}"
+                onclick={() => onUninstall(detailPlugin.manifest.id)}>
+                <TrashIcon />
+                {confirmingUninstall === detailPlugin.manifest.id ? '确认卸载？' : '卸载'}
+              </Button>
+            {:else}
+              <span class="self-center text-[11px] text-muted-foreground"
+                >内置插件（仅可停用）</span>
+            {/if}
           </div>
         </div>
       {:else}
@@ -391,6 +398,11 @@
                       <span class="truncate text-sm font-medium">{plugin.manifest.name}</span>
                       <span class="text-[11px] text-muted-foreground"
                         >v{plugin.manifest.version}</span>
+                      {#if plugin.builtin}
+                        <span
+                          class="rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-800 dark:bg-sky-900/40 dark:text-sky-300"
+                          >内置</span>
+                      {/if}
                       {#if plugin.enabled}
                         <span
                           class="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
@@ -452,23 +464,25 @@
                         onclick={() => onExport(plugin.manifest.id)}>
                         <DownloadIcon />
                       </Button>
-                      <Button
-                        size="sm"
-                        variant={confirmingUninstall === plugin.manifest.id
-                          ? 'destructive'
-                          : 'ghost'}
-                        class={confirmingUninstall === plugin.manifest.id
-                          ? 'h-7 px-2 text-xs'
-                          : 'size-7 p-0'}
-                        title="卸载"
-                        data-testid="plugin-uninstall-{plugin.manifest.id}"
-                        onclick={() => onUninstall(plugin.manifest.id)}>
-                        {#if confirmingUninstall === plugin.manifest.id}
-                          确认卸载？
-                        {:else}
-                          <TrashIcon />
-                        {/if}
-                      </Button>
+                      {#if !plugin.builtin}
+                        <Button
+                          size="sm"
+                          variant={confirmingUninstall === plugin.manifest.id
+                            ? 'destructive'
+                            : 'ghost'}
+                          class={confirmingUninstall === plugin.manifest.id
+                            ? 'h-7 px-2 text-xs'
+                            : 'size-7 p-0'}
+                          title="卸载"
+                          data-testid="plugin-uninstall-{plugin.manifest.id}"
+                          onclick={() => onUninstall(plugin.manifest.id)}>
+                          {#if confirmingUninstall === plugin.manifest.id}
+                            确认卸载？
+                          {:else}
+                            <TrashIcon />
+                          {/if}
+                        </Button>
+                      {/if}
                     </div>
                   </div>
                 </div>

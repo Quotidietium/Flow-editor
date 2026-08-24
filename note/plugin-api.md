@@ -29,6 +29,16 @@ export default {
 安装：导航栏 **插件 → 从本地安装（.mjs）**，或管理器「模板库」一键安装
 起始模板。源码持久化于 localStorage（键 `flowPlugins`），重启自动恢复。
 
+**内置插件（2.0.138）**：应用捆绑的插件（当前为 MC 进度设计器
+`flow.mc-advancement`）在启动时自动播种进注册表——**默认安装、默认
+启用**，网页构建与桌面安装包同源（源码经 `?raw` 内嵌进 bundle）。
+特性：升级时捆绑版本覆盖存储副本但**保留用户的启用/停用选择**；同 id
+的旧手动安装会被收编（不重复）；**不可卸载仅可停用**（管理器显示
+「内置」徽章、无卸载按钮）。内置源码 =
+`plugins/examples/mc-advancement.mjs` 的逐字节副本
+（`src/lib/plugins/builtin/`，字节一致性由单测守卫钉住——改插件请同步
+两处）。
+
 **插件管理器**（2.0.128 重写，导航栏「插件」按钮）三个标签页：
 
 - **已安装**：插件卡片（名称/版本/权限徽章/状态徽章）+ Switch 启停 +
@@ -84,7 +94,7 @@ rejection 与同步异常同样被隔离（三振停用）。**二进制格式**
 用 `file.bytes`（原始 `Uint8Array`）——`file.text` 是有损 UTF-8 解码，
 不可回转；示例见 MC 进度设计器的 zip 逆向导入。
 
-### 2.3 导出格式 `export`（含私有格式 / MC 插件等）
+### 2.3 导出格式 `export` / `exports`（含私有格式 / MC 插件等）
 
 ```js
 export: {
@@ -99,6 +109,17 @@ export: {
 
 注册后出现在「导出 ▾」菜单底部（testid `plugin-export-<id>`）。
 `svg` 是当前渲染的 SVG 字符串（未渲染为 undefined）。
+
+**多导出项（2.0.137）**：`exports: ExportFormat[]` 数组可注册多个菜单
+项（每项独立 id/label/run），与旧单 `export` 同时存在时**数组优先**
+（旧字段被忽略，不重复出现）。`run` 可为 **async**（如等待桌面 IPC
+编译）——异步 rejection 与同步异常同样被三振隔离。返回 undefined 前
+用 `ctx.notify()` 说明原因（宿主仍会提示「未产出内容」，双提示可接受；
+抛错则会计入三振，引导类提示请走 notify 而非 throw）。
+示例：MC 进度设计器同时注册「Maven 工程 .zip」（全平台）与
+「编译 .jar」（桌面版直调 `window.__FLOW_DESKTOP__.mcBuild.build`，
+装好 JDK 21+ 一键出可安装 jar；无 JDK 时主进程返回结构化引导文案
+透传给用户）。
 
 ### 2.4 主题与样式 `theme`
 

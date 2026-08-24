@@ -38,6 +38,7 @@ interface Analysis {
   nodes: AnalysisNode[];
   ok: boolean;
   tabs: { members: string[]; name: string; rootId: string; rootNid: string }[];
+  skipped?: number;
   warnings: Issue[];
 }
 interface TriggerParam {
@@ -107,19 +108,29 @@ interface Core {
   };
   starterCode(): string;
 }
+interface ExportCtx {
+  notify(msg: string): void;
+}
+interface ExportPayload {
+  blob?: Blob;
+  filename: string;
+}
 interface PluginModule {
   _core: Core;
   default: {
-    export: {
+    exports?: {
+      id: string;
+      label: string;
       run(
         input: { code: string },
-        ctx: { notify(msg: string): void }
-      ): { blob?: Blob; filename: string } | undefined;
-    };
+        ctx: ExportCtx
+      ): ExportPayload | undefined | Promise<ExportPayload | undefined>;
+    }[];
     frontend: { sandbox?: string; url: string };
     id: string;
     name: string;
     permissions: string[];
+    version: string;
   };
 }
 
@@ -1334,7 +1345,7 @@ describe('循环 34 三项核验', () => {
     if (!parsed.ok) {
       throw new Error('预分析失败');
     }
-    parsed.meta.nodes = { ...parsed.meta.nodes };
+    parsed.meta.nodes = { ...(parsed.meta.nodes as Record<string, unknown>) };
     const renamed = CORE.buildCode(
       parsed.meta,
       'TD',
@@ -1389,7 +1400,7 @@ describe('AsyncChat 闭包提取与覆盖确认（循环 32）', () => {
 
 describe('可取消事件 ignoreCancelled（循环 31）', () => {
   it('trade/tame/breed/chat 四个 Cancellable 事件带 ignoreCancelled', () => {
-    const mk = (trigger) => {
+    const mk = (trigger: string) => {
       const meta = CORE.readMeta(CORE.starterCode()).meta;
       meta.nodes = { x: { params: trigger === 'chat_keyword' ? { keyword: 'hi' } : {}, trigger } };
       return CORE.exportZip(
@@ -1404,7 +1415,7 @@ describe('可取消事件 ignoreCancelled（循环 31）', () => {
         )
       );
     };
-    const expectIc = (trigger, method) => {
+    const expectIc = (trigger: string, method: string) => {
       const r = mk(trigger);
       if (!r.ok) {
         throw new Error(`${trigger} 导出失败`);
@@ -1920,17 +1931,17 @@ describe('插件导出钩子', () => {
     return { messages, notify: (m: string) => messages.push(m) };
   };
 
-  it('合法图返回 zip blob', () => {
+  it('合法图返回 zip blob', async () => {
     const c = ctx();
-    const out = plugin.export.run({ code: CORE.starterCode() }, c);
+    const out = await plugin.exports?.[0]?.run({ code: CORE.starterCode() }, c);
     expect(out?.filename).toBe('MyAchievements.zip');
     expect(out?.blob).toBeInstanceOf(Blob);
     expect(c.messages[0]).toContain('MyAchievements.zip');
   });
 
-  it('非法图返回 undefined 并提示首个错误', () => {
+  it('非法图返回 undefined 并提示首个错误', async () => {
     const c = ctx();
-    const out = plugin.export.run({ code: 'pie title x\n  "a": 1\n' }, c);
+    const out = await plugin.exports?.[0]?.run({ code: 'pie title x\n  "a": 1\n' }, c);
     expect(out).toBeUndefined();
     expect(c.messages[0]).toContain('无法导出 MC 插件');
   });
@@ -2118,7 +2129,7 @@ describe('循环 54：校验面板定位跳转（全局/栏级问题）', () => 
   it('设置级问题带 scope:settings；栏级问题带 tabId', () => {
     const meta = CORE.readMeta(CORE.starterCode()).meta;
     meta.command = 'kill'; // 原版命令冲突 → 设置级
-    meta.tabs.root.background = 'not-a-texture-path'; // 栏级
+    (meta.tabs as Record<string, { background?: string }>).root.background = 'not-a-texture-path'; // 栏级
     const r = CORE.analyze(
       CORE.buildCode(
         meta,
@@ -2177,9 +2188,14 @@ describe('循环 55：自动保存间隔边界（负值曾致插件 onEnable 崩
       ).toBe(true);
     }
     const r2 = build(120.5);
-    const cfg2 = r2.ok ? (r2.files.find((f) => f.path.endsWith('config.yml'))?.text ?? '') : '';
+    if (!r2.ok) {
+      throw new Error('导出失败');
+    }
+    const cfg2 = r2.files.find((f) => f.path.endsWith('config.yml'))?.text ?? '';
     expect(cfg2).toContain('autosave-interval-seconds: 120'); // 截断而非 120.5
-    expect(r2.analysis.warnings.some((w) => w.msg.includes('不是整数'))).toBe(true);
+    expect(r2.analysis.warnings.some((w: { msg: string }) => w.msg.includes('不是整数'))).toBe(
+      true
+    );
   });
 });
 
@@ -2233,8 +2249,9 @@ describe('循环 56：战利品区间/权重与负经验值——静默行为显
 describe('循环 57：栏图标与大满贯图标格式校验（此前零校验）', () => {
   it('非法栏图标/大满贯图标产生警告（带 tabId 可定位），整栏加载失败风险可见', () => {
     const meta = CORE.readMeta(CORE.starterCode()).meta;
-    meta.tabs.root.icon = 'Not Valid!!';
-    meta.tabs.root.completionistIcon = '也是错的';
+    (meta.tabs as Record<string, { icon?: string }>).root.icon = 'Not Valid!!';
+    (meta.tabs as Record<string, { completionistIcon?: string }>).root.completionistIcon =
+      '也是错的';
     const r = CORE.analyze(
       CORE.buildCode(
         meta,
@@ -2254,13 +2271,13 @@ describe('循环 57：栏图标与大满贯图标格式校验（此前零校验�
 });
 
 describe('循环 58：issue 行键盘可达（与树行同模式）+ 插件版本 1.9.0', () => {
-  it('可定位 issue 带 role/tabindex 与 Enter/Space 处理；插件版本升至 1.9.0', () => {
+  it('可定位 issue 带 role/tabindex 与 Enter/Space 处理；插件版本在册', () => {
     const html = decodeURIComponent(
       plugin.frontend.url.replace('data:text/html;charset=utf-8,', '')
     );
     expect(html).toContain('\' role="button" tabindex="0"'); // issueRow 输出
     expect(html).toContain("ev.key === 'Enter' || ev.key === ' '");
-    expect(plugin.version).toBe('1.9.0');
+    expect(plugin.version).toBe('1.10.0');
   });
 });
 
@@ -2292,7 +2309,7 @@ describe('循环 61：生成 README 修正（版本硬编码 + revoke 缺席）'
 describe('循环 62：大满贯负经验值如实提示（原样输出=解锁扣经验）', () => {
   it('completionistXp=-50 → 警告「扣除玩家经验」+ JSON rewards 原样 -50', () => {
     const meta = CORE.readMeta(CORE.starterCode()).meta;
-    meta.tabs.root.completionistXp = -50;
+    (meta.tabs as Record<string, { completionistXp?: number }>).root.completionistXp = -50;
     const r = CORE.exportZip(
       CORE.buildCode(
         meta,
@@ -2425,5 +2442,77 @@ describe('循环 70：config 逐键注释对新参数自动覆盖（核验入测
     expect(cfg).toContain('# 弹射物类型');
     expect(cfg).toContain('cause: "melee"');
     expect(cfg).toContain('projectile: "ARROW"');
+  });
+});
+
+describe('JAR 一键导出（exports[1]，桌面直调编译链）', () => {
+  const ctx = () => {
+    const messages: string[] = [];
+    return { messages, notify: (m: string) => messages.push(m) };
+  };
+  const jarRun = () => {
+    const run = plugin.exports?.[1]?.run;
+    if (!run) {
+      throw new Error('jar export missing');
+    }
+    return run;
+  };
+  const setDesktop = (build: unknown) => {
+    (window as unknown as { __FLOW_DESKTOP__?: unknown }).__FLOW_DESKTOP__ = build
+      ? { mcBuild: { build } }
+      : undefined;
+  };
+
+  it('manifest：exports 两项（zip 首位保持原 id，jar 第二），无旧单 export 字段', () => {
+    expect(plugin.exports?.map((f) => f.id)).toEqual(['mc-plugin', 'mc-plugin-jar']);
+    expect(plugin.exports?.[1]?.label).toContain('编译 .jar');
+    expect((plugin as unknown as { export?: unknown }).export).toBeUndefined();
+  });
+
+  it('网页版（无桌面桥）：undefined + 引导提示（不抛错、不触发三振）', async () => {
+    setDesktop(undefined);
+    const c = ctx();
+    const out = await jarRun()({ code: CORE.starterCode() }, c);
+    expect(out).toBeUndefined();
+    expect(c.messages[0]).toContain('仅在桌面版可用');
+    expect(c.messages[0]).toContain('mvn package');
+  });
+
+  it('桌面无 JDK：结构化错误文案透传（主进程引导文案直达用户）', async () => {
+    setDesktop(async () => ({
+      error: { message: '未检测到 JDK 21+，请您自行安装（如 Eclipse Temurin）后重试' },
+      ok: false
+    }));
+    const c = ctx();
+    const out = await jarRun()({ code: CORE.starterCode() }, c);
+    expect(out).toBeUndefined();
+    expect(c.messages[0]).toContain('未检测到 JDK 21+');
+  });
+
+  it('桌面编译成功：base64 → Blob 下载载荷 + 成功提示含 JDK 版本', async () => {
+    // mock 后端（真实 javac 链路由 installer/scripts/test-mc-build.mjs 15 项覆盖）
+    setDesktop(async (request: { filename?: string }) => ({
+      filename: request.filename ?? 'MyAchievements-1.0.0.jar',
+      jarBase64: Buffer.from('PK-fake-jar-bytes').toString('base64'),
+      jdkVersion: '21.0.5',
+      ok: true
+    }));
+    const c = ctx();
+    const out = await jarRun()({ code: CORE.starterCode() }, c);
+    expect(out?.filename).toBe('MyAchievements-1.0.0.jar');
+    expect(out?.blob).toBeInstanceOf(Blob);
+    expect(out?.blob && (await out.blob.text())).toBe('PK-fake-jar-bytes');
+    expect(c.messages[0]).toContain('已编译');
+    expect(c.messages[0]).toContain('21.0.5');
+    setDesktop(undefined);
+  });
+
+  it('非法图（非 flowchart）：编译前拦截并提示首个错误', async () => {
+    setDesktop(async () => ({ ok: true })); // 即使桌面在也不应走到编译
+    const c = ctx();
+    const out = await jarRun()({ code: 'pie title x\n  "a": 1\n' }, c);
+    expect(out).toBeUndefined();
+    expect(c.messages[0]).toContain('无法编译');
+    setDesktop(undefined);
   });
 });

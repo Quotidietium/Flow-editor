@@ -151,14 +151,32 @@ try {
   Write-Host "    $electronZip"
 } finally { Pop-Location }
 
+# 2.0.138：把运行时 zip 预解压为目录再交给 electron-builder（-c.electronDist
+# 支持目录形态）。原因：本机杀软对「解压 → 立即 rename」的目录持锁，
+# builder 内建的 zip 路径每次在 win-unpacked.tmp rename 处 EPERM；预解压后
+# builder 走逐文件复制，无 rename 动作。目录按 zip 文件名中的版本号缓存。
+$electronVer = if ("$electronZip" -match 'electron-v([\d.]+)-') { $Matches[1] } else { 'unknown' }
+$electronDir = Join-Path $InstallerRoot ".cache\electron-unpacked\$electronVer"
+$exeInDir = Join-Path $electronDir 'electron.exe'
+if (-not (Test-Path $exeInDir)) {
+  Write-Host "    预解压 electron 运行时 v$electronVer（供 electron-builder 以目录形态使用）…"
+  Expand-Archive -LiteralPath $electronZip -DestinationPath $electronDir -Force
+  Start-Sleep -Seconds 60   # 等杀软对新解压 exe 的扫描窗口过去
+}
+
 Write-Step 'electron-builder 打包（NSIS，数分钟）'
 Push-Location $InstallerRoot
 try {
-  pnpm exec electron-builder --win --x64 "-c.electronDist=$electronZip"
+  # --use-system-ca：TLS 拦截代理环境下，NSIS/winCodeSign 工具下载走
+  # 系统证书库（Node 默认内置根证书不含本机拦截 CA）
+  $env:NODE_OPTIONS = '--use-system-ca'
+  # 残留的 win-unpacked* 会让解压 rename 撞 EPERM（2.0.138 实测），尽力清
+  Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "$InstallerRoot\dist\win-unpacked", "$InstallerRoot\dist\win-unpacked.tmp"
+  pnpm exec electron-builder --win --x64 "-c.electronDist=$electronDir"
   if ($LASTEXITCODE -ne 0 -and -not $UseMirror) {
     Write-Host '    打包失败，回退 npmmirror 镜像重试一次…' -ForegroundColor Yellow
     Set-MirrorEnv
-    pnpm exec electron-builder --win --x64 "-c.electronDist=$electronZip"
+    pnpm exec electron-builder --win --x64 "-c.electronDist=$electronDir"
   }
   if ($LASTEXITCODE -ne 0) { throw "electron-builder 退出码 $LASTEXITCODE" }
 } finally { Pop-Location }

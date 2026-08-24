@@ -1,11 +1,17 @@
 import { expect, it, describe, vi, beforeEach } from 'vitest';
 import { bridgeTools, handleBridgeRequest } from './bridge';
 import {
+  disablePlugin,
+  installPlugin,
+  listInstalled,
+  loadRegistry,
   pluginExportFormats,
+  pluginFrontends,
   registerPluginInstance,
   runImportHandler,
   runInputTransforms,
   runPluginExport,
+  uninstallPlugin,
   unregisterAllPluginInstances
 } from './registry.svelte';
 import type { FlowPlugin } from './types';
@@ -138,7 +144,7 @@ describe('plugin hook dispatch', () => {
     await expect(runImportHandler('a.mmd', 'A')).resolves.toBeUndefined();
   });
 
-  it('registers and runs custom export formats', () => {
+  it('registers and runs custom export formats (legacy single export)', async () => {
     registerPluginInstance(
       basePlugin({
         export: {
@@ -160,9 +166,42 @@ describe('plugin hook dispatch', () => {
       throw new Error('format missing');
     }
     expect(format.label).toBe('MC 函数');
-    const payload = runPluginExport(format);
+    expect(format.pluginId).toBe('exporter');
+    const payload = await runPluginExport(format);
     expect(payload?.filename).toBe('out.mcfunction');
     expect(payload?.text).toContain('lines');
+  });
+
+  it('exports[] registers multiple menu items and takes precedence over legacy export', async () => {
+    registerPluginInstance(
+      basePlugin({
+        export: { id: 'legacy', label: '旧单项', run: () => undefined },
+        exports: [
+          {
+            id: 'fmt-a',
+            label: '格式 A',
+            run: () => ({ filename: 'a.txt', mime: 'text/plain', text: 'A' })
+          },
+          {
+            id: 'fmt-b',
+            label: '格式 B（异步）',
+            run: async () => {
+              await new Promise((resolve) => setTimeout(resolve, 0));
+              return { filename: 'b.txt', mime: 'text/plain', text: 'B' };
+            }
+          }
+        ],
+        id: 'multi'
+      })
+    );
+    const formats = pluginExportFormats().filter((f) => f.pluginId === 'multi');
+    expect(formats.map((f) => f.id)).toEqual(['fmt-a', 'fmt-b']); // 旧 export 不重复出现
+    const formatB = formats.find((f) => f.id === 'fmt-b');
+    if (!formatB) {
+      throw new Error('format-b missing');
+    }
+    const payloadB = await runPluginExport(formatB);
+    expect(payloadB?.text).toBe('B'); // 异步 run 经 guardedAsync 正常产出
   });
 
   it('theme.css injects arbitrary CSS (layout/stickers) into a style tag', () => {
@@ -337,5 +376,80 @@ describe('MCP bridge protocol', () => {
         'export'
       ])
     );
+  });
+});
+
+describe('built-in plugins（2.0.138：MC 进度设计器默认安装）', () => {
+  beforeEach(() => {
+    unregisterAllPluginInstances();
+    localStorage.removeItem('flowPlugins');
+  });
+
+  it('首次启动播种 flow.mc-advancement：默认启用、激活、导出项与前端就绪', async () => {
+    await loadRegistry();
+    const rec = listInstalled().find((p) => p.manifest.id === 'flow.mc-advancement');
+    expect(rec?.builtin).toBe(true);
+    expect(rec?.enabled).toBe(true);
+    expect(rec?.manifest.version).toBeTruthy();
+    // 模块真实加载并激活：前端入口与两个导出项（zip + 一键 jar）全部就绪
+    expect(pluginFrontends().some((f) => f.name.includes('MC 进度设计器'))).toBe(true);
+    const ids = pluginExportFormats().filter((f) => f.pluginId === 'flow.mc-advancement');
+    expect(ids.map((f) => f.id).sort()).toEqual(['mc-plugin', 'mc-plugin-jar']);
+  });
+
+  it('用户停用后重启不复活（enabled 选择跨加载保留，源码仍随捆绑刷新）', async () => {
+    await loadRegistry();
+    disablePlugin('flow.mc-advancement');
+    await loadRegistry(); // 模拟下次启动
+    const rec = listInstalled().find((p) => p.manifest.id === 'flow.mc-advancement');
+    expect(rec?.enabled).toBe(false);
+    expect(rec?.builtin).toBe(true);
+    expect(pluginFrontends().some((f) => f.name.includes('MC 进度设计器'))).toBe(false); // 停用即摘除
+  });
+
+  it('内置插件不可卸载；重复安装同 id 被拒绝', async () => {
+    await loadRegistry();
+    uninstallPlugin('flow.mc-advancement');
+    expect(listInstalled().some((p) => p.manifest.id === 'flow.mc-advancement')).toBe(true);
+    const source = listInstalled().find((p) => p.builtin)?.source ?? '';
+    const dup = await installPlugin(source);
+    expect(dup.ok).toBe(false);
+    expect(dup.error).toContain('已安装');
+  });
+
+  it('用户曾手动装过同 id 旧版本 → 升级为内置（保留启用选择，不产生重复记录）', async () => {
+    // 预置一个“用户手装”的同 id 记录（停用态、旧源码）
+    localStorage.setItem(
+      'flowPlugins',
+      JSON.stringify([
+        {
+          builtin: false,
+          enabled: false,
+          installedAt: '1',
+          manifest: { id: 'flow.mc-advancement', name: '旧版本', version: '0.0.1' },
+          source: 'export default { id: "flow.mc-advancement", name: "旧版本" };'
+        }
+      ])
+    );
+    await loadRegistry();
+    const records = listInstalled().filter((p) => p.manifest.id === 'flow.mc-advancement');
+    expect(records).toHaveLength(1); // 不重复
+    expect(records[0]?.builtin).toBe(true); // 升级为内置
+    expect(records[0]?.enabled).toBe(false); // 保留停用选择
+    expect(records[0]?.manifest.version).not.toBe('0.0.1'); // manifest 随捆绑刷新
+  });
+});
+
+describe('内置源码同步守卫（canonical = plugins/examples）', () => {
+  it('src/lib/plugins/builtin/mc-advancement.mjs 与 plugins/examples 字节一致', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const canonical = readFileSync(
+      resolve(process.cwd(), 'plugins/examples/mc-advancement.mjs'),
+      'utf8'
+    );
+    const bundled = ((await import('./builtin/mc-advancement.mjs?raw')) as { default: string })
+      .default;
+    expect(bundled).toBe(canonical); // 改了插件请同步两处（本守卫防漂移）
   });
 });

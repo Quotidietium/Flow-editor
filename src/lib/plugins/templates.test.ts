@@ -70,7 +70,7 @@ describe('plugin templates', () => {
     expect(importer.import?.import({ name: 'a.puml', text: 'just text' }, noopCtx)).toBeUndefined();
 
     const csv = await loadTemplate(byId.get('template.csv-exporter')?.source ?? '');
-    const payload = csv.export?.run(
+    const payload = await csv.export?.run(
       { code: 'flowchart TD\n  A --> B\n', config: '{}', svg: undefined },
       noopCtx
     );
@@ -78,7 +78,7 @@ describe('plugin templates', () => {
     expect(payload?.text).toContain('A,B');
 
     const ai = await loadTemplate(byId.get('template.ai-prompt-exporter')?.source ?? '');
-    const prompt = ai.export?.run(
+    const prompt = await ai.export?.run(
       { code: 'pie\n  "Dogs" : 1\n', config: '{}', svg: undefined },
       noopCtx
     );

@@ -21,7 +21,10 @@ export default defineConfig(
     'installer/app/site/**',
     'installer/dist/**',
     'installer/.cache/**',
-    'installer/.smoke/**'
+    'installer/.smoke/**',
+    // 内置插件源码 = plugins/examples 的逐字节副本（单测守卫钉住一致），
+    // 作为打包资产不做 lint（sort-keys 规则在 src 系配置下崩溃）
+    'src/lib/plugins/builtin/**'
   ]),
   js.configs.recommended,
   ...ts.configs.strict,
