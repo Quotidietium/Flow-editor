@@ -22,6 +22,34 @@ const electronPkg = JSON.parse(
 );
 const version = electronPkg.version;
 
+// 缓存优先：@electron/get 的缓存键含下载 URL（换镜像/直连即 miss → 强制
+// 联网），而代理拦截 TLS 的环境会握手失败。同版本 zip 已在缓存目录时
+// 直接短路（离线可构建，与 fetch-toolchain 的本机优先策略同哲学）。
+const wanted = `electron-v${version}-win32-x64.zip`;
+const findCached = (root) => {
+  if (!fs.existsSync(root)) {
+    return undefined;
+  }
+  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+    const p = path.join(root, entry.name);
+    if (entry.isDirectory()) {
+      const hit = findCached(p);
+      if (hit) {
+        return hit;
+      }
+    } else if (entry.name === wanted && fs.statSync(p).size > 50_000_000) {
+      return p;
+    }
+  }
+  return undefined;
+};
+const cached = findCached(cacheRoot);
+if (cached) {
+  console.log(`cache hit: ${cached}`);
+  console.log(cached);
+  process.exit(0);
+}
+
 const request = {
   arch: 'x64',
   artifactName: 'electron',
