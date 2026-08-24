@@ -217,15 +217,6 @@ try {
   } else {
     console.log('SKIP  reload 探测（此构建控制台偶发吞行，/reload 不可稳定驱动）');
   }
-  const { readdirSync } = await import('node:fs');
-  let dirDump = '目录不存在';
-  if (existsSync(pluginDataDir)) {
-    try {
-      dirDump = readdirSync(pluginDataDir).join(',') || '空';
-    } catch {
-      dirDump = '读取失败';
-    }
-  }
   check('reload 全程无异常栈', !/Exception[\s\S]{0,120}dev\.floweditor\.flowtest/.test(reloadLog));
 
   const full = readLog();
