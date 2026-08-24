@@ -4101,9 +4101,45 @@ const FRONTEND_HTML = `<!doctype html>
 
       var treeFilter = '';
 
+      // 结构操作后清过滤（新节点默认标签不匹配旧词会被隐藏，形似添加失败）；
+      // 搜索框常驻后其显示文本必须一并清空（此前靠整体重建顺带清掉）
+      function clearTreeFilter() {
+        treeFilter = '';
+        var sb = document.getElementById('treeSearch');
+        if (sb) { sb.value = ''; }
+      }
+
+      // 树搜索框常驻、不随列表重建销毁：输入元素若在输入法合成（拼音）
+      // 中途被替换，合成会话即被打断、已键内容异常提交——此前每次 oninput
+      // 都整体重建 #tree（含输入框），中文搜索必断。现在只重建列表容器，
+      // 输入框与焦点/光标/合成状态跨重建天然保持。
+      var treeUi = null;
+      function ensureTreeUi() {
+        if (treeUi && document.getElementById('treeSearch')) { return treeUi; }
+        var host = $('tree');
+        host.textContent = '';
+        var sb = document.createElement('input');
+        sb.type = 'text';
+        sb.id = 'treeSearch';
+        sb.placeholder = '搜索成就…';
+        sb.setAttribute('style', 'width:100%;margin-bottom:8px;padding:5px 8px;background:#15151a;color:#e8e8ec;border:1px solid #3a3a46;border-radius:6px');
+        sb.oninput = function () {
+          treeFilter = sb.value;
+          renderTree();
+        };
+        var list = document.createElement('div');
+        list.id = 'treeList';
+        host.appendChild(sb);
+        host.appendChild(list);
+        treeUi = { list: list, search: sb };
+        return treeUi;
+      }
+
       function renderTree() {
+        var ui = ensureTreeUi();
+        var list = ui.list;
         var a = S.analysis;
-        var html = '<input type="text" id="treeSearch" placeholder="搜索成就…" value="' + esc(treeFilter) + '" style="width:100%;margin-bottom:8px;padding:5px 8px;background:#15151a;color:#e8e8ec;border:1px solid #3a3a46;border-radius:6px" />';
+        var html = '';
         if (a.tabs.length === 0) {
           html += '<p class="hint">尚无成就栏。点「初始化示例」或在主界面画布上画出成就树后点「重新读取」。</p>';
         }
@@ -4147,49 +4183,43 @@ const FRONTEND_HTML = `<!doctype html>
           html += '</div>';
         }
         html += '<div style="margin-top:10px"><button id="btnAddTab">+ 新增成就栏</button></div>';
-        $('tree').innerHTML = html;
+        // 重建前后保持列表滚动位置（字段编辑/过滤都会走到这里，滚动跳顶
+        // 会让长树里正在查看的位置丢失）
+        var top = list.scrollTop;
+        list.innerHTML = html;
         var activate = function (el, type) {
           return function () { S.sel = { id: el.getAttribute('data-' + type), type: type }; render(); };
         };
-        Array.prototype.forEach.call(document.querySelectorAll('[data-tab]'), function (el) {
+        Array.prototype.forEach.call(list.querySelectorAll('[data-tab]'), function (el) {
           el.onclick = activate(el, 'tab');
           el.onkeydown = function (e) {
             if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(el, 'tab')(); }
           };
         });
-        Array.prototype.forEach.call(document.querySelectorAll('[data-node]'), function (el) {
+        Array.prototype.forEach.call(list.querySelectorAll('[data-node]'), function (el) {
           el.onclick = activate(el, 'node');
           el.onkeydown = function (e) {
             if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(el, 'node')(); }
           };
         });
-        $('btnAddTab').onclick = addTab;
-        var searchBox = $('treeSearch');
-        if (searchBox) {
-          searchBox.oninput = function () {
-            treeFilter = searchBox.value;
-            renderTree();
-            var fresh = $('treeSearch');
-            if (fresh) {
-              fresh.focus();
-              fresh.setSelectionRange(fresh.value.length, fresh.value.length);
-            }
-          };
-          if (treeFilter) {
-            searchBox.focus();
-          }
-        }
+        var addTabBtn = list.querySelector('#btnAddTab');
+        if (addTabBtn) { addTabBtn.onclick = addTab; }
+        list.scrollTop = top;
       }
 
       function renderPanel() {
-        if (S.settings) { renderSettings(); return; }
+        // 重建前后保持面板滚动：长表单（属性+样式+战利品+触发器参数）里
+        // 编辑底部字段后跳回顶部，等于每次编辑都要重新滚下来
+        var top = $('panel').scrollTop;
+        if (S.settings) { renderSettings(); return restore(); }
         if (!S.sel) {
           $('panel').innerHTML = '<p class="hint">在左侧选择成就或成就栏进行编辑。结构（增删、连线）推荐回主界面可视化画布操作；此处编辑名称、图标、触发方式、奖励等全部元数据。</p>'
             + '<p class="hint">提示：画布里节点的<b>形状</b>对应框架类型（矩形=任务 / 圆角=目标 / 菱形=挑战），<b>连线</b>对应承接关系。</p>';
-          return;
+          return restore();
         }
-        if (S.sel.type === 'tab') { renderTabForm(S.sel.id); return; }
+        if (S.sel.type === 'tab') { renderTabForm(S.sel.id); return restore(); }
         renderNodeForm(S.sel.id);
+        function restore() { $('panel').scrollTop = top; }
       }
 
       function inputHtml(key, labelText, value, type, extra) {
@@ -4212,13 +4242,20 @@ const FRONTEND_HTML = `<!doctype html>
             + '栏图标、背景纹理、大满贯汇总成就请在左侧点击栏名进入「成就栏设置」编辑。</p>';
           rhtml += '</fieldset>';
           $('panel').innerHTML = rhtml;
+          // 事件时动态解析当前代（与 bindNodeForm 同款防线）：值类编辑不再
+          // 整页重渲，闭包 n 在 rebuildCode 后会变孤儿——第二项编辑必须
+          // 重新查找当前代节点
+          var curRoot = function () { return findNode(id); };
           Array.prototype.forEach.call($('panel').querySelectorAll('[data-k]'), function (el) {
             el.onchange = function () {
+              var node = curRoot();
+              if (!node) { render(); return; }
               var k = el.getAttribute('data-k');
-              if (k === 'label') { n.label = el.value; }
-              if (k === 'id') { renameNode(n, el.value); return; }
+              if (k === 'label') { node.label = el.value; }
+              else if (k === 'id') { renameNode(node, el.value); return; }
               rebuildCode();
-              render();
+              renderTree();
+              renderIssues();
             };
           });
           return;
@@ -4381,14 +4418,21 @@ const FRONTEND_HTML = `<!doctype html>
             if (k === 'hidden') { meta.hidden = el.checked; }
             if (k === 'toast') { meta.toast = el.checked; }
             if (k === 'announce') { meta.announce = el.checked; }
-            if (k === 'xp') { meta.xp = Math.max(0, parseInt(el.value, 10) || 0); }
+            if (k === 'xp') {
+              meta.xp = Math.max(0, parseInt(el.value, 10) || 0);
+              if (String(meta.xp) !== el.value) { el.value = String(meta.xp); }
+            }
             if (k === 'styleFill' || k === 'styleStroke') {
               meta.style = { ...(meta.style && typeof meta.style === 'object' ? meta.style : {}) };
               meta.style[k === 'styleFill' ? 'fill' : 'stroke'] = el.value;
             }
             if (k === 'parent') { reparent(node, el.value); return; }
+            // 值类编辑只定向刷新（树徽章/标签 + 校验面板），不重建表单：
+            // 整面板 innerHTML 重建会吞掉「blur 后紧接着的点击」（用户要
+            // 点两下才能进下一个输入框/按钮）并让滚动跳顶
             rebuildCode();
-            render();
+            renderTree();
+            renderIssues();
           };
         });
         Array.prototype.forEach.call($('panel').querySelectorAll('[data-p]'), function (el) {
@@ -4400,7 +4444,10 @@ const FRONTEND_HTML = `<!doctype html>
             var spec = CORE.triggerById(meta.trigger || 'manual');
             var pspec = spec.params.find(function (p) { return p.key === k; });
             if (el.type === 'checkbox') { meta.params[k] = el.checked; }
-            else if (pspec && pspec.type === 'int') { meta.params[k] = parseInt(el.value, 10) || 0; }
+            else if (pspec && pspec.type === 'int') {
+              meta.params[k] = parseInt(el.value, 10) || 0;
+              if (String(meta.params[k]) !== el.value) { el.value = String(meta.params[k]); }
+            }
             else { meta.params[k] = el.value; }
             rebuildCode();
             renderIssues();
@@ -4444,7 +4491,10 @@ const FRONTEND_HTML = `<!doctype html>
             var k = el.getAttribute('data-l');
             if (!meta.loot[i]) { return; }
             if (k === 'item') { meta.loot[i].item = el.value.trim(); }
-            else { meta.loot[i][k] = Math.max(1, parseInt(el.value, 10) || 1); }
+            else {
+              meta.loot[i][k] = Math.max(1, parseInt(el.value, 10) || 1);
+              if (String(meta.loot[i][k]) !== el.value) { el.value = String(meta.loot[i][k]); }
+            }
             rebuildCode();
             renderIssues();
           };
@@ -4488,13 +4538,15 @@ const FRONTEND_HTML = `<!doctype html>
           if (e.to === n.id) { e.to = id; }
         });
         if (a.meta.nodes[n.id]) { a.meta.nodes[id] = a.meta.nodes[n.id]; delete a.meta.nodes[n.id]; }
-        // 根节点改名：tab.rootId 与成员表必须同步——否则 rebuildCode 用旧
-        // rootId 生成 subgraph，根掉出分组、显示退化为平铺连通分量
+        // 任意节点改名都要迁移成员表里的旧 id：非根成员不迁移会掉出
+        // subgraph → rebuildCode 平铺 + 相关边被丢 → 重建分析时自成独立
+        // 分量栏（「改名后跳栏」缺陷，子级被重挂到原栏根）；根节点另需
+        // 同步 rootId/rootNid，否则组 id 失配、显示退化为平铺连通分量
         a.tabs.forEach(function (t) {
+          t.members = t.members.map(function (m) { return m === n.id ? id : m; });
           if (t.rootId === n.id) {
             t.rootId = id;
             t.rootNid = CORE.normId(id);
-            t.members = t.members.map(function (m) { return m === n.id ? id : m; });
           }
         });
         var tabMeta0 = a.meta.tabs[n.id];
@@ -4569,7 +4621,7 @@ const FRONTEND_HTML = `<!doctype html>
           hostTab.members.push(id);
         }
         S.sel = { id: id, type: 'node' };
-        treeFilter = ''; // 结构操作后清过滤——新节点默认标签不匹配旧词会被隐藏
+        clearTreeFilter(); // 结构操作后清过滤——新节点默认标签不匹配旧词会被隐藏
         rebuildCode();
         render();
       }
@@ -4610,7 +4662,7 @@ const FRONTEND_HTML = `<!doctype html>
           nid: nid, params: {}, parent: null, shape: 'rect', tab: nid
         });
         S.sel = { id: id, type: 'tab' };
-        treeFilter = ''; // 同上：新栏需立即可见
+        clearTreeFilter(); // 同上：新栏需立即可见
         rebuildCode();
         render();
       }
@@ -4682,10 +4734,15 @@ const FRONTEND_HTML = `<!doctype html>
             if (k === 'label') { root.label = el.value; }
             else if (k === 'id') { renameNode(root, el.value); return; }
             else if (k === 'completionist') { tm.completionist = el.checked; }
-            else if (k === 'cxp') { tm.completionistXp = Math.max(0, parseInt(el.value, 10) || 0); }
+            else if (k === 'cxp') {
+              tm.completionistXp = Math.max(0, parseInt(el.value, 10) || 0);
+              if (String(tm.completionistXp) !== el.value) { el.value = String(tm.completionistXp); }
+            }
             else { tm[map[k]] = el.value; }
+            // 值类编辑定向刷新（同 bindNodeForm）：表单不重建，滚动/焦点不动
             rebuildCode();
-            render();
+            renderTree();
+            renderIssues();
           };
         });
         $('btnAddToTab').onclick = function () {
@@ -4746,11 +4803,17 @@ const FRONTEND_HTML = `<!doctype html>
             // 孤儿闭包家族第三处：本 handler 只 renderIssues 不整页重渲，
             // 闭包 m 在首次编辑的 rebuildCode 后即成孤儿——第二项编辑曾写
             // 进旧代 meta 静默丢失。事件时取当前代。
-            var cur = S.analysis.meta;
-            if (k === 'sound') { cur.sound = el.checked; }
-            else if (k === 'autosaveSeconds') { cur[k] = parseInt(el.value, 10) || 300; } // 清空回退默认，0/负值由 analyze 钳制
-            else if (k === 'packFormat') { cur[k] = parseInt(el.value, 10) || 94; }
-            else { cur[k] = el.value; }
+              var cur = S.analysis.meta;
+              if (k === 'sound') { cur.sound = el.checked; }
+              else if (k === 'autosaveSeconds') { // 清空回退默认，0/负值由 analyze 钳制
+                cur[k] = parseInt(el.value, 10) || 300;
+                if (String(cur[k]) !== el.value) { el.value = String(cur[k]); }
+              }
+              else if (k === 'packFormat') {
+                cur[k] = parseInt(el.value, 10) || 94;
+                if (String(cur[k]) !== el.value) { el.value = String(cur[k]); }
+              }
+              else { cur[k] = el.value; }
             rebuildCode();
             renderIssues();
           };
@@ -5025,7 +5088,7 @@ export default {
   id: 'flow.mc-advancement',
   name: 'MC 进度设计器',
   permissions: ['import:file', 'export:format', 'ui:frontend'],
-  version: '1.10.0'
+  version: '1.10.1'
 };
 
 // 单测钩子（不改变插件运行时行为）

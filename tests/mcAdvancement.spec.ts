@@ -307,6 +307,98 @@ test.describe('窄视口', () => {
   });
 });
 
+test('MC 设计器：非根节点改名不跳栏（成员表同步缺陷回归）', async ({ editPage, page }) => {
+  await editPage.view.waitFor({ state: 'visible' });
+  await installDesigner(page);
+  page.on('dialog', (dialog) => void dialog.accept());
+
+  await page.getByRole('button', { name: /打开 MC 进度设计器/ }).click();
+  await expect(page.getByTestId('plugin-manager')).toHaveCount(0, { timeout: 10_000 });
+  const frame = page.frameLocator('iframe[title="插件前端"]');
+  await frame.getByRole('button', { name: '初始化示例' }).click();
+  await frame.getByText('🏆 示例成就').waitFor({ timeout: 10_000 });
+  await expect(frame.getByText('✓ 校验通过，可以导出')).toBeVisible();
+
+  // 选中非根节点（愚公移山 = block_breaker，有父级）改名
+  await frame.getByText('愚公移山').click();
+  await frame.locator('input[data-k="id"]').fill('yugong');
+  await frame.locator('input[data-k="id"]').blur();
+
+  // 缺陷形态：改名节点掉出 subgraph → 重建分析后自成独立分量栏（第二个
+  // tab-block + 原栏徽章数缩水）。修复后仍是一个栏、两个成就。
+  await expect(frame.locator('.tab-block')).toHaveCount(1);
+  await expect(frame.locator('.badge')).toHaveText('2 成就');
+  await expect(frame.getByText('愚公移山')).toBeVisible(); // 仍在原栏树里
+  await expect(frame.getByText('✓ 校验通过，可以导出')).toBeVisible();
+
+  // 写回：subgraph 只有一个、改名 id 在其中；再读回结构完整
+  await frame.getByRole('button', { name: '写回编辑器' }).click();
+  await expect
+    .poll(() => page.evaluate(() => window.__FLOW_EDITOR_STATE__?.().code ?? ''))
+    .toContain('yugong');
+  const written = await page.evaluate(() => window.__FLOW_EDITOR_STATE__?.().code ?? '');
+  expect((written.match(/subgraph/g) ?? []).length).toBe(1);
+  await frame.getByRole('button', { name: '重新读取' }).click();
+  await frame.getByText('🏆 示例成就').waitFor({ timeout: 10_000 });
+  await expect(frame.locator('.tab-block')).toHaveCount(1);
+  await expect(frame.locator('.badge')).toHaveText('2 成就');
+  await expect(frame.getByText('✓ 校验通过，可以导出')).toBeVisible();
+});
+
+test('MC 设计器：字段编辑不打断输入（定向刷新 + 滚动/输入框保持）', async ({ editPage, page }) => {
+  await editPage.view.waitFor({ state: 'visible' });
+  await installDesigner(page);
+  page.on('dialog', (dialog) => void dialog.accept());
+
+  await page.getByRole('button', { name: /打开 MC 进度设计器/ }).click();
+  await expect(page.getByTestId('plugin-manager')).toHaveCount(0, { timeout: 10_000 });
+  const frame = page.frameLocator('iframe[title="插件前端"]');
+  await frame.getByRole('button', { name: '初始化示例' }).click();
+  await frame.getByText('🏆 示例成就').waitFor({ timeout: 10_000 });
+
+  // 树搜索框常驻：给元素打标记，经历一次选中/重渲后标记仍在（此前输入框
+  // 随列表整体重建被销毁——中文输入法合成会被打断，标记即丢失）
+  const search = frame.locator('#treeSearch');
+  await search.evaluate((el) => el.setAttribute('data-marker', 'persistent'));
+  await frame.getByText('愚公移山').click();
+  await expect(frame.getByText('成就属性')).toBeVisible();
+  await expect(frame.locator('#treeSearch[data-marker="persistent"]')).toHaveCount(1);
+  // 过滤输入后焦点仍在搜索框内（不被重建夺走）
+  await search.fill('mine');
+  expect(await search.evaluate((el) => document.activeElement === el)).toBe(true);
+  await search.fill('');
+
+  // 加两条战利品行撑长表单，保证 #panel 可滚动
+  await frame.getByRole('button', { name: '+ 添加物品' }).click();
+  await frame.getByRole('button', { name: '+ 添加物品' }).click();
+  const panel = frame.locator('#panel');
+  expect(await panel.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+  await panel.evaluate((el) => {
+    el.scrollTop = 60;
+  });
+
+  // 编辑底部字段（描述）：先填值（Playwright 的 actionability 会自动滚动
+  // 到目标元素），再把面板滚到底，blur 触发 onchange——定向刷新路径下
+  // 面板不重建，滚动保持（此前整面板重建会跳回顶部）
+  const descInput = frame.locator('input[data-k="desc"]');
+  await descInput.fill('编辑后滚动应保持');
+  await panel.evaluate((el) => {
+    el.scrollTop = el.scrollHeight;
+  });
+  const scrolledTo = await panel.evaluate((el) => el.scrollTop);
+  expect(scrolledTo).toBeGreaterThan(0);
+  await descInput.blur();
+  await expect.poll(() => panel.evaluate((el) => el.scrollTop)).toBe(scrolledTo);
+  // 修改生效但表单未重建（同一输入框仍持有值）
+  await expect(descInput).toHaveValue('编辑后滚动应保持');
+
+  // 写回验证编辑确实进了代码
+  await frame.getByRole('button', { name: '写回编辑器' }).click();
+  await expect
+    .poll(() => page.evaluate(() => window.__FLOW_EDITOR_STATE__?.().code ?? ''))
+    .toContain('编辑后滚动应保持');
+});
+
 test('MC 设计器：校验面板问题点击/键盘定位（循环 54/58）', async ({ editPage, page }) => {
   await editPage.view.waitFor({ state: 'visible' });
   await installDesigner(page);
