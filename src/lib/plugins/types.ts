@@ -143,7 +143,7 @@ export interface FlowPlugin extends PluginManifest {
 /** Stored plugin record (source text + user toggles). */
 export interface InstalledPlugin {
   manifest: PluginManifest;
-  /** Raw module source, re-imported from a blob URL at load time. */
+  /** Raw module source, re-imported from a data: URL at load time. */
   source: string;
   enabled: boolean;
   installedAt: string;
