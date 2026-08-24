@@ -130,8 +130,10 @@ test('MC 设计器识别多成就栏图（两个连通分量 = 两个标签页�
   await expect(frame.locator('.node-row')).toContainText('战斗狂人');
   await frame.locator('#treeSearch').fill('zzz-no-match');
   await expect(frame.locator('.node-row')).toHaveCount(0);
-  await frame.locator('#treeSearch').fill('');
+  // Esc 清空过滤回全量（循环 73）；输入框同步为空
+  await frame.locator('#treeSearch').press('Escape');
   await expect(frame.locator('.node-row')).toHaveCount(3);
+  await expect(frame.locator('#treeSearch')).toHaveValue('');
 
   // 写回编辑器：成就栏输出为 subgraph 分组语法（2.0.133）
   await frame.getByRole('button', { name: '写回编辑器' }).click();

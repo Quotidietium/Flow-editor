@@ -942,6 +942,15 @@ const coreFactory = function () {
         } else {
           const existing = flow.nodes.find((n) => n.id === group.id);
           existing.label = group.label || existing.label;
+          // 组 id 与既有节点重名（其他 subgraph 内或组外游离）：该节点被
+          // 强制收编为本栏根——归属迁移、名称被栏名覆盖、原连线按跨栏
+          // 忽略。曾完全静默（用户只见节点消失/莫名多栏），此处显式告知
+          if (flow.groupOf.get(group.id) !== group.id) {
+            warnings.push({
+              msg: `subgraph「${group.label}」的 id「${group.id}」与既有节点重名：该节点已被收编为本栏根（原归属与名称被栏名覆盖），指向它的连线按跨栏忽略——请把 subgraph id 与节点 id 区分开`,
+              tabId: group.id
+            });
+          }
         }
         flow.groupOf.set(group.id, group.id);
       }
@@ -4126,6 +4135,15 @@ const FRONTEND_HTML = `<!doctype html>
         sb.oninput = function () {
           treeFilter = sb.value;
           renderTree();
+        };
+        // Esc 清空过滤（大图里清词回全量是高频动作）；合成期间 Esc 属于
+        // 取消候选词，不清过滤
+        sb.onkeydown = function (e) {
+          if (e.key === 'Escape' && !e.isComposing) {
+            sb.value = '';
+            treeFilter = '';
+            renderTree();
+          }
         };
         var list = document.createElement('div');
         list.id = 'treeList';

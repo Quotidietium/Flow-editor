@@ -890,6 +890,29 @@ describe('subgraph 成就栏（循环 11）', () => {
     expect(a.nodes.find((n) => n.id === 'mine')?.tab).toBe('adv_main');
   });
 
+  it('subgraph id 与其他组的节点重名：收编为栏根时显式警告（循环 73）', () => {
+    // 手写代码形态：shared 先作为甲栏成员出现，随后又被用作乙栏的组 id——
+    // 该节点被强制收编为乙栏根（归属迁移、名称被栏名覆盖、r1→shared 按跨
+    // 栏忽略）。此前完全静默，用户只见节点从甲栏消失
+    const collide = `flowchart TD
+    subgraph a["甲栏"]
+        r1["根1"] --> shared["共有节点"]
+    end
+    subgraph shared["乙栏"]
+        c1["成员1"]
+    end
+`;
+    const a = CORE.analyze(collide);
+    expect(a.ok).toBe(true);
+    expect(a.tabs.map((t) => t.rootId)).toEqual(['a', 'shared']);
+    expect(a.tabs[0].members).toEqual(['a', 'r1']); // shared 已离开甲栏
+    expect(a.warnings.some((w) => w.msg.includes('与既有节点重名'))).toBe(true);
+    expect(a.warnings.some((w) => w.msg.includes('已被收编为本栏根'))).toBe(true);
+    // 组 id 唯一（自建代码 / 本插件生成的常态）不触发该警告
+    const normal = CORE.analyze(groupedCode);
+    expect(normal.warnings.some((w) => w.msg.includes('与既有节点重名'))).toBe(false);
+  });
+
   it('subgraph 与游离节点混用：游离节点仍按连通分量成栏', () => {
     const mixed = `${groupedCode}    loner_root[孤栏]\n    loner_root --> loner_child[孤民]\n`;
     const a = CORE.analyze(mixed);
