@@ -1,6 +1,6 @@
 # Flow 编辑器 API 参考
 
-> 版本：2.0.96｜适用分支：`feat/perf-optimization`（栈尖）
+> 版本：2.0.138｜适用分支：`develop`（2026-08-25 同步）
 > 本文面向**开发与代码维护**：按分层列出全部公开 API 的签名、语义、关键
 > 不变式与测试指针。插件面向最终用户的写法见 `note/plugin-api.md`；
 > 架构分析见 `note/codebase-analysis/`。
@@ -270,7 +270,7 @@ markdownOf(code): string                                       // ```mermaid fen
 stateFileOf(code, mermaid): StateFile                          // {version:1, code, mermaid, savedAt}
 parseOpenedFile(name, text): { code, mermaid? } | undefined    // .json 状态/.md 剥代码块/裸源码
 downloadTextFile(filename, text, mime): void                   // base64 data:URL（blob 通道在部分内嵌 Chromium 不可捕获）
-openTextFile(accept): Promise<{ name, text } | undefined>      // 文件选择器
+openTextFile(accept): Promise<{ bytes, name, text } | undefined>  // 文件选择器；arrayBuffer 读取，bytes=原始 Uint8Array（2.0.132 起随打开事件下发插件，text 是有损 UTF-8 解码）
 ````
 
 「打开」流程：**插件 import 钩子优先** → `parseOpenedFile` 兜底 →
@@ -291,14 +291,29 @@ PDF/Markdown/源码/状态 JSON）在 `Actions.svelte`；插件格式经
 ```ts
 interface PluginManifest { id; name; version; description?; permissions?: PluginPermission[] }
 type PluginPermission = 'input:transform'|'import:file'|'export:format'|'ui:theme'|'ui:frontend'|'ai:mcp';
+interface ExportFormat {
+  id; label;
+  // run 可为 async（2.0.137；异步 rejection 与同步异常同样三振隔离，
+  // 如等待桌面 IPC 编译）；返回 undefined 前用 ctx.notify() 说明原因
+  // （引导类提示走 notify 不计三振，勿 throw）
+  run(input: { code; svg: string|undefined; config }, ctx):
+    { blob?: Blob; text?: string; mime; filename } | undefined | Promise<…>;
+}
 interface FlowPlugin extends PluginManifest {
   inputTransform?: { name; transform(code, source: 'bridge'|'file'|'url'): string };
-  import?: { extensions: string[]; name; import(file, ctx): {code, mermaid?}|undefined };
-  export?: { id; label; run(input, ctx): {blob?|text?, mime, filename}|undefined };
+  // import 可为 async（2.0.132）；file.bytes = 原始 Uint8Array（二进制格式，
+  // text 是有损 UTF-8 解码不可回转）
+  import?: { extensions: string[]; name;
+             import(file: { bytes?; name; text }, ctx):
+               { code; mermaid? } | undefined | Promise<…> };
+  export?: ExportFormat;    // 单导出项（旧字段）
+  exports?: ExportFormat[]; // 多导出项（2.0.137）；与旧 export 并存时数组优先（旧字段忽略不重复）
   theme?: { variables?: Record<string,string>; css?: string };
   frontend?: { url; sandbox? };
   activate?(ctx)?: void; deactivate?(): void;
 }
+interface InstalledPlugin { manifest; source; enabled; installedAt;
+                            builtin?: boolean }  // 内置插件标记（2.0.138，见 §7.2）
 interface PluginContext { getState(); setCode(code); setState(state); notify(msg);
   storage: { get<T>(key, fallback): T; set(key, value) }; getSvg() }
 ```
@@ -309,16 +324,17 @@ interface PluginContext { getState(); setCode(code); setState(state); notify(msg
 ### 7.2 注册表 `registry.svelte.ts`（runes 状态）
 
 ```ts
-loadRegistry(): Promise<void>          // 启动恢复（edit 页在 initHandler 之前调用）
-installPlugin(source): Promise<{ok, error?}>     // .mjs 源安装（blob import 校验）
+loadRegistry(): Promise<void>          // 启动恢复 + 内置插件播种（edit 页在 initHandler 之前调用）
+installPlugin(source): Promise<{ok, error?}>     // .mjs 源安装（data: URL 动态 import 校验，2.0.138 起——jsdom 无 URL.createObjectURL 亦可测）
 uninstallPlugin(id) / disablePlugin(id, reason?) / enablePlugin(id)
+                                       // uninstallPlugin 拒绝内置插件（同步守卫，仅可停用）
 runInputTransforms(code, source): string         // 链式（file/bridge/url 三入口均接线）
 findImportHandler(fileName)
 runImportHandler(fileName, text, bytes?): Promise<{code, mermaid?}|undefined>
        // 异步：handler 可为 async（rejection 同样隔离三振）；bytes=原始
        // Uint8Array（二进制格式；text 是有损 UTF-8 解码，2.0.132 起）
 pluginExportFormats(): (ExportFormat & {pluginId})[]
-runPluginExport(format): payload | undefined
+runPluginExport(format): Promise<payload | undefined>   // run 可 async（2.0.137，guardedAsync）
 pluginFrontends(): { id, name, sandbox?, url }[]
 anyPluginThemes() / reapplyThemes()
 listInstalled(): InstalledPlugin[]
@@ -331,6 +347,21 @@ unregisterAllPluginInstances()
 运行时保证：钩子错误隔离 + **连续 3 次失败自动停用**；存储命名空间
 `flow-plugin:<id>:<key>`；主题 `<style id="flow-plugin-theme-<id>">` 注入/
 移除；持久化键 `flowPlugins`。
+
+**内置插件（2.0.138）**：`BUILTIN_DEFINITIONS`（`registry.svelte.ts`）声明
+随包捆绑的插件（当前为 MC 进度设计器 `flow.mc-advancement`），源码经
+`?raw` import 内嵌进 bundle。`loadRegistry` 启动时 upsert 进持久化注册表：
+
+- **播种**：新环境默认安装且默认启用（`InstalledPlugin.builtin = true`）；
+- **升级刷新**：应用升级后捆绑源码/manifest 覆盖存储副本，**保留用户的
+  启停选择**（停用不复活）；用户曾手动安装的同 id 旧版会被收编为内置
+  （不产生重复记录）；
+- **不可卸载**：仅可停用（`uninstallPlugin` 同步守卫；管理器隐藏卸载按钮）。
+
+源码内嵌方式：`src/lib/plugins/builtin/mc-advancement.mjs` 是
+`plugins/examples/mc-advancement.mjs`（canonical）的**逐字节副本**——
+副本存在的原因是 Vite dev fs 中间件拒绝 src 外的 `?raw` 请求（403 实测）；
+字节一致性由单测守卫钉住（改插件必须同步两处，测试即拦）。
 
 ### 7.3 插件模板 `templates.ts`
 
@@ -350,9 +381,11 @@ export const installEditorApi = (): void;
 
 `setCode/setState` 先过 `runInputTransforms(code,'bridge')` 再进网关。
 
-**测试**：`plugins.test.ts` 16 用例 + `templates.test.ts` 4 用例 +
-`mcpConfig.test.ts` 3 用例；e2e `tests/plugins.spec.ts` 4 用例 +
-`tests/pluginManager.spec.ts` 5 用例。
+**测试**：`plugins.test.ts` 25 用例（含内置播种/禁卸载/字节守卫）+
+`templates.test.ts` 4 + `mcpConfig.test.ts` 3 + `configGate.test.ts` 5
+（配置安全门）+ `mcAdvancement.example.test.ts` 110（内置 MC 设计器核心）；
+e2e `tests/plugins.spec.ts` 5 + `tests/pluginManager.spec.ts` 5 +
+`tests/mcAdvancement.spec.ts` 11。
 
 ---
 
@@ -525,7 +558,13 @@ startAutoSave`——全部**写前重读**合并防跨标签丢更新，manual �
     javac 与 jar 必须同目录配对），永不自动下载/安装 JDK；渲染进程上传的
     源文件按白名单校验（`src/main/(java|resources)/…`、禁 `..`），仅作数据
     落盘、spawn 无 shell；工具链仅编译期 classpath（不含 Mojang 资产）。
+13. **内置插件双副本字节一致**——`plugins/examples/mc-advancement.mjs` 与
+    `src/lib/plugins/builtin/mc-advancement.mjs` 必须逐字节相同（副本经
+    `?raw` 内嵌进 bundle）；单测守卫钉住，**改一处必须同步另一处**。内置
+    插件不可卸载仅可停用；升级刷新保留用户启停选择（语义见 §7.2）。
 
 ---
 
-_生成于 2026-08-21，对应 v2.0.96；签名摘自源码导出，可用 grep 复核。_
+_生成于 2026-08-21（v2.0.96）；2026-08-25 同步至 v2.0.138（插件 `exports[]`/异步
+run/内置机制、`openTextFile` bytes、不变式 13、测试指针）。签名摘自源码导出，
+可用 grep 复核。_
