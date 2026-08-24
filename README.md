@@ -1,9 +1,8 @@
-[![Join our Discord!](https://img.shields.io/static/v1?message=join%20chat&color=9cf&logo=discord&label=discord)](https://discord.gg/sKeNQX4Wtj)
-[![Netlify Status](https://api.netlify.com/api/v1/badges/27fa023d-7c73-4a3f-9791-b3b657a47100/deploy-status)](https://app.netlify.com/sites/mermaidjs/deploys)
+# Flow 编辑器（Flow-editor）
 
-# Mermaid Live Editor
-
-Edit, preview and share mermaid charts/diagrams.
+画图、实时预览、分享 Mermaid 图表的**全离线**编辑器。本仓库是
+[mermaid-live-editor](https://github.com/mermaid-js/mermaid-live-editor)
+的 Fork：深度汉化，并扩展了可视化编辑器、插件系统与 Windows 桌面版。
 
 ## 许可证与 Fork 说明（License & Fork Notice）
 
@@ -23,117 +22,66 @@ MIT copyright notice (full text preserved in
 [THIRD-PARTY-NOTICES](./THIRD-PARTY-NOTICES)); code added by this fork is
 licensed under Apache-2.0 (see [LICENSE](./LICENSE)).
 
-## Features
+## 特性
 
-- Edit and preview flowcharts, sequence diagrams, gantt diagrams in real time.
-- Save the result as a svg
-- Get a link to a viewer of the diagram so that you can share it with others.
-- Get a link to edit the diagram so that someone else can tweak it and send a new link back
+- **全离线**：无埋点、无外部渲染服务、零自主网络请求（`tests/noNetwork.spec.ts`
+  守卫）；图表内容永不离开浏览器
+- **实时编辑**：代码/配置双编辑器 + 实时预览，支持 Mermaid 全部图类型；
+  URL 即分享（状态压缩进 hash，链接即完整图表）
+- **可视化编辑**：31 类图全部可编辑——节点-边族用类 draw.io 画布
+  （多选/撤销/正交路由/AutoConnect），分组列表/记录表格/缩进大纲/时序/git
+  各有专用编辑器
+- **插件系统**：输入管道、文件导入、导出格式、主题、整页前端替换、MCP 桥
+  六个扩展点（钩子错误隔离，三振自动停用）；内置「MC 进度设计器」——画
+  流程图导出 Minecraft Paper 成就插件（Maven 工程 zip；桌面版一键编译
+  .jar，需用户自装 JDK 21+）
+- **桌面版**：`installer/` 产出 Windows NSIS 安装包，最终用户零前置依赖；
+  内嵌 MCP HTTP 服务（默认关闭、仅回环）供本地 AI 客户端直连
+- **界面全面汉化**；PWA 离线可用
 
-## Live demo
+## 环境要求
 
-You can try out a [live version](https://mermaid.live/).
+- [Node.js](https://nodejs.org/) ≥ 24.16
+- [pnpm](https://pnpm.io/) 包管理器（`corepack enable pnpm`）
 
-# Contributors are welcome!
-
-If you want to speed up the progress for mermaid-live-editor, join the Discord channel and contact knsv.
-
-## Docker
-
-### Run published image
-
-```bash
-docker run --platform linux/amd64 --publish 8000:8080 ghcr.io/mermaid-js/mermaid-live-editor
-```
-
-The published docker image is built using our default environment variables. You cannot override them when running the image. If you need to customize them, you will need to build the image yourself.
-
-### To configure renderer URL
-
-When building set the MERMAID_RENDERER_URL build argument to the rendering
-service.
-Example:
-Default is`https://mermaid.ink`.
-Set to empty string to disable PNG and SVG links under Actions
-
-### To configure Kroki Instance URL
-
-When building set the MERMAID_KROKI_RENDERER_URL build argument to your Kroki
-instance.
-Default is `https://kroki.io`
-Set to empty string to disable Kroki link under Actions
-
-### To configure Analytics
-
-When building set the MERMAID_ANALYTICS_URL build argument to your plausible instance, and MERMAID_DOMAIN to your domain.
-
-Default is empty, disabling analytics.
-
-### To enable Mermaid Chart links and promotion
-
-When building set the MERMAID_IS_ENABLED_MERMAID_CHART_LINKS build argument to `true`
-
-Default is empty, disabling button to save to Mermaid Chart and promotional banner.
-
-### To update the Security modal
-
-The modal shown on clicking the security link assumes analytics, renderer, Kroki
-and Mermaid chart are enabled. You can update it by modifying `Privacy.svelte`
-if you wish.
-
-### Development
-
-```bash
-docker compose up --build
-```
-
-Then open http://localhost:3000
-
-### Building and running images locally
-
-#### Build
-
-```bash
-docker build -t mermaid-js/mermaid-live-editor .
-```
-
-#### Run
-
-```bash
-docker run --detach --name mermaid-live-editor --publish 8080:8080 mermaid-js/mermaid-live-editor
-```
-
-Visit: <http://localhost:8080>
-
-#### Stop
-
-```bash
-docker stop mermaid-live-editor
-```
-
-## Setup
-
-Below link will help you making a copy of the repository in your local system.
-
-https://docs.github.com/en/get-started/quickstart/fork-a-repo
-
-## Requirements
-
-- [Node.js](https://nodejs.org/en/) current LTS version
-- [pnpm](https://pnpm.io/) package manager. Install with `corepack enable pnpm`
-
-## Development
+## 开发
 
 ```sh
 pnpm install
-pnpm dev -- --open
+pnpm dev -- --open   # http://localhost:3000
 ```
 
-This app is created with Svelte Kit.
+Windows 可直接运行 `start.ps1`（自动引导 pnpm 与依赖安装），
+Git Bash / Linux / macOS 用 `./start.sh`——详见 `note/start-script.md`。
 
-## Release
+开发者 API 参考见根目录 [`API.md`](./API.md)；设计文档与各版本改动记录在
+[`note/`](./note/)（每版一份 `note/release/<版本号>.md`）；Windows 安装包
+构建见 [`installer/README.md`](./installer/README.md)。
 
-When a PR is created targeting master, it will be built and deployed by Netlify.
-The URL will be indicated in a Comment in the PR.
+## Docker
 
-Once the PR is merged, it will automatically be released.
+```bash
+# 开发态（源码挂载 + 热重载）
+docker compose up --build        # http://localhost:3000
+
+# 生产镜像（静态站点 + nginx）
+docker build -t flow-editor .
+docker run --detach --name flow-editor --publish 8080:8080 flow-editor
+# 访问 http://localhost:8080 ；停止：docker stop flow-editor
+```
+
+> 本 Fork 已移除外部渲染（mermaid.ink / Kroki）、统计埋点与商业推广的全部
+> 构建期配置；镜像内只有静态站点本身，无任何外部服务依赖。
+> CI 会把 `master` 构建为 `latest`、`develop` 构建为 `nightly` 推送到本仓库
+> 的 ghcr.io 镜像。
+
+## 发布
+
+- 版本号见 `package.json`；每版改动记录于 `note/release/<版本号>.md`
+- GitHub Release（Tag = 版本号）附 `installer/build.ps1` 产出的 Windows
+  安装包 `Flow-Editor-Setup-<版本>.exe`（SMOKE 全链路验证后发布）
+
+## 致谢
+
+本项目基于 [mermaid-live-editor](https://github.com/mermaid-js/mermaid-live-editor)
+构建，感谢上游作者 Knut Sveidqvist、mermaid-js 社区及全体贡献者。
