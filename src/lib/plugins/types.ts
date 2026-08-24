@@ -147,4 +147,10 @@ export interface InstalledPlugin {
   source: string;
   enabled: boolean;
   installedAt: string;
+  /**
+   * Built-in plugin (2.0.138): seeded from the bundle at load, source
+   * refreshed on app upgrade (the user's enabled choice is preserved),
+   * and it cannot be uninstalled — only disabled.
+   */
+  builtin?: boolean;
 }

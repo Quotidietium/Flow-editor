@@ -104,7 +104,9 @@ test('uninstall asks for confirmation and removes the plugin', async ({ editPage
   await expect(uninstall).toHaveText('确认卸载？');
   await uninstall.click();
   await expect(page.getByTestId('plugin-card-demo.input-cleaner')).toHaveCount(0);
-  await expect(manager.getByText('尚未安装插件')).toBeVisible();
+  // 2.0.138：MC 进度设计器为内置插件——卸载用户插件后仍在（空态不可达）
+  await expect(page.getByTestId('plugin-card-flow.mc-advancement')).toBeVisible();
+  await expect(manager.getByText('尚未安装插件')).toHaveCount(0);
 });
 
 test('MCP tab lists bridge tools and manages the HTTP service config', async ({

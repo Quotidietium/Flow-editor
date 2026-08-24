@@ -11,12 +11,10 @@ test.use({ viewport: { height: 1080, width: 1920 } });
 
 const EXAMPLES = join(process.cwd(), 'plugins', 'examples');
 
+// 2.0.138 起 MC 进度设计器为内置插件（默认安装）；管理器打开即见卡片。
+// 文件安装同 id 插件的路径由 plugins.spec 覆盖（会被「已安装」拒绝）。
 const installDesigner = async (page: import('@playwright/test').Page) => {
   await page.getByTestId('plugin-manager-open').click();
-  const chooserPromise = page.waitForEvent('filechooser');
-  await page.getByTestId('plugin-install').click();
-  const chooser = await chooserPromise;
-  await chooser.setFiles(join(EXAMPLES, 'mc-advancement.mjs'));
   await page.getByTestId('plugin-card-flow.mc-advancement').waitFor({ timeout: 10_000 });
 };
 
@@ -445,4 +443,27 @@ test('MC 插件 JAR 导出项：菜单可见，网页版点击给出桌面版引
   await jarItem.click();
   await expect(page.getByText('仅在桌面版可用').first()).toBeVisible({ timeout: 10_000 });
   await expect(page.getByText(/mvn package/).first()).toBeVisible();
+});
+
+test('MC 进度设计器默认安装（内置，2.0.138）：徽章在册、无卸载按钮、可直接打开', async ({
+  editPage,
+  page
+}) => {
+  await editPage.view.waitFor({ state: 'visible' });
+  await page.getByTestId('plugin-manager-open').click();
+  const card = page.getByTestId('plugin-card-flow.mc-advancement');
+  await card.waitFor({ timeout: 10_000 });
+  // 内置徽章 + 无卸载按钮（两步确认入口不存在）
+  await expect(card.getByText('内置', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('plugin-uninstall-flow.mc-advancement')).toHaveCount(0);
+  // 详情页：同样无卸载、提示仅可停用
+  await page.getByTestId('plugin-info-flow.mc-advancement').click();
+  await expect(page.getByText('内置插件（仅可停用）')).toBeVisible();
+  await expect(page.getByTestId('plugin-uninstall-flow.mc-advancement')).toHaveCount(0);
+  // 无需任何安装动作即可打开设计器（内置默认启用）
+  await page.getByRole('button', { name: /打开 MC 进度设计器/ }).click();
+  await expect(page.getByTestId('plugin-manager')).toHaveCount(0, { timeout: 10_000 });
+  const frame = page.frameLocator('iframe[title="插件前端"]');
+  await frame.getByText('MC 进度设计器').first().waitFor({ timeout: 10_000 });
+  await page.getByTestId('plugin-frontend-exit').click();
 });

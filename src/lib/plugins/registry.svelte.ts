@@ -58,15 +58,13 @@ const makeContext = (id: string): PluginContext => {
 
 const loadModule = async (source: string): Promise<FlowPlugin | undefined> => {
   try {
-    const url = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
-    try {
-      const mod = (await import(/* @vite-ignore */ url)) as {
-        default?: FlowPlugin;
-      };
-      return mod.default;
-    } finally {
-      setTimeout(() => URL.revokeObjectURL(url), 10_000);
-    }
+    // data: URL imports work everywhere the blob path did (incl. jsdom, which
+    // lacks URL.createObjectURL — the registry is fully unit-testable now)
+    const url = `data:text/javascript;charset=utf-8,${encodeURIComponent(source)}`;
+    const mod = (await import(/* @vite-ignore */ url)) as {
+      default?: FlowPlugin;
+    };
+    return mod.default;
   } catch (error) {
     console.error(`[plugin] load failed: ${String(error)}`);
     return undefined;
@@ -117,8 +115,72 @@ const guardedAsync = async <T>(
   }
 };
 
+/**
+ * Built-in plugins (2.0.138): bundled with the app (site build AND the
+ * desktop installer package — the source is embedded via ?raw import, so
+ * whatever ships in the bundle ships enabled-by-default). Seeded into the
+ * persisted registry on first load; on upgrade the bundled source/manifest
+ * replaces the stored copy while the user's enabled choice is preserved.
+ * Built-ins cannot be uninstalled — only disabled.
+ *
+ * Canonical source lives in plugins/examples/mc-advancement.mjs; the copy
+ * under ./builtin/ exists because Vite's dev fs middleware won't serve
+ * ?raw imports from outside src/ — a unit test pins byte-equality so the
+ * two can never drift.
+ */
+const BUILTIN_DEFINITIONS: { id: string; load: () => Promise<string> }[] = [
+  {
+    id: 'flow.mc-advancement',
+    load: async () => (await import('./builtin/mc-advancement.mjs?raw')).default as string
+  }
+];
+
+const manifestOf = (instance: FlowPlugin): InstalledPlugin['manifest'] => ({
+  description: instance.description,
+  id: instance.id,
+  name: instance.name,
+  permissions: instance.permissions ?? [],
+  version: instance.version ?? '0.0.0'
+});
+
+const upsertBuiltins = async (): Promise<void> => {
+  let changed = false;
+  for (const def of BUILTIN_DEFINITIONS) {
+    const source = await def.load();
+    const existing = installed.find((p) => p.manifest.id === def.id);
+    // 已是内置（或用户曾手动装过同 id 插件）：捆绑版本为准，保留启用选择
+    const enabled = existing ? existing.enabled : true;
+    const instance = await loadModule(source);
+    if (!instance || instance.id !== def.id) {
+      console.error(`[plugin] builtin ${def.id} failed to load`);
+      continue;
+    }
+    const record: InstalledPlugin = {
+      builtin: true,
+      enabled,
+      installedAt: existing?.installedAt ?? String(Date.now()),
+      manifest: manifestOf(instance),
+      source
+    };
+    const same =
+      existing?.builtin === true &&
+      existing.enabled === record.enabled &&
+      existing.source === record.source &&
+      JSON.stringify(existing.manifest) === JSON.stringify(record.manifest);
+    if (same) {
+      continue;
+    }
+    installed = [...installed.filter((p) => p.manifest.id !== def.id), record];
+    changed = true;
+  }
+  if (changed) {
+    persist();
+  }
+};
+
 export const loadRegistry = async (): Promise<void> => {
   installed = readJSON<InstalledPlugin[]>(REGISTRY_KEY, []);
+  await upsertBuiltins();
   for (const record of installed) {
     const rt: RuntimePlugin = { errors: 0, installed: record, instance: undefined };
     runtimes.set(record.manifest.id, rt);
@@ -174,6 +236,11 @@ export const installPlugin = async (source: string): Promise<{ ok: boolean; erro
 };
 
 export const uninstallPlugin = (id: string): void => {
+  // 内置插件随应用分发，卸载后下次启动会重新播种——干脆禁止卸载（UI 同步隐藏）
+  if (installed.some((p) => p.manifest.id === id && p.builtin)) {
+    notify(`内置插件 ${id} 不可卸载（可停用）`);
+    return;
+  }
   const rt = runtimes.get(id);
   if (rt?.instance) {
     try {
