@@ -20,6 +20,7 @@ Gotchas:
 - If `.claude/worktrees/` contains repo copies, vitest picks up their test files too — scope with `pnpm vitest run --dir src`.
 - Local Playwright runs can be flaky under parallel workers; retry or use `--workers=1` before assuming a real failure.
 - CI runs lint, check, unit tests, and Playwright (against a production build) on PRs to master.
+- vitest/eslint passing does not imply type correctness — run `pnpm check` periodically when touching `.test.ts`/`.svelte.ts` files (12 svelte-check errors once accumulated unnoticed this way).
 
 ## Architecture
 
@@ -45,6 +46,14 @@ SvelteKit 2 + Svelte 5 (runes) SPA using `@sveltejs/adapter-static`. **`docs/` i
 ### Editors
 
 Two editor implementations behind `Editor.svelte`: Monaco for desktop (`DesktopEditor.svelte`; custom mermaid language, completions, and error markers in `monacoExtra.ts`) and CodeMirror for mobile (`MobileEditor.svelte`). Both edit either the diagram code or the mermaid config JSON depending on `editorMode`.
+
+### Plugins
+
+`src/lib/plugins/` hosts the plugin system (registry with error isolation + 3-strike disable, MCP postMessage bridge, templates; user-facing docs in `note/plugin-api.md`). `loadRegistry()` runs before `initHandler()` on the edit page. The MC advancement designer ships as a **built-in plugin**: `src/lib/plugins/builtin/mc-advancement.mjs` is a byte-exact copy of `plugins/examples/mc-advancement.mjs` (Vite dev 403s `?raw` imports from outside src) — **edit both copies or the byte-guard unit test fails**. Built-ins are seeded enabled on first run, refreshed on app upgrade while preserving the user's enable/disable choice, and cannot be uninstalled (disable only). Plugin templates (`templates.ts`) embed source in TS template literals — no raw backticks or `${` allowed.
+
+### Desktop installer
+
+`installer/` is a self-contained packaging workspace (own `package.json`, Electron + NSIS, `build.ps1` one-click; requires the repo's dev environment, end users need nothing). It packages `docs/` — the static site build — so rebuild the site before repackaging. Verified artifacts + smoke suite documented in `installer/README.md`.
 
 ### Security
 
