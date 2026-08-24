@@ -5,6 +5,24 @@
 
 Edit, preview and share mermaid charts/diagrams.
 
+## 许可证与 Fork 说明（License & Fork Notice）
+
+本项目（**Flow 编辑器 / Flow-editor**）Fork 自上游 MIT 许可项目
+[mermaid-live-editor](https://github.com/mermaid-js/mermaid-live-editor)。
+
+- 本仓库自身的代码以 **Apache License 2.0** 授权（见
+  [LICENSE](./LICENSE)）；
+- **源自上游的原始代码仍受其原 MIT 版权声明约束**（版权人 Knut
+  Sveidqvist 及上游贡献者），原许可证全文与版权声明保留于
+  [THIRD-PARTY-NOTICES](./THIRD-PARTY-NOTICES)。
+
+This repository is forked from the upstream MIT-licensed project
+[mermaid-live-editor](https://github.com/mermaid-js/mermaid-live-editor).
+Code originating from the upstream project remains governed by its original
+MIT copyright notice (full text preserved in
+[THIRD-PARTY-NOTICES](./THIRD-PARTY-NOTICES)); code added by this fork is
+licensed under Apache-2.0 (see [LICENSE](./LICENSE)).
+
 ## Features
 
 - Edit and preview flowcharts, sequence diagrams, gantt diagrams in real time.

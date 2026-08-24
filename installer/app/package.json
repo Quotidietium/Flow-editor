@@ -5,6 +5,6 @@
   "description": "Flow 编辑器（Mermaid 实时编辑/可视化编辑）离线桌面版",
   "main": "main.cjs",
   "author": "Flow Editor contributors",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "private": true
 }

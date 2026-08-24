@@ -2,7 +2,7 @@
   "name": "mermaid-live-editor",
   "version": "2.0.136",
   "type": "module",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "scripts": {
     "dev": "pnpm build:embed && vite dev",
     "dev:force": "MERMAID_LOCAL=true pnpm dev --force",
