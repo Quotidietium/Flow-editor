@@ -2277,7 +2277,7 @@ describe('循环 58：issue 行键盘可达（与树行同模式）+ 插件版�
     );
     expect(html).toContain('\' role="button" tabindex="0"'); // issueRow 输出
     expect(html).toContain("ev.key === 'Enter' || ev.key === ' '");
-    expect(plugin.version).toBe('1.10.1');
+    expect(plugin.version).toBe('1.10.2');
   });
 });
 

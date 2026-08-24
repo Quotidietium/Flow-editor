@@ -307,6 +307,94 @@ test.describe('窄视口', () => {
   });
 });
 
+test('MC 设计器：结构操作不变量（多栏改名/加子/改挂/写回往返，循环 72）', async ({
+  editPage,
+  page
+}) => {
+  await editPage.view.waitFor({ state: 'visible' });
+  await installDesigner(page);
+  page.on('dialog', (dialog) => void dialog.accept());
+
+  // 双栏 subgraph 图：冒险栏 r1→mine→deep，生活栏 r2→cook
+  await page.evaluate(async () => {
+    await window.__FLOW_EDITOR_API__?.setCode(
+      [
+        'flowchart TD',
+        '    subgraph adv["冒险栏"]',
+        '        r1["冒险起点"] --> mine["挖矿达人"] --> deep["深处探索"]',
+        '    end',
+        '    subgraph life["生活栏"]',
+        '        r2["生活起点"] --> cook["干饭人"]',
+        '    end'
+      ].join('\n')
+    );
+  });
+  await expect
+    .poll(() => page.evaluate(() => window.__FLOW_EDITOR_STATE__?.().code ?? ''))
+    .toContain('subgraph adv');
+
+  await page.getByRole('button', { name: /打开 MC 进度设计器/ }).click();
+  await expect(page.getByTestId('plugin-manager')).toHaveCount(0, { timeout: 10_000 });
+  const frame = page.frameLocator('iframe[title="插件前端"]');
+  await frame.getByRole('button', { name: '重新读取' }).click();
+  await frame.getByText('🏆 冒险栏').waitFor({ timeout: 10_000 });
+  await expect(frame.locator('.tab-block')).toHaveCount(2);
+  await expect(frame.getByText('✓ 校验通过，可以导出')).toBeVisible();
+
+  // 不变量 A：给链尾（非根、无子）改名——栏数与徽章不变
+  //（subgraph 模式下组 id=栏根，r1/r2 是无入边成员自动挂根：冒险栏 3 成就、生活栏 2 成就）
+  await frame.locator('.node-row[data-node="deep"]').click();
+  await frame.locator('input[data-k="id"]').fill('deep2');
+  await frame.locator('input[data-k="id"]').blur();
+  await expect(frame.locator('.tab-block')).toHaveCount(2);
+  await expect(frame.locator('.badge', { hasText: '3 成就' })).toHaveCount(1);
+  await expect(frame.locator('.badge', { hasText: '2 成就' })).toHaveCount(1);
+
+  // 不变量 B：给链中（有子级）改名——子级承接保留、仍在原栏
+  await frame.locator('.node-row[data-node="mine"]').click();
+  await frame.locator('input[data-k="id"]').fill('miner');
+  await frame.locator('input[data-k="id"]').blur();
+  await expect(frame.locator('.tab-block')).toHaveCount(2);
+  await expect(frame.locator('.node-row[data-node="deep2"]')).toBeVisible();
+
+  // Enter 即提交：描述输入后按 Enter（不 blur）应已进模型——写回后可见
+  await frame.locator('input[data-k="desc"]').fill('Enter提交的描述');
+  await frame.locator('input[data-k="desc"]').press('Enter');
+  await frame.getByRole('button', { name: '写回编辑器' }).click();
+  await expect
+    .poll(() => page.evaluate(() => window.__FLOW_EDITOR_STATE__?.().code ?? ''))
+    .toContain('Enter提交的描述');
+
+  // 不变量 C：链尾添加下级——徽章 +1、仍两栏
+  await frame.locator('.node-row[data-node="deep2"]').click();
+  await frame.getByRole('button', { name: '+ 添加下级成就' }).click();
+  await frame.getByText('新成就').first().waitFor({ timeout: 5000 });
+  await expect(frame.locator('.tab-block')).toHaveCount(2);
+  await expect(frame.locator('.badge', { hasText: '4 成就' })).toHaveCount(1);
+
+  // 不变量 D：改挂到栏根——栏数不变、校验仍通过
+  await frame.locator('.node-row[data-node="miner"]').click();
+  await frame.locator('select[data-k="parent"]').selectOption('r1');
+  await expect(frame.locator('.tab-block')).toHaveCount(2);
+  await expect(frame.getByText('✓ 校验通过，可以导出')).toBeVisible();
+
+  // 写回 → 重读 → 结构与名称完整往返（subgraph 两个、成员数稳定）
+  await frame.getByRole('button', { name: '写回编辑器' }).click();
+  await expect
+    .poll(() => page.evaluate(() => window.__FLOW_EDITOR_STATE__?.().code ?? ''))
+    .toContain('subgraph life');
+  const roundTrip = await page.evaluate(() => window.__FLOW_EDITOR_STATE__?.().code ?? '');
+  expect((roundTrip.match(/subgraph/g) ?? []).length).toBe(2);
+  expect(roundTrip).toContain('miner');
+  expect(roundTrip).toContain('deep2');
+  await frame.getByRole('button', { name: '重新读取' }).click();
+  await frame.getByText('🏆 冒险栏').waitFor({ timeout: 10_000 });
+  await expect(frame.locator('.tab-block')).toHaveCount(2);
+  await expect(frame.locator('.badge', { hasText: '4 成就' })).toHaveCount(1);
+  await expect(frame.locator('.badge', { hasText: '2 成就' })).toHaveCount(1);
+  await expect(frame.getByText('✓ 校验通过，可以导出')).toBeVisible();
+});
+
 test('MC 设计器：非根节点改名不跳栏（成员表同步缺陷回归）', async ({ editPage, page }) => {
   await editPage.view.waitFor({ state: 'visible' });
   await installDesigner(page);

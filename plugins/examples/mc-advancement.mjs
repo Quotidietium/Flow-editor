@@ -4227,6 +4227,23 @@ const FRONTEND_HTML = `<!doctype html>
           + '<input type="' + type + '" data-k="' + key + '" value="' + esc(value) + '"' + (extra || '') + ' /></div>';
       }
 
+      // 文本/数值输入 Enter 即提交（blur 触发 change）：面板无 <form>，
+      // 此前按 Enter 没有任何反馈，用户常以为已保存而直接离开。输入法
+      // 合成期间（拼音选词确认的 Enter）不得触发——isComposing 与
+      // keyCode 229 双保险。
+      function bindEnterCommit(scope) {
+        Array.prototype.forEach.call(
+          scope.querySelectorAll('input[type=text],input[type=number]'),
+          function (el) {
+            el.onkeydown = function (e) {
+              if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) {
+                el.blur();
+              }
+            };
+          }
+        );
+      }
+
       function renderNodeForm(id) {
         var n = findNode(id);
         if (!n) { S.sel = null; renderPanel(); return; }
@@ -4258,6 +4275,7 @@ const FRONTEND_HTML = `<!doctype html>
               renderIssues();
             };
           });
+          bindEnterCommit($('panel'));
           return;
         }
         var spec = CORE.triggerById(n.meta.trigger);
@@ -4519,6 +4537,7 @@ const FRONTEND_HTML = `<!doctype html>
             render();
           };
         }
+        bindEnterCommit($('panel'));
       }
 
       function renameNode(n, newId) {
@@ -4749,6 +4768,7 @@ const FRONTEND_HTML = `<!doctype html>
           var root = findNode(rootId);
           if (root) { addNode(root); }
         };
+        bindEnterCommit($('panel'));
         $('btnDelTab').onclick = function () {
           var a = S.analysis;
           var tab = a.tabs.find(function (t) { return t.rootId === rootId; });
@@ -4818,6 +4838,7 @@ const FRONTEND_HTML = `<!doctype html>
             renderIssues();
           };
         });
+        bindEnterCommit($('panel'));
         $('btnBack').onclick = function () { S.settings = false; render(); };
       }
 
@@ -4836,7 +4857,11 @@ const FRONTEND_HTML = `<!doctype html>
         a.errors.forEach(function (i) { html += issueRow('error', i); });
         a.warnings.forEach(function (i) { html += issueRow('warn', i); });
         if (!html) { html = '<div class="issue ok">✓ 校验通过，可以导出</div>'; }
-        $('issues').innerHTML = html;
+        // 重建前后保持滚动（与面板/树同款：编辑中校验列表刷新不该把
+        // 正在查看的位置跳回顶部）
+        var issuesEl = $('issues');
+        var top = issuesEl.scrollTop;
+        issuesEl.innerHTML = html;
         $('btnExport').disabled = a.errors.length > 0;
         var jarBtn = $('btnJar');
         if (jarBtn) {
@@ -4872,6 +4897,7 @@ const FRONTEND_HTML = `<!doctype html>
             }
           };
         });
+        issuesEl.scrollTop = top;
       }
 
       function exportZipFile() {
@@ -5088,7 +5114,7 @@ export default {
   id: 'flow.mc-advancement',
   name: 'MC 进度设计器',
   permissions: ['import:file', 'export:format', 'ui:frontend'],
-  version: '1.10.1'
+  version: '1.10.2'
 };
 
 // 单测钩子（不改变插件运行时行为）
