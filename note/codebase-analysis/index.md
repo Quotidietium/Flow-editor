@@ -47,3 +47,24 @@ _本报告由 codebase-analyzer 生成；所有论断均附 `文件:行号` 证�
 3. **ZenUML 整页刷新 hack** → 保留（语义风险）。
 4. 其余新增优化：serde deflate L6 + 惰性序列化、mermaid.parse 代码级缓存、示例目录
    动态 chunk、可视化 model 扫描器/布局优化——详见各轮报告。
+
+---
+
+## 增补：2026-08-25 状态说明（v2.0.138）
+
+本报告主体分析于 2.0.67，此后项目经历大规模演进，**本报告不再逐节跟进**。
+当前状态的权威文档索引：
+
+- 每版改动：[`note/release/`](../release/)（2.0.68–2.0.138 逐版记录）
+- 插件系统：[`note/plugin-api.md`](../plugin-api.md)（六扩展点 + MCP 桥 +
+  2.0.138 内置插件机制）
+- MC 进度设计器：[`note/mc-advancement-plugin.md`](../mc-advancement-plugin.md)
+- 桌面安装包：[`installer/README.md`](../../installer/README.md)
+- 开发 API 参考：根目录 [`API.md`](../../API.md)（已同步 2.0.138）
+- 许可证：本仓库 Apache-2.0；源自上游的原始代码保留其 MIT 声明
+  （根目录 `THIRD-PARTY-NOTICES`，README 附 Fork 说明）
+
+重大形态变化（超出本报告分析范围）：隐私精简 + 全量汉化（2.0.69/2.0.74，
+零外联）、可视化编辑器全 31 类 + 分族专用编辑器重写（2.0.85、2.0.119–124）、
+插件系统 + 桌面 MCP HTTP 服务（2.0.92–128）、MC 进度设计器与桌面离线
+编译链（2.0.129–138）、Windows NSIS 安装包（2.0.127 起）。
