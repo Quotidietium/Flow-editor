@@ -27,34 +27,43 @@ Electron 主进程（main.cjs + server.cjs）───────────�
 - **目录自包含**：打包过程的一切文件（脚本、配置、依赖、缓存、产物）都在
   `installer/` 内。Electron 运行时 zip 经 `scripts/fetch-electron.mjs` 以编程
   `cacheRoot` 下载到 `.cache/electron-dist/`（npm postinstall 的默认缓存位于
-  用户目录且无环境变量可改道，故已通过 `pnpm.ignoredBuiltDependencies` 关闭），
-  再由 `build.ps1` 以 `-c.electronDist=` 传给 electron-builder。
+  用户目录且无环境变量可改道，故已通过 `pnpm.ignoredBuiltDependencies` 关闭）。
+  **2.0.138 起构建链固化四道防护**（杀软锁 rename / TLS 拦截代理环境实测）：
+  ① fetch-electron **缓存优先短路**——同版本 zip（>50MB）已在缓存目录即用，
+  不再联网（`@electron/get` 缓存键含 URL，换镜像/直连即 miss 强制联网，
+  拦截环境握手失败；与 fetch-toolchain 同哲学，离线可构建）；
+  ② zip **预解压为 `.cache/electron-unpacked/<版本>/` 目录**（按版本缓存，
+  解压后等 60s 扫描窗口），再以 `-c.electronDist=<目录>` 交给
+  electron-builder——builder 对目录形态走逐文件复制，避开「zip 解压→立即
+  rename」撞杀软锁的 EPERM；③ `NODE_OPTIONS=--use-system-ca`——NSIS/
+  winCodeSign 工具下载走系统证书库（Node 内置根证书不含拦截代理的 CA）；
+  ④ 打包前预清理 `dist/win-unpacked*` 残留目录（残留必撞 rename EPERM）。
 
 ## 目录结构
 
-| 路径                          | 说明                                                                  |
-| ----------------------------- | --------------------------------------------------------------------- |
-| `build.ps1`                   | 一键构建编排（见下）                                                  |
-| `package.json`                | 打包工程自身依赖（electron / electron-builder / sharp，精确锁版）     |
-| `electron-builder.yml`        | NSIS 安装包配置（辅助向导、per-user 免管理员、简体中文界面）          |
-| `app/package.json`            | 应用清单（版本号由 build.ps1 从根 package.json 同步）                 |
-| `app/main.cjs`                | Electron 主进程：内嵌服务器 + 窗口生命周期 + 单实例锁 + MCP IPC       |
-| `app/server.cjs`              | 静态文件服务器（MIME / SPA 兜底 / 目录穿越防护）                      |
-| `app/mcp-server.cjs`          | MCP HTTP 服务器（回环 JSON-RPC 门面，默认关闭）                       |
-| `app/mc-build.cjs`            | MC 成就插件离线编译（javac+jar；探测用户自装 JDK≥21，不捆绑 Java）    |
-| `app/preload.cjs`             | contextBridge 预加载：`__FLOW_DESKTOP__.mcp` 三方法 + `mcBuild.build` |
-| `app/site/`                   | 站点产物（`robocopy /MIR` 自 `docs/`，不入库）                        |
-| `scripts/build-icon.mjs`      | `static/favicon.png` → `resources/icon.ico`（多尺寸）                 |
-| `scripts/fetch-electron.mjs`  | Electron 运行时 zip 拉取到 `.cache/electron-dist/`                    |
-| `scripts/fetch-toolchain.mjs` | MC 编译工具链 12 个 jar（本机 .m 优先）→ `toolchain/` + 第三方声明    |
-| `scripts/test-mc-build.mjs`   | MC 离线编译器 Node 级探测（校验面/真实 javac/战利品文件，打包前必跑） |
-| `scripts/smoke.mjs`           | 冒烟测试：静默安装 → 启动探测（站点 + MCP + mc_build）→ 卸载          |
-| `scripts/test-mcp.mjs`        | MCP 服务器 Node 级探测（协议面与安全防线，打包前必跑）                |
-| `toolchain/`                  | MC 编译工具链（javac classpath；不入库，构建时拉取并随包分发）        |
-| `resources/icon.ico`          | 安装包/快捷方式图标（入库，可由脚本再生成）                           |
-| `dist/`                       | 最终产物（不入库）                                                    |
-| `.cache/`                     | Electron / electron-builder 二进制缓存（不入库，自包含）              |
-| `.smoke/`                     | 冒烟测试临时目录（不入库）                                            |
+| 路径                          | 说明                                                                                                                       |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `build.ps1`                   | 一键构建编排（见下）                                                                                                       |
+| `package.json`                | 打包工程自身依赖（electron / electron-builder / sharp，精确锁版）                                                          |
+| `electron-builder.yml`        | NSIS 安装包配置（辅助向导、per-user 免管理员、简体中文界面）                                                               |
+| `app/package.json`            | 应用清单（版本号由 build.ps1 从根 package.json 同步）                                                                      |
+| `app/main.cjs`                | Electron 主进程：内嵌服务器 + 窗口生命周期 + 单实例锁 + MCP IPC                                                            |
+| `app/server.cjs`              | 静态文件服务器（MIME / SPA 兜底 / 目录穿越防护）                                                                           |
+| `app/mcp-server.cjs`          | MCP HTTP 服务器（回环 JSON-RPC 门面，默认关闭）                                                                            |
+| `app/mc-build.cjs`            | MC 成就插件离线编译（javac+jar；探测用户自装 JDK≥21，不捆绑 Java）                                                         |
+| `app/preload.cjs`             | contextBridge 预加载：`__FLOW_DESKTOP__.mcp` 三方法 + `mcBuild.build`                                                      |
+| `app/site/`                   | 站点产物（`robocopy /MIR` 自 `docs/`，不入库）                                                                             |
+| `scripts/build-icon.mjs`      | `static/favicon.png` → `resources/icon.ico`（多尺寸）                                                                      |
+| `scripts/fetch-electron.mjs`  | Electron 运行时 zip 拉取到 `.cache/electron-dist/`                                                                         |
+| `scripts/fetch-toolchain.mjs` | MC 编译工具链 12 个 jar（本机 .m 优先）→ `toolchain/` + 第三方声明                                                         |
+| `scripts/test-mc-build.mjs`   | MC 离线编译器 Node 级探测（校验面/真实 javac/战利品文件，打包前必跑）                                                      |
+| `scripts/smoke.mjs`           | 冒烟测试：静默安装 → 启动探测（站点 + MCP + mc_build）→ 卸载                                                               |
+| `scripts/test-mcp.mjs`        | MCP 服务器 Node 级探测（协议面与安全防线，打包前必跑）                                                                     |
+| `toolchain/`                  | MC 编译工具链（javac classpath；不入库，构建时拉取并随包分发）                                                             |
+| `resources/icon.ico`          | 安装包/快捷方式图标（入库，可由脚本再生成）                                                                                |
+| `dist/`                       | 最终产物（不入库）                                                                                                         |
+| `.cache/`                     | Electron zip（`electron-dist/`）+ 预解压目录（`electron-unpacked/<版本>/`）+ electron-builder 二进制缓存（不入库，自包含） |
+| `.smoke/`                     | 冒烟测试临时目录（不入库）                                                                                                 |
 
 ## 用法
 
@@ -125,4 +134,11 @@ postMessage 桥（频道 `flow-editor`）暴露为 `http://127.0.0.1:<port>/`，
   扫描全部失败或站点文件缺失（重新打包可修复）。
 - **杀毒软件提示**：未签名安装包可能被 SmartScreen 提示「未知发布者」，属
   预期（代码签名证书需另行采购，与本工程无关）。
+- **构建报 `win-unpacked.tmp` rename EPERM**：本机杀软对「解压→立即
+  rename」持锁（曾四连复现）——build.ps1 已走预解压目录 + 预清理规避；
+  若仍出现，重跑一次或暂时放行构建目录。
+- **NSIS/winCodeSign 工具下载 TLS 失败**：TLS 拦截代理环境已由
+  `--use-system-ca` 处理（build.ps1 内置）；Electron 运行时换下载源后缓存
+  miss 属预期（`@electron/get` 缓存键含 URL），缓存目录已有同版本 zip 时
+  fetch-electron 会直接短路使用。
 - **构建期 Electron 下载慢**：`.\build.ps1 -UseMirror`。
