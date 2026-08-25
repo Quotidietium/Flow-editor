@@ -542,6 +542,7 @@ ${svgString}`);
           class="absolute right-0 z-20 mt-1 min-w-44 rounded-md border bg-popover p-1 text-xs text-popover-foreground shadow-md"
           data-testid="export-menu-list"
           onpointerdown={(e) => e.stopPropagation()}>
+          <div class="px-2 pt-1 pb-0.5 text-[10px] text-muted-foreground">图像</div>
           <button
             class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
             data-testid="download-PNG"
@@ -597,6 +598,7 @@ ${svgString}`);
             PDF 文档
           </button>
           <div class="my-1 border-t"></div>
+          <div class="px-2 pt-1 pb-0.5 text-[10px] text-muted-foreground">文档与数据</div>
           <button
             class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
             onclick={onDownloadMarkdown}>
@@ -614,8 +616,11 @@ ${svgString}`);
             onclick={onDownloadState}>
             状态文件（.json）
           </button>
-          {#each pluginExportFormats() as format (format.pluginId + ':' + format.id)}
+          {#if pluginExportFormats().length > 0}
             <div class="my-1 border-t"></div>
+            <div class="px-2 pt-1 pb-0.5 text-[10px] text-muted-foreground">插件导出</div>
+          {/if}
+          {#each pluginExportFormats() as format (format.pluginId + ':' + format.id)}
             <button
               class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
               data-testid="plugin-export-{format.id}"
