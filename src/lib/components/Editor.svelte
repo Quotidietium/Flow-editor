@@ -17,6 +17,17 @@
 
   let showError = $state(false);
 
+  // 桌面端错误条「定位到错误行」：经 bind:this 调用 DesktopEditor 暴露的
+  // revealPosition；移动端无 Monaco 标记体系，按钮不渲染。
+  let desktopEditor: { revealPosition?: (line: number, column: number) => void } | undefined =
+    $state();
+  const revealFirstError = () => {
+    const marker = validatedState.current.errorMarkers[0];
+    if (marker) {
+      desktopEditor?.revealPosition?.(marker.startLineNumber, marker.startColumn);
+    }
+  };
+
   const showErrorDebounced = debounce(() => {
     showError = true;
   }, 3000);
@@ -39,7 +50,7 @@
   {#if isMobile}
     <MobileEditor {onUpdate} {wordWrap} />
   {:else}
-    <DesktopEditor {onUpdate} {wordWrap} />
+    <DesktopEditor {onUpdate} {wordWrap} bind:this={desktopEditor} />
   {/if}
   {#if showError && validatedState.current.error instanceof Error}
     <div class="flex flex-col text-sm" data-testid={TID.errorContainer}>
@@ -48,6 +59,14 @@
           <ExclamationCircleIcon class="size-6 text-destructive" aria-hidden="true" />
           <p>语法错误</p>
         </div>
+        {#if !isMobile && validatedState.current.errorMarkers.length > 0}
+          <button
+            class="rounded px-2 py-0.5 text-xs hover:bg-slate-700"
+            data-testid="error-reveal"
+            onclick={revealFirstError}>
+            定位到错误行
+          </button>
+        {/if}
       </div>
       <output class="max-h-32 overflow-auto bg-muted p-2" name="mermaid-error" for="editor">
         <pre>{validatedState.current.error?.toString()}</pre>

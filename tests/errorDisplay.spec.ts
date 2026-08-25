@@ -50,6 +50,27 @@ test.describe('Error display tests', () => {
     await expect(squiggles.first()).toBeVisible();
   });
 
+  test('定位按钮把光标放进错误行并聚焦编辑器', async ({ editPage }) => {
+    await editPage.clearEditor();
+    await editPage.typeInEditor('graph TD\nA --> B -->');
+    await editPage.checkError('语法错误');
+
+    const revealButton = editPage.page.getByTestId('error-reveal');
+    await expect(revealButton).toBeVisible();
+    await revealButton.click();
+
+    // reveal + setPosition + focus 的可观察结果：编辑器重新获得焦点。
+    // Monaco 0.55 的输入域是 div[native-edit-context]（aria-label "Editor
+    // content"），不是 textarea——另一个 textarea 是 IME 隐藏域，不可聚焦。
+    await expect(editPage.editor.locator('[aria-label="Editor content"]')).toBeFocused();
+
+    // 修复代码后错误条消失，定位按钮随之消失
+    await editPage.clearEditor();
+    await editPage.typeInEditor('graph TD\nA --> B');
+    await expect(editPage.page.getByTestId('error-container')).toHaveCount(0);
+    await expect(revealButton).toHaveCount(0);
+  });
+
   // Clearing the editor must clear the persisted code too: swallowing the
   // empty edit left exports/share URL/history carrying the previous diagram
   // while the editor showed an empty document (MobileEditor always

@@ -34,6 +34,14 @@
     divElement?.classList.toggle('mermaid-dark', currentMode === 'dark');
   };
 
+  // 错误条「定位」入口：把标记行滚到视口中央、放置光标并聚焦编辑器。
+  export const revealPosition = (line: number, column: number): void => {
+    if (!editor) return;
+    editor.revealLineInCenter(line);
+    editor.setPosition({ column: Math.max(1, column), lineNumber: line });
+    editor.focus();
+  };
+
   $effect(() => {
     applyEditorTheme(mode.current);
   });
