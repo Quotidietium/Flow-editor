@@ -139,6 +139,32 @@ test.describe('配置模板', () => {
     await expect(page.getByText('森林手绘', { exact: true })).toHaveCount(0);
   });
 
+  test('悬停模板预览将修改的叶子键（旧值 → 新值）', async ({ page, editPage }) => {
+    await editPage.setEditorMode('配置');
+    await openPresetMenu(page);
+    const diff = page.getByTestId('config-preset-diff');
+    // 未悬停时的引导文案
+    await expect(diff).toContainText('悬停模板可预览将修改的配置项');
+
+    // 悬停深色主题：theme 由 default → dark
+    await page.getByTestId('config-preset-theme-dark').hover();
+    await expect(diff).toContainText('「深色主题」将修改');
+    await expect(diff).toContainText('theme: default → dark');
+
+    // 悬停已生效模板：明确告知无变化
+    await page.getByTestId('config-preset-theme-default').hover();
+    await expect(diff).toContainText('已全部生效，应用后无变化');
+
+    // 多叶子模板只列实际变化项（theme 叶子未变 → 不出现）
+    await page.getByTestId('config-preset-print-white').hover();
+    await expect(diff).toContainText('themeVariables.background: （未设置） → #ffffff');
+    await expect(diff).not.toContainText('theme: default → default');
+
+    // 预览不干扰应用本身
+    await page.getByTestId('config-preset-theme-dark').click();
+    await expect(page.locator('.monaco-editor')).toContainText('"theme": "dark"');
+  });
+
   test('JSON 损坏时保存我的模板被拒绝', async ({ page, editPage }) => {
     await editPage.setEditorMode('配置');
     await replaceConfig(page, '{ broken');

@@ -1,0 +1,10 @@
+# 成就达成阈值
+thresholds:
+  blocks-broken: 200
+  items-eaten: 30
+  monsters-killed: 30
+  fish-caught: 10
+  sky-height: 300
+
+# 进度自动保存间隔（秒）
+autosave-interval-seconds: 300

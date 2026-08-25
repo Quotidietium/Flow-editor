@@ -1,0 +1,7 @@
+name: ExampleAchievements
+version: '${project.version}'
+main: com.example.achievements.ExampleAchievementsPlugin
+bootstrapper: com.example.achievements.ExampleAchievementsBootstrap
+api-version: '1.21'
+description: 通过内置数据包在原版进度界面中添加独立自定义成就标签页的示例插件。
+authors: [Zurker]

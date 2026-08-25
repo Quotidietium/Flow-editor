@@ -1,0 +1,11 @@
+target/
+*.iml
+.idea/
+.vscode/
+.settings/
+.classpath
+.project
+dependency-reduced-pom.xml
+
+# 运行时产物（冒烟测试用服务器目录）
+run/

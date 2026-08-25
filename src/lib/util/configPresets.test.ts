@@ -5,6 +5,7 @@ import {
   CONFIG_PRESET_GROUPS,
   defaultConfigJson,
   deleteUserPreset,
+  diffConfigLeaves,
   formatConfigJson,
   isConfigSubset,
   loadUserPresets,
@@ -222,5 +223,61 @@ describe('user presets (自定义模板)', () => {
       saveUserPreset(`t${index}`, { theme: 'dark' });
     }
     expect(loadUserPresets()).toHaveLength(20);
+  });
+});
+
+describe('diffConfigLeaves（差异预览）', () => {
+  it('标量叶子：旧值/新值/变化标记', () => {
+    const entries = diffConfigLeaves({ theme: 'default' }, { theme: 'dark' });
+    expect(entries).toEqual([{ changed: true, from: 'default', path: 'theme', to: 'dark' }]);
+  });
+
+  it('当前缺少该键时 from 为 undefined（未设置）', () => {
+    const entries = diffConfigLeaves({}, { look: 'handDrawn' });
+    expect(entries).toEqual([{ changed: true, from: undefined, path: 'look', to: 'handDrawn' }]);
+  });
+
+  it('已生效的叶子 changed=false（字符串与数值同判）', () => {
+    const entries = diffConfigLeaves(
+      { flowchart: { nodeSpacing: 25, rankSpacing: 35 }, theme: 'dark' },
+      preset('compact').config
+    );
+    expect(entries.every((entry) => !entry.changed)).toBe(true);
+    const themeEntry = diffConfigLeaves({ theme: 'dark' }, { theme: 'dark' });
+    expect(themeEntry[0].changed).toBe(false);
+  });
+
+  it('嵌套对象递归出点路径，中间层缺失时叶子 from 全为未设置', () => {
+    const entries = diffConfigLeaves({ theme: 'default' }, preset('compact').config);
+    expect(entries.map((entry) => entry.path)).toEqual([
+      'flowchart.nodeSpacing',
+      'flowchart.rankSpacing'
+    ]);
+    expect(entries.every((entry) => entry.from === undefined && entry.changed)).toBe(true);
+    expect(entries[0].to).toBe('25');
+  });
+
+  it('数组按整体替换比较（顺序不同即变化），对象值 JSON 序列化展示', () => {
+    const same = diffConfigLeaves({ a: [1, 2] }, { a: [1, 2] });
+    expect(same[0].changed).toBe(false);
+    const reordered = diffConfigLeaves({ a: [2, 1] }, { a: [1, 2] });
+    expect(reordered[0]).toEqual({ changed: true, from: '[2,1]', path: 'a', to: '[1,2]' });
+  });
+
+  it('超长值截断展示（24 字符 + 省略号）', () => {
+    const long = 'x'.repeat(40);
+    const entries = diffConfigLeaves({}, { theme: long });
+    expect(entries[0].to).toBe(`${'x'.repeat(24)}…`);
+  });
+
+  it('字符串值不带引号展示，非字符串 JSON 序列化', () => {
+    const entries = diffConfigLeaves({}, { n: 25, s: 'dark' });
+    expect(entries.find((entry) => entry.path === 's')?.to).toBe('dark');
+    expect(entries.find((entry) => entry.path === 'n')?.to).toBe('25');
+  });
+
+  it('保持模板键序（预览行序与菜单语义一致）', () => {
+    const entries = diffConfigLeaves({}, preset('print-white').config);
+    expect(entries.map((entry) => entry.path)).toEqual(['theme', 'themeVariables.background']);
   });
 });

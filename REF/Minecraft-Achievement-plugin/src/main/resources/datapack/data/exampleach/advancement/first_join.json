@@ -1,0 +1,22 @@
+{
+  "parent": "exampleach:root",
+  "display": {
+    "icon": {
+      "id": "minecraft:compass"
+    },
+    "title": {
+      "text": "你好，世界！"
+    },
+    "description": {
+      "text": "第一次加入服务器"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": false
+  },
+  "criteria": {
+    "joined": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

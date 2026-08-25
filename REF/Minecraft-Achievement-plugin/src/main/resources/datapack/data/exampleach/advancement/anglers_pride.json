@@ -1,0 +1,22 @@
+{
+  "parent": "exampleach:root",
+  "display": {
+    "icon": {
+      "id": "minecraft:fishing_rod"
+    },
+    "title": {
+      "text": "姜太公再世"
+    },
+    "description": {
+      "text": "钓上 10 条鱼"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": false
+  },
+  "criteria": {
+    "fished_10": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

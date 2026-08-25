@@ -1,0 +1,22 @@
+{
+  "parent": "exampleach:root",
+  "display": {
+    "icon": {
+      "id": "minecraft:iron_sword"
+    },
+    "title": {
+      "text": "为民除害"
+    },
+    "description": {
+      "text": "击杀 30 只敌对生物"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": false
+  },
+  "criteria": {
+    "killed_30": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "parent": "exampleach:root",
+  "display": {
+    "icon": {
+      "id": "minecraft:cooked_beef"
+    },
+    "title": {
+      "text": "干饭人"
+    },
+    "description": {
+      "text": "累计进食 30 次"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": false
+  },
+  "criteria": {
+    "ate_30": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

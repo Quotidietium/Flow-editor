@@ -1,0 +1,49 @@
+{
+  "parent": "exampleach:root",
+  "display": {
+    "icon": {
+      "id": "minecraft:dragon_egg"
+    },
+    "title": {
+      "text": "大满贯！"
+    },
+    "description": {
+      "text": "解锁本页所有其他成就"
+    },
+    "frame": "challenge",
+    "hidden": true,
+    "show_toast": true,
+    "announce_to_chat": false
+  },
+  "criteria": {
+    "first_join": {
+      "trigger": "minecraft:impossible"
+    },
+    "block_breaker": {
+      "trigger": "minecraft:impossible"
+    },
+    "foodie": {
+      "trigger": "minecraft:impossible"
+    },
+    "monster_hunter": {
+      "trigger": "minecraft:impossible"
+    },
+    "anglers_pride": {
+      "trigger": "minecraft:impossible"
+    },
+    "sky_walker": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    ["first_join"],
+    ["block_breaker"],
+    ["foodie"],
+    ["monster_hunter"],
+    ["anglers_pride"],
+    ["sky_walker"]
+  ],
+  "rewards": {
+    "experience": 100
+  }
+}

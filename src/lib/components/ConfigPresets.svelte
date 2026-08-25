@@ -8,6 +8,7 @@
     CONFIG_PRESET_GROUPS,
     defaultConfigJson,
     deleteUserPreset,
+    diffConfigLeaves,
     formatConfigJson,
     isConfigSubset,
     loadUserPresets,
@@ -100,6 +101,16 @@
     userPresets = deleteUserPreset(preset.id);
     notify(`已删除模板「${preset.label}」`);
   };
+
+  /* ---------------- 差异预览：悬停/聚焦模板时列出将修改的叶子键 ---------------- */
+
+  // 保留「最后悬停」而非离开即清空：菜单内移动时预览不闪烁。
+  let previewPreset = $state<ConfigPreset | undefined>();
+  const previewEntries = $derived(
+    previewPreset ? diffConfigLeaves(currentConfig, previewPreset.config) : []
+  );
+  const changedEntries = $derived(previewEntries.filter((entry) => entry.changed));
+  const PREVIEW_MAX_ROWS = 4;
 </script>
 
 <Popover.Root>
@@ -118,6 +129,20 @@
         <Popover.Close
           data-testid="config-preset-user-{preset.id}"
           class="flex w-full flex-col rounded px-2 py-1 text-left hover:bg-accent"
+          onfocus={() =>
+            (previewPreset = {
+              config: preset.config,
+              hint: '',
+              id: preset.id,
+              label: preset.label
+            })}
+          onmouseenter={() =>
+            (previewPreset = {
+              config: preset.config,
+              hint: '',
+              id: preset.id,
+              label: preset.label
+            })}
           onclick={() =>
             applyPreset({ config: preset.config, hint: '', id: preset.id, label: preset.label })}>
           <span class="text-sm">{preset.label}</span>
@@ -172,6 +197,8 @@
         <Popover.Close
           data-testid="config-preset-{preset.id}"
           class="flex w-full flex-col rounded px-2 py-1 text-left hover:bg-accent"
+          onfocus={() => (previewPreset = preset)}
+          onmouseenter={() => (previewPreset = preset)}
           onclick={() => applyPreset(preset)}>
           <span class="flex items-center justify-between text-sm">
             <span>{preset.label}</span>
@@ -196,5 +223,28 @@
       onclick={resetDefault}>
       重置为默认
     </Popover.Close>
+    <Separator class="my-1" />
+    <!-- 差异预览：应用前告知会改哪些键（键路径: 旧值 → 新值），降低一键合并的不确定性 -->
+    <div class="px-2 py-1 text-xs" data-testid="config-preset-diff">
+      {#if previewPreset}
+        <div class="font-medium">「{previewPreset.label}」将修改：</div>
+        {#if changedEntries.length === 0}
+          <div class="text-muted-foreground">已全部生效，应用后无变化</div>
+        {:else}
+          {#each changedEntries.slice(0, PREVIEW_MAX_ROWS) as entry (entry.path)}
+            <div
+              class="truncate font-mono text-muted-foreground"
+              title="{entry.path}: {entry.from ?? '（未设置）'} → {entry.to}">
+              {entry.path}: {entry.from ?? '（未设置）'} → {entry.to}
+            </div>
+          {/each}
+          {#if changedEntries.length > PREVIEW_MAX_ROWS}
+            <div class="text-muted-foreground">…共 {changedEntries.length} 项变化</div>
+          {/if}
+        {/if}
+      {:else}
+        <div class="text-muted-foreground">悬停模板可预览将修改的配置项</div>
+      {/if}
+    </div>
   </Popover.Content>
 </Popover.Root>

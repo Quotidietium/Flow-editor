@@ -169,6 +169,55 @@ export const isConfigSubset = (current: unknown, preset: unknown): boolean => {
   return current === preset;
 };
 
+/* ---------------- 差异预览（悬停模板时展示「将修改哪些键」） ---------------- */
+
+export interface ConfigDiffEntry {
+  /** 应用后是否会变化（已生效的叶子为 false） */
+  changed: boolean;
+  /** 当前值的展示文本；未设置为 undefined */
+  from: string | undefined;
+  /** 点路径，如 flowchart.nodeSpacing */
+  path: string;
+  /** 模板将写入的值的展示文本 */
+  to: string;
+}
+
+const MAX_LEAF_TEXT = 24;
+
+const formatLeaf = (value: unknown): string => {
+  const text = typeof value === 'string' ? value : JSON.stringify(value);
+  return text.length > MAX_LEAF_TEXT ? `${text.slice(0, MAX_LEAF_TEXT)}…` : text;
+};
+
+/**
+ * 叶子级差异：按模板键序列出每个叶子在当前配置中的旧值与新值。
+ * 与 deepMerge 同语义——模板里的普通对象递归、数组/标量整体覆盖。
+ */
+export const diffConfigLeaves = (
+  current: unknown,
+  preset: Record<string, unknown>,
+  prefix = ''
+): ConfigDiffEntry[] => {
+  const entries: ConfigDiffEntry[] = [];
+  for (const [key, value] of Object.entries(preset)) {
+    const path = prefix ? `${prefix}.${key}` : key;
+    const currentValue = isPlainObject(current) ? current[key] : undefined;
+    if (isPlainObject(value)) {
+      entries.push(...diffConfigLeaves(currentValue, value, path));
+      continue;
+    }
+    const unchanged =
+      currentValue !== undefined && JSON.stringify(currentValue) === JSON.stringify(value);
+    entries.push({
+      changed: !unchanged,
+      from: currentValue === undefined ? undefined : formatLeaf(currentValue),
+      path,
+      to: formatLeaf(value)
+    });
+  }
+  return entries;
+};
+
 /** 出厂默认配置（与 defaultState.mermaid 同形）。 */
 export const defaultConfigJson = (): string => formatJSON({ theme: 'default' });
 

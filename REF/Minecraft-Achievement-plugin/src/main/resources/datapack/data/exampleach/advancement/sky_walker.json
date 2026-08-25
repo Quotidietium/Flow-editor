@@ -1,0 +1,22 @@
+{
+  "parent": "exampleach:root",
+  "display": {
+    "icon": {
+      "id": "minecraft:firework_rocket"
+    },
+    "title": {
+      "text": "平流层观光客"
+    },
+    "description": {
+      "text": "抵达 Y=300 的高空"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": false
+  },
+  "criteria": {
+    "high_altitude": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}
