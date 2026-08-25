@@ -71,6 +71,18 @@ test.describe('Error display tests', () => {
     await expect(revealButton).toHaveCount(0);
   });
 
+  test('复制错误内容到剪贴板', async ({ page, context, editPage }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await editPage.clearEditor();
+    await editPage.typeInEditor('graph TD\nA --> B -->');
+    await editPage.checkError('语法错误');
+
+    await page.getByTestId('error-copy').click();
+    await expect(page.getByText('已复制错误内容')).toBeVisible();
+    const clipboard = await page.evaluate(() => navigator.clipboard.readText());
+    expect(clipboard).toContain('Parse error');
+  });
+
   // Clearing the editor must clear the persisted code too: swallowing the
   // empty edit left exports/share URL/history carrying the previous diagram
   // while the editor showed an empty document (MobileEditor always

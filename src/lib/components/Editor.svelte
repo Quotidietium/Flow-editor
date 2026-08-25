@@ -3,6 +3,7 @@
   import MobileEditor from '$/components/MobileEditor.svelte';
   import { TID } from '$/constants';
   import { updateCode, updateConfig, validatedState } from '$lib/util/state.svelte';
+  import { notify } from '$lib/util/notify';
   import { debounce } from 'lodash-es';
   import ExclamationCircleIcon from '~icons/material-symbols/error-outline-rounded';
 
@@ -50,6 +51,20 @@
     }
   };
 
+  // 错误内容一键复制（排查/反馈时免手选长文本），双端可用。
+  const copyError = async () => {
+    const text = validatedState.current.error?.toString();
+    if (!text) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      notify('已复制错误内容');
+    } catch {
+      notify('复制失败');
+    }
+  };
+
   const showErrorDebounced = debounce(() => {
     showError = true;
   }, 3000);
@@ -89,6 +104,12 @@
             定位到错误行
           </button>
         {/if}
+        <button
+          class="rounded px-2 py-0.5 text-xs hover:bg-slate-700"
+          data-testid="error-copy"
+          onclick={() => void copyError()}>
+          复制错误内容
+        </button>
       </div>
       <output class="max-h-32 overflow-auto bg-muted p-2" name="mermaid-error" for="editor">
         <pre>{validatedState.current.error?.toString()}</pre>
