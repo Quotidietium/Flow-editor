@@ -114,7 +114,9 @@
       <div class="flex items-center justify-between gap-2 bg-slate-900 p-2 text-white">
         <div class="flex w-fit items-center gap-2">
           <ExclamationCircleIcon class="size-6 text-destructive" aria-hidden="true" />
-          <p>语法错误</p>
+          <p>
+            {validatedState.current.errorSource === 'config' ? '配置 JSON 错误' : '图表语法错误'}
+          </p>
         </div>
         {#if !isMobile && validatedState.current.errorMarkers.length > 0}
           <button

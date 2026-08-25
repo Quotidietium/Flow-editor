@@ -149,12 +149,16 @@ const processState = async (state: State) => {
   processed.diagramType = outcome.diagramType;
   processed.error = outcome.error;
   processed.errorMarkers = outcome.errorMarkers;
+  if (outcome.error) {
+    processed.errorSource = 'code';
+  }
   try {
     JSON.parse(state.mermaid);
   } catch (error) {
     // Invalid config JSON surfaces the same way a parse error does (no
     // markers) — also a normal mid-typing state, so no console.error here.
     processed.error = error as Error;
+    processed.errorSource = 'config';
     errorDebug();
   }
   return processed;
@@ -281,18 +285,18 @@ const applyLoadedState = (
   transform: (code: string, source: 'bridge' | 'file' | 'url') => string
 ): void => {
   let next: State;
-    try {
-      next = deserializeState(data);
-      next.mermaid = sanitizeConfig(next.mermaid || defaultState.mermaid);
-      next.code = transform(next.code, 'url');
-    } catch (error) {
-      next = $state.snapshot(state) as State;
-      if (data) {
-        console.error('Init error', error);
-        next.code = urlParseFailedState;
-        next.mermaid = defaultState.mermaid;
-      }
+  try {
+    next = deserializeState(data);
+    next.mermaid = sanitizeConfig(next.mermaid || defaultState.mermaid);
+    next.code = transform(next.code, 'url');
+  } catch (error) {
+    next = $state.snapshot(state) as State;
+    if (data) {
+      console.error('Init error', error);
+      next.code = urlParseFailedState;
+      next.mermaid = defaultState.mermaid;
     }
+  }
   applyPartial(state, next);
 };
 

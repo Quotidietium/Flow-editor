@@ -6,8 +6,8 @@ test.describe('Error display tests', () => {
     await editPage.clearEditor();
     await editPage.typeInEditor('graph TD\nA --> B -->');
 
-    // Verify error is displayed
-    await editPage.checkError('语法错误');
+    // 错误条按来源分流（循环 30）：图表语法错误
+    await editPage.checkError('图表语法错误');
   });
 
   test('should show syntax error for invalid JSON in Config tab', async ({ editPage }) => {
@@ -22,8 +22,8 @@ test.describe('Error display tests', () => {
     await editPage.clearEditor();
     await editPage.typeInEditor('{\n  "theme": "default",\n  invalid json');
 
-    // Verify error is displayed
-    await editPage.checkError('语法错误');
+    // 错误条按来源分流（循环 30）：配置 JSON 错误
+    await editPage.checkError('配置 JSON 错误');
   });
 
   // Code error markers carry positions in the mermaid CODE document — they

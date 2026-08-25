@@ -42,6 +42,8 @@ export interface ValidatedState extends State {
   editorMode: EditorMode;
   diagramType?: string;
   error?: Error;
+  /** 错误来源：code = 图表语法错误；config = 配置 JSON 错误（错误条文案分流）。 */
+  errorSource?: 'code' | 'config';
   errorMarkers: MarkerData[];
   serialized: string;
 }
