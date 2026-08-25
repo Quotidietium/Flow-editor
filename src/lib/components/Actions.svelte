@@ -299,6 +299,20 @@ ${svgString}`);
     simulateDownload(getFileName('svg'), `data:image/svg+xml;base64,${getBase64SVG()}`);
   };
 
+  // 粘贴到支持 SVG 的目标（文档/设计工具）时免下载中转：与下载同源，
+  // 复制的是克隆并补过 xlink 命名空间的干净 SVG。
+  const onCopySvgSource = async () => {
+    try {
+      if (!document.querySelector('#container svg')) {
+        throw new Error('svg not found');
+      }
+      await navigator.clipboard.writeText(getSvgElement().outerHTML);
+      notify('已复制 SVG 源码');
+    } catch {
+      notify('复制失败：当前没有可导出的图形');
+    }
+  };
+
   // --- local file save / open / extra export formats ---
 
   let exportOpen = $state(false);
@@ -509,6 +523,15 @@ ${svgString}`);
               onDownloadSVG();
             }}>
             SVG 矢量图
+          </button>
+          <button
+            class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
+            data-testid="copy-svg-source"
+            onclick={() => {
+              exportOpen = false;
+              void onCopySvgSource();
+            }}>
+            复制 SVG 源码
           </button>
           <button
             class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
