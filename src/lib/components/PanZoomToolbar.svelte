@@ -3,6 +3,9 @@
   import { Button } from '$/components/ui/button';
   import { Separator } from '$/components/ui/separator';
   import type { PanZoomState } from '$/util/panZoom';
+  import { PREVIEW_BG_LABELS } from '$/util/previewBackground';
+  import { previewBackground } from '$/util/previewBackground.svelte';
+  import BgIcon from '~icons/material-symbols/format-color-fill-rounded';
   import ExpandIcon from '~icons/material-symbols/open-in-full-rounded';
   import ArrowsToCircleIcon from '~icons/material-symbols/screenshot-frame-2';
   import MagnifyingGlassPlusIcon from '~icons/material-symbols/zoom-in';
@@ -60,6 +63,17 @@
     title="放大"
     onclick={() => panZoomState.zoomIn()}>
     <MagnifyingGlassPlusIcon />
+  </Button>
+  <Separator orientation="vertical" />
+  <!-- 预览背景四档循环（网格点/棋盘格/纯白/纯黑）：核对透明导出与深色文档嵌图效果 -->
+  <Button
+    variant="ghost"
+    size="icon"
+    data-testid="preview-bg-toggle"
+    title="预览背景：{PREVIEW_BG_LABELS[previewBackground.current]}（点击切换）"
+    aria-label="切换预览背景"
+    onclick={() => previewBackground.cycle()}>
+    <BgIcon />
   </Button>
   {#if fullScreenHref}
     <Separator orientation="vertical" class={zoomClass} />

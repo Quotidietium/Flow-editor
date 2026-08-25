@@ -2,6 +2,8 @@
   import type { State, ValidatedState } from '$/types';
   import { recordRenderTime, shouldRefreshView } from '$/util/autoSync';
   import { PanZoomState } from '$/util/panZoom';
+  import { previewBgClass } from '$/util/previewBackground';
+  import { previewBackground } from '$/util/previewBackground.svelte';
   import { renderAndPlaceDiagram } from '$/util/renderView';
   import { updateCodeStore, validatedState } from '$/util/state.svelte';
   import uniqueID from 'lodash-es/uniqueId';
@@ -126,7 +128,14 @@
 <div
   id="view"
   bind:this={view}
-  class={['h-full w-full', shouldShowGrid && `grid-bg-${mode.current}`, error && 'opacity-50']}>
+  class={[
+    'h-full w-full',
+    // shouldShowGrid=false（如 /view 全屏页）保持素净默认：grid 档不上点阵；
+    // 但用户显式切到棋盘格/纯白/纯黑时处处生效——否则该页工具栏的切换钮形同虚设。
+    (shouldShowGrid || previewBackground.current !== 'grid') &&
+      previewBgClass(previewBackground.current, mode.current),
+    error && 'opacity-50'
+  ]}>
   <div id="container" bind:this={container} class="h-full overflow-auto"></div>
 </div>
 
@@ -139,5 +148,25 @@
   .grid-bg-dark {
     background-size: 30px 30px;
     background-image: radial-gradient(circle, #46464646 2px, #0000 2px);
+  }
+
+  /* 棋盘格：设计工具通用的透明底示意，便于核对透明 PNG/SVG 导出 */
+  .preview-bg-checker {
+    background-color: #ffffff;
+    background-image:
+      linear-gradient(45deg, #d4d4d4 25%, #0000 25%, #0000 75%, #d4d4d4 75%),
+      linear-gradient(45deg, #d4d4d4 25%, #0000 25%, #0000 75%, #d4d4d4 75%);
+    background-position:
+      0 0,
+      12px 12px;
+    background-size: 24px 24px;
+  }
+
+  .preview-bg-white {
+    background: #ffffff;
+  }
+
+  .preview-bg-black {
+    background: #171717;
   }
 </style>
