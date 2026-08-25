@@ -132,7 +132,10 @@
             {validatedState.current.errorSource === 'config' ? '配置 JSON 错误' : '图表语法错误'}
           </p>
         </div>
-        {#if !isMobile && validatedState.current.errorMarkers.length > 0}
+        <!-- 标记只带代码文档位置（state 网关只对 mermaid 代码产出 markers）；
+             配置错误横幅或配置页在前时若仍给「定位」，会拿代码旧标记在配置
+             文档里跳错行——只在「代码错误 + 代码页在前」时提供跳转。 -->
+        {#if !isMobile && validatedState.current.errorSource === 'code' && validatedState.current.editorMode === 'code' && validatedState.current.errorMarkers.length > 0}
           <button
             class="rounded px-2 py-0.5 text-xs hover:bg-slate-700"
             data-testid="error-reveal"

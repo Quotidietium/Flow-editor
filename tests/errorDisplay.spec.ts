@@ -71,6 +71,45 @@ test.describe('Error display tests', () => {
     await expect(revealButton).toHaveCount(0);
   });
 
+  test('定位按钮只在「代码错误且代码页在前」时出现（不拿旧标记跳错文档）', async ({ editPage }) => {
+    // 代码破：定位可见
+    await editPage.clearEditor();
+    await editPage.typeInEditor('graph TD\nA --> B -->');
+    await editPage.checkError('图表语法错误');
+    await expect(editPage.page.getByTestId('error-reveal')).toBeVisible();
+
+    // 切到配置页（代码仍破，横幅仍是图表语法错误）：定位不许在配置文档里跳
+    await editPage.setEditorMode('配置');
+    await expect(editPage.editor).toContainText('"theme"');
+    await editPage.checkError('图表语法错误');
+    await expect(editPage.page.getByTestId('error-reveal')).toHaveCount(0);
+
+    // 配置再破（来源覆盖为 config，标记仍是代码的旧标记）：同样不许跳。
+    // 走剪贴板粘贴：Monaco 自动闭括号会把键盘逐字符键入的 JSON 变成双括号。
+    await editPage.editor.click();
+    await editPage.page.evaluate((c) => navigator.clipboard.writeText(c), '{ broken');
+    await editPage.page.keyboard.press('Control+KeyA');
+    await editPage.page.keyboard.press('Control+V');
+    await editPage.checkError('配置 JSON 错误');
+    await expect(editPage.page.getByTestId('error-reveal')).toHaveCount(0);
+
+    // 修好配置（代码仍破、配置页在前）：横幅回到图表语法错误，定位仍不出现
+    await editPage.editor.click();
+    await editPage.page.evaluate(
+      (c) => navigator.clipboard.writeText(c),
+      '{\n  "theme": "default"\n}'
+    );
+    await editPage.page.keyboard.press('Control+KeyA');
+    await editPage.page.keyboard.press('Control+V');
+    await editPage.checkError('图表语法错误');
+    await expect(editPage.page.getByTestId('error-reveal')).toHaveCount(0);
+
+    // 回到代码页：定位回来，跳的就是代码文档
+    await editPage.setEditorMode('代码');
+    await editPage.checkError('图表语法错误');
+    await expect(editPage.page.getByTestId('error-reveal')).toBeVisible();
+  });
+
   test('复制错误内容到剪贴板', async ({ page, context, editPage }) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await editPage.clearEditor();
