@@ -209,6 +209,26 @@
     new Set(selected.filter((s) => s.kind === 'edge').map((s) => s.id))
   );
   const selectedNodes = $derived(graph.nodes.filter((n) => selectedNodeIds.has(n.id)));
+
+  // 画布节点搜索：大流程图定位节点全靠拖屏（Board/Sequence/Outline/Sheet
+  // 列表类编辑器已有过滤框，画布类同款思路）。命中保持原样、非命中降为
+  // 25% 不透明度；Esc 清空；只影响显示不动数据。
+  let canvasQuery = $state('');
+  const canvasQueryLower = $derived(canvasQuery.trim().toLowerCase());
+  const canvasHitIds = $derived(
+    new Set(
+      canvasQueryLower === ''
+        ? []
+        : graph.nodes
+            .filter(
+              (n) =>
+                n.label.toLowerCase().includes(canvasQueryLower) ||
+                n.id.toLowerCase().includes(canvasQueryLower)
+            )
+            .map((n) => n.id)
+    )
+  );
+  const canvasHitCount = $derived(canvasQueryLower === '' ? 0 : canvasHitIds.size);
   const primaryNodeKey = $derived(
     [...selected].reverse().find((s) => s.kind === 'node' && nodeById.has(s.id))
   );
@@ -1605,6 +1625,24 @@
           插入 ▾
         </Button>
       {/if}
+      <input
+        class="w-28 rounded border bg-background px-1.5 py-1"
+        placeholder="搜索节点…"
+        aria-label="搜索节点"
+        data-testid="visual-canvas-search"
+        bind:value={canvasQuery}
+        onkeydown={(e) => {
+          if (e.key === 'Escape') {
+            canvasQuery = '';
+          }
+        }} />
+      {#if canvasQueryLower !== ''}
+        <span
+          class="whitespace-nowrap text-muted-foreground"
+          data-testid="visual-canvas-search-count">
+          {canvasHitCount} 匹配
+        </span>
+      {/if}
       {#if kindSpec.startEnd}
         <Button
           size="sm"
@@ -1972,6 +2010,10 @@
                 role="button"
                 tabindex="-1"
                 data-node-id={node.id}
+                data-search-hit={canvasQueryLower !== '' && canvasHitIds.has(node.id)
+                  ? true
+                  : undefined}
+                opacity={canvasQueryLower !== '' && !canvasHitIds.has(node.id) ? 0.25 : undefined}
                 style="cursor: move;"
                 onpointerdown={(e) => onNodePointerDown(e, node)}
                 ondblclick={(e) => {
