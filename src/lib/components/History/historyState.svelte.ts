@@ -105,6 +105,16 @@ export const addAutoEntry = (state: State): boolean =>
 export const manualEntryCount = (): number => manual.value.length;
 export const MAX_MANUAL_HISTORY = MAX_MANUAL_HISTORY_LENGTH;
 
+// 两个槽位的反应式计数（历史面板标签页徽章用；loader 在内存中故不在此列）。
+export const historyCounts = {
+  get auto(): number {
+    return auto.value.length;
+  },
+  get manual(): number {
+    return manual.value.length;
+  }
+};
+
 // Replaces the in-memory revisions (e.g. when a gist is loaded), assigning ids.
 export const setLoaderEntries = (entries: Optional<HistoryEntry, 'id'>[]): void => {
   loader = entries.map((entry) =>

@@ -250,6 +250,30 @@ test.describe('History', () => {
     await expect(page.getByText('该状态已保存过。')).toBeVisible();
   });
 
+  test('标签页显示条目计数并随操作更新', async ({ page }) => {
+    await page.evaluate(
+      ([manual, auto]) => {
+        localStorage.setItem('manualHistoryStore', manual);
+        localStorage.setItem('autoHistoryStore', auto);
+      },
+      [JSON.stringify(manualHistory), JSON.stringify(autoHistory)]
+    );
+    await page.reload();
+    await openHistory(page);
+
+    // 种子：已保存 2、时间线 2
+    await expect(page.getByRole('tab', { name: /已保存 \(2\)/ })).toBeVisible();
+    await expect(page.getByRole('tab', { name: /时间线 \(2\)/ })).toBeVisible();
+
+    // 删除一条已保存 → 计数 (1)
+    await page.getByRole('button', { name: '删除此版本' }).first().click();
+    await expect(page.getByRole('tab', { name: /已保存 \(1\)/ })).toBeVisible();
+
+    // 保存当前状态 → 计数 (2)
+    await page.locator('#saveHistory').click();
+    await expect(page.getByRole('tab', { name: /已保存 \(2\)/ })).toBeVisible();
+  });
+
   test('renames a saved entry inline', async ({ page }) => {
     await openHistory(page);
     await page.locator('#saveHistory').click();

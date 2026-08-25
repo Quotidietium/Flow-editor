@@ -25,6 +25,7 @@
   import {
     addManualEntry,
     clearActive,
+    historyCounts,
     historyState,
     removeEntry,
     renameEntry,
@@ -34,11 +35,15 @@
 
   dayjs.extend(dayjsRelativeTime);
 
-  const baseTabs: Tab[] = [
-    { id: 'manual', title: '已保存', icon: BookmarkIcon },
-    { id: 'auto', title: '时间线', icon: HistoryIcon }
-  ];
-  const loaderTab: Tab = { id: 'loader', title: '修订版本', icon: GitAltIcon };
+  const baseTabs: Tab[] = $derived([
+    { id: 'manual', title: `已保存 (${historyCounts.manual})`, icon: BookmarkIcon },
+    { id: 'auto', title: `时间线 (${historyCounts.auto})`, icon: HistoryIcon }
+  ]);
+  const loaderTab: Tab = $derived({
+    id: 'loader',
+    title: `修订版本 (${historyState.loaderEntries.length})`,
+    icon: GitAltIcon
+  });
 
   const tabs = $derived(
     historyState.loaderEntries.length > 0 ? [loaderTab, ...baseTabs] : baseTabs
