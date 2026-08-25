@@ -21,11 +21,15 @@
   let divElement: HTMLDivElement | undefined = $state();
   let editor: monaco.editor.IStandaloneCodeEditor | undefined;
   let editorOptions = {
+    // 括号配对着色 + 缩进/括号参考线：配置 JSON 嵌套一深就靠数括号，
+    // 全程视觉辅助，不改变任何文档内容。
+    bracketPairColorization: { enabled: true },
+    guides: { bracketPairs: true, indentation: true },
+    lineNumbersMinChars: 4,
     minimap: {
       enabled: false
     },
-    overviewRulerLanes: 0,
-    lineNumbersMinChars: 4
+    overviewRulerLanes: 0
   } satisfies monaco.editor.IStandaloneEditorConstructionOptions;
   let currentText = '';
   let isUpdatingFromState = false;
