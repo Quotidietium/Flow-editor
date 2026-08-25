@@ -43,6 +43,14 @@
     return kind ? KIND_SPECS[kind]?.label : undefined;
   });
 
+  // 字符数：分享链接长度随代码增长（URL 有物理上限），状态栏给早期预警；
+  // 配置模式显示配置 JSON 的字符数。
+  const charCount = $derived(
+    validatedState.current.editorMode === 'code'
+      ? validatedState.current.code.length
+      : validatedState.current.mermaid.length
+  );
+
   let showError = $state(false);
 
   // 桌面端错误条「定位到错误行」：经 bind:this 调用 DesktopEditor 暴露的
@@ -120,6 +128,7 @@
     {#if diagramKindLabel}
       <span class="mr-auto" data-testid="editor-kind">{diagramKindLabel}</span>
     {/if}
+    <span data-testid="editor-char-count">{charCount} 字符</span>
     <span>行 {cursor.line}，列 {cursor.column}</span>
     <span>共 {cursor.lines} 行</span>
   </div>
