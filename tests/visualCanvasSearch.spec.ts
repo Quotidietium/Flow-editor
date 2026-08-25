@@ -28,4 +28,29 @@ test.describe('画布节点搜索', () => {
     await expect(page.getByTestId('visual-canvas-search-count')).toHaveCount(0);
     expect(await page.locator('[data-node-id][opacity="0.25"]').count()).toBe(0);
   });
+
+  test('Enter 滚动居中并选中首个命中（节点操作即刻可用）', async ({ page }) => {
+    await page.goto('/edit');
+    await page.getByTestId('visual-tab').click();
+    await expect(page.getByTestId('visual-canvas')).toBeVisible();
+
+    // 未选中时形状按钮禁用
+    const shapeButton = page.getByRole('button', { name: /^形状:/ });
+    await expect(shapeButton).toBeDisabled();
+
+    const search = page.getByTestId('visual-canvas-search');
+    // 选底行节点「新车」：居中目标滚动量为正（顶部节点目标为负会被钳到 0）
+    await search.fill('新车');
+    await search.press('Enter');
+
+    // 首个命中被选中：形状按钮解禁，选区计数落到该节点
+    await expect(shapeButton).toBeEnabled();
+    await expect(page.locator('[data-search-hit="true"]')).toHaveCount(1);
+
+    // 滚动确实发生（smooth 滚动异步进行，轮询到位）
+    const canvas = page.getByTestId('visual-canvas');
+    await expect
+      .poll(async () => canvas.evaluate((el) => el.scrollTop + el.scrollLeft))
+      .toBeGreaterThan(0);
+  });
 });

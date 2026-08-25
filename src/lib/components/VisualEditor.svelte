@@ -229,6 +229,21 @@
     )
   );
   const canvasHitCount = $derived(canvasQueryLower === '' ? 0 : canvasHitIds.size);
+
+  // 搜索 Enter：滚动居中首个命中并选中（定位 = 看见 + 到达），
+  // 选中后形状/类型/属性等节点操作即刻可用。
+  const centerOnNode = (node: VNode): void => {
+    if (!canvasEl) {
+      return;
+    }
+    const size = nodeSize(node);
+    canvasEl.scrollTo({
+      behavior: 'smooth',
+      left: (node.x + size.w / 2) * view.k - canvasEl.clientWidth / 2,
+      top: (node.y + size.h / 2) * view.k - canvasEl.clientHeight / 2
+    });
+    selected = [{ id: node.id, kind: 'node' }];
+  };
   const primaryNodeKey = $derived(
     [...selected].reverse().find((s) => s.kind === 'node' && nodeById.has(s.id))
   );
@@ -1634,6 +1649,11 @@
         onkeydown={(e) => {
           if (e.key === 'Escape') {
             canvasQuery = '';
+          } else if (e.key === 'Enter') {
+            const first = graph.nodes.find((n) => canvasHitIds.has(n.id));
+            if (first) {
+              centerOnNode(first);
+            }
           }
         }} />
       {#if canvasQueryLower !== ''}
