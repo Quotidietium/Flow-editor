@@ -4,6 +4,7 @@
   import { nextEdgeId, nextNodeId } from '$/util/visualEditor/model';
   import AddIcon from '~icons/material-symbols/add-2-rounded';
   import DeleteIcon from '~icons/material-symbols/close-rounded';
+  import CopyIcon from '~icons/material-symbols/content-copy-rounded';
   import LeftIcon from '~icons/material-symbols/arrow-left-alt-rounded';
   import RightIcon from '~icons/material-symbols/arrow-right-alt-rounded';
   import UpIcon from '~icons/material-symbols/arrow-upward-alt-rounded';
@@ -109,6 +110,19 @@
       const a = graph.edges[at];
       graph.edges[at] = graph.edges[swap] as NonNullable<typeof a>;
       graph.edges[swap] = a as NonNullable<typeof a>;
+    });
+  };
+
+  // 复制消息：紧邻原位插入一份全等拷贝（新 id）。时序图里相邻消息常成对
+  // （请求/响应、重试），复制后改一端或改箭头比从头选快得多。
+  const duplicateMessage = (id: string): void => {
+    commit(() => {
+      const at = graph.edges.findIndex((e) => e.id === id);
+      const source = graph.edges[at];
+      if (!source) {
+        return;
+      }
+      graph.edges.splice(at + 1, 0, { ...source, id: nextEdgeId(graph.edges) });
     });
   };
 
@@ -269,6 +283,12 @@
                 title="下移"
                 onclick={() => moveMessage(edge.id, 1)}>
                 <DownIcon />
+              </button>
+              <button
+                class="rounded p-0.5 hover:bg-accent"
+                title="复制消息（紧邻原位插入）"
+                onclick={() => duplicateMessage(edge.id)}>
+                <CopyIcon />
               </button>
               <button
                 class="rounded p-0.5 hover:bg-accent hover:text-destructive"

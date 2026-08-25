@@ -89,6 +89,27 @@ test('sequence editor adds participants and messages', async ({ page }) => {
   await expect(codeOut).toContainText('A->>B: 一');
 });
 
+test('sequence editor duplicates a message right after the original', async ({ page }) => {
+  await openEditor(page);
+  await typeCode(page, 'sequenceDiagram\n  participant A\n  participant B\n  A->>B: 请求');
+  const codeOut = await enterVisual(page);
+  const editor = page.getByTestId('visual-sequence');
+
+  // 复制：紧邻原位插入全等拷贝（源/目标/箭头/标签一致，新 id）
+  await editor.locator('[data-message-id="E1"]').getByTitle('复制消息（紧邻原位插入）').click();
+  await expect(editor.locator('[data-message-id]')).toHaveCount(2);
+  const copy = editor.locator('[data-message-id="E2"]');
+  await expect(copy.getByLabel('消息内容')).toHaveValue('请求');
+  await expect(copy.getByLabel('消息源')).toHaveValue('A');
+  await expect(copy.getByLabel('消息目标')).toHaveValue('B');
+  await expect(codeOut).toContainText('A->>B: 请求\n  A->>B: 请求');
+
+  // 拷贝可独立编辑（改目标/标签不回染原消息）——删除原消息留拷贝
+  await editor.locator('[data-message-id="E1"]').getByTitle('删除消息').click();
+  await expect(editor.locator('[data-message-id]')).toHaveCount(1);
+  await expect(codeOut).toContainText('A->>B: 请求');
+});
+
 test('zenuml uses the sequence editor with its two arrow types', async ({ page }) => {
   await openEditor(page);
   await typeCode(page, 'zenuml\n  title: 演示\n  A->B: 同步\n  B-->A: 异步');
