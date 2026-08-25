@@ -443,6 +443,22 @@ ${svgString}`);
         disabled={imageSizeMode === 'auto'}
         bind:value={imageSize} />
     </div>
+    {#if imageSizeMode !== 'auto'}
+      <!-- 常用分辨率一键填入（宽/高语义随模式切换），省去手敲数字 -->
+      <div class="flex items-center gap-1 px-1 pb-1" data-testid="png-size-chips">
+        {#each [720, 1080, 1440, 2160] as size (size)}
+          <button
+            class={[
+              'rounded border px-1.5 py-0.5 text-xs hover:bg-accent',
+              imageSize === size && 'border-primary text-primary'
+            ]}
+            data-testid="png-size-{size}"
+            onclick={() => (imageSize = size)}>
+            {size}
+          </button>
+        {/each}
+      </div>
+    {/if}
     <div class="flex gap-2">
       <Button
         class="flex-grow"
