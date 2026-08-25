@@ -4,6 +4,7 @@
   import { TID } from '$/constants';
   import { updateCode, updateConfig, validatedState } from '$lib/util/state.svelte';
   import { notify } from '$lib/util/notify';
+  import { detectDiagramKind, KIND_SPECS } from '$lib/util/visualEditor/model';
   import { debounce } from 'lodash-es';
   import ExclamationCircleIcon from '~icons/material-symbols/error-outline-rounded';
 
@@ -31,6 +32,16 @@
   const onCursor = (info: { column: number; line: number; lines: number }) => {
     cursor = info;
   };
+
+  // 状态栏左侧的图类型标识（与历史徽章/示例高亮同源的 detectDiagramKind）：
+  // 多图来回切换时一眼看出正在编辑哪类图；配置模式无图可识别，不显示。
+  const diagramKindLabel = $derived.by(() => {
+    if (validatedState.current.editorMode !== 'code') {
+      return undefined;
+    }
+    const kind = detectDiagramKind(validatedState.current.code);
+    return kind ? KIND_SPECS[kind]?.label : undefined;
+  });
 
   let showError = $state(false);
 
@@ -106,6 +117,9 @@
   <div
     class="flex flex-none items-center justify-end gap-3 px-2 py-0.5 text-[11px] text-muted-foreground tabular-nums"
     data-testid="editor-status">
+    {#if diagramKindLabel}
+      <span class="mr-auto" data-testid="editor-kind">{diagramKindLabel}</span>
+    {/if}
     <span>行 {cursor.line}，列 {cursor.column}</span>
     <span>共 {cursor.lines} 行</span>
   </div>
