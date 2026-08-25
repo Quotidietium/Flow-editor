@@ -18,6 +18,7 @@
   let code = '';
   let config = '';
   let container: HTMLDivElement | undefined = $state();
+  let rendering = $state(false);
   let rough: boolean;
   let view: HTMLDivElement | undefined = $state();
   let error = $state(false);
@@ -69,13 +70,21 @@
         panZoom = state.panZoom ?? true;
 
         const scroll = view?.parentElement?.scrollTop;
-        const { graphDiv } = await renderAndPlaceDiagram({
-          code,
-          config: JSON.parse(state.mermaid) as MermaidConfig,
-          container,
-          rough: state.rough,
-          viewId: uniqueID('graph-')
-        });
+        // 大图渲染可达数百毫秒：给用户一个「正在工作」的可见信号，
+        // 而不是旧图静静挂着让人以为没生效（finally 保证任何路径都熄灭）。
+        rendering = true;
+        let graphDiv: SVGSVGElement | undefined;
+        try {
+          ({ graphDiv } = await renderAndPlaceDiagram({
+            code,
+            config: JSON.parse(state.mermaid) as MermaidConfig,
+            container,
+            rough: state.rough,
+            viewId: uniqueID('graph-')
+          }));
+        } finally {
+          rendering = false;
+        }
         if (disposed) {
           return;
         }
@@ -129,7 +138,7 @@
   id="view"
   bind:this={view}
   class={[
-    'h-full w-full',
+    'relative h-full w-full',
     // shouldShowGrid=false（如 /view 全屏页）保持素净默认：grid 档不上点阵；
     // 但用户显式切到棋盘格/纯白/纯黑时处处生效——否则该页工具栏的切换钮形同虚设。
     (shouldShowGrid || previewBackground.current !== 'grid') &&
@@ -137,6 +146,13 @@
     error && 'opacity-50'
   ]}>
   <div id="container" bind:this={container} class="h-full overflow-auto"></div>
+  {#if rendering}
+    <div
+      class="pointer-events-none absolute right-2 bottom-2 rounded bg-background/80 px-2 py-1 text-[11px] text-muted-foreground shadow"
+      data-testid="view-rendering">
+      渲染中…
+    </div>
+  {/if}
 </div>
 
 <style>
