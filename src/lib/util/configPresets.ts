@@ -159,6 +159,80 @@ export const formatConfigJson = (currentJson: string): string | undefined => {
 /** 出厂默认配置（与 defaultState.mermaid 同形）。 */
 export const defaultConfigJson = (): string => formatJSON({ theme: 'default' });
 
+/* ---------------- 自定义模板（用户把当前配置存为预设） ---------------- */
+
+export interface UserPreset {
+  config: Record<string, unknown>;
+  id: string;
+  label: string;
+}
+
+const USER_PRESETS_KEY = 'flowUserConfigPresets';
+const MAX_USER_PRESETS = 20;
+const MAX_LABEL_LENGTH = 30;
+// localStorage 可被手改：单条配置体超限直接丢弃（与 sanitizePositions 同款
+// 不可信输入防线）。
+const MAX_CONFIG_JSON_LENGTH = 10 * 1024;
+
+const isValidUserPreset = (value: unknown): value is UserPreset => {
+  if (!isPlainObject(value)) {
+    return false;
+  }
+  const { config, id, label } = value as Partial<UserPreset>;
+  return (
+    typeof id === 'string' &&
+    id.length > 0 &&
+    typeof label === 'string' &&
+    label.trim().length > 0 &&
+    isPlainObject(config) &&
+    formatJSON(config).length <= MAX_CONFIG_JSON_LENGTH
+  );
+};
+
+/** 读取用户模板（非法/超限条目静默丢弃）。 */
+export const loadUserPresets = (): UserPreset[] => {
+  try {
+    const raw = localStorage.getItem(USER_PRESETS_KEY);
+    if (!raw) {
+      return [];
+    }
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed.filter(isValidUserPreset).slice(0, MAX_USER_PRESETS);
+  } catch {
+    return [];
+  }
+};
+
+/** 保存当前配置为用户模板（同名覆盖；返回最新列表）。空名不落盘。 */
+export const saveUserPreset = (label: string, config: Record<string, unknown>): UserPreset[] => {
+  const trimmed = label.trim().slice(0, MAX_LABEL_LENGTH);
+  const presets = loadUserPresets();
+  if (!trimmed) {
+    return presets;
+  }
+  const entry: UserPreset = {
+    config,
+    id: `user-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    label: trimmed
+  };
+  const next = [entry, ...presets.filter((preset) => preset.label !== trimmed)].slice(
+    0,
+    MAX_USER_PRESETS
+  );
+  localStorage.setItem(USER_PRESETS_KEY, JSON.stringify(next));
+  return next;
+};
+
+/** 删除一条用户模板（返回最新列表）。 */
+export const deleteUserPreset = (id: string): UserPreset[] => {
+  const next = loadUserPresets().filter((preset) => preset.id !== id);
+  localStorage.setItem(USER_PRESETS_KEY, JSON.stringify(next));
+  return next;
+};
+
 // 注册表完整性在模块加载期即校验（另有单测钉住）：非法模板宁可炸在
 // 开发期，也不让它进菜单。
 const themeValues = new Set<string>(MERMAID_THEMES);

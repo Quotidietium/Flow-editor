@@ -80,4 +80,54 @@ test.describe('配置模板', () => {
     await expect(editor).toContainText('"theme": "forest"');
     await expect(page.getByText('已格式化配置 JSON')).toBeVisible();
   });
+
+  test('保存当前配置为我的模板，应用与删除', async ({ page, editPage }) => {
+    await editPage.setEditorMode('配置');
+    // 造一份自定义配置
+    await openPresetMenu(page);
+    await page.getByTestId('config-preset-hand-drawn').click();
+    await openPresetMenu(page);
+    await page.getByTestId('config-preset-theme-forest').click();
+
+    // 保存为我的模板
+    await openPresetMenu(page);
+    await page.getByTestId('config-preset-save').click();
+    await page.getByTestId('config-preset-save-name').fill('森林手绘');
+    await page.getByTestId('config-preset-save-name').press('Enter');
+    await expect(page.getByText('已保存模板「森林手绘」')).toBeVisible();
+
+    // 重置后从我的模板恢复两键合一
+    await openPresetMenu(page);
+    await page.getByTestId('config-preset-reset').click();
+    const editor = page.locator('.monaco-editor');
+    await expect(editor).not.toContainText('handDrawn');
+    await openPresetMenu(page);
+    await page.getByText('森林手绘', { exact: true }).click();
+    await expect(editor).toContainText('"look": "handDrawn"');
+    await expect(editor).toContainText('"theme": "forest"');
+
+    // 删除我的模板
+    const stored = await page.evaluate(() => {
+      const list = JSON.parse(localStorage.getItem('flowUserConfigPresets') ?? '[]') as {
+        id: string;
+      }[];
+      return list[0]?.id;
+    });
+    await openPresetMenu(page);
+    await page.getByTestId(`config-preset-delete-${stored}`).click();
+    await expect(page.getByText('已删除模板「森林手绘」')).toBeVisible();
+    await expect(page.getByText('森林手绘', { exact: true })).toHaveCount(0);
+  });
+
+  test('JSON 损坏时保存我的模板被拒绝', async ({ page, editPage }) => {
+    await editPage.setEditorMode('配置');
+    await replaceConfig(page, '{ broken');
+    await openPresetMenu(page);
+    await page.getByTestId('config-preset-save').click();
+    await page.getByTestId('config-preset-save-name').fill('坏模板');
+    await page.getByTestId('config-preset-save-confirm').click();
+    await expect(page.getByText('当前配置 JSON 无法解析，未保存')).toBeVisible();
+    const stored = await page.evaluate(() => localStorage.getItem('flowUserConfigPresets'));
+    expect(stored ?? '[]').toBe('[]');
+  });
 });

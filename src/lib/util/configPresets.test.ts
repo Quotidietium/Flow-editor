@@ -1,10 +1,13 @@
 import { MERMAID_LOOKS, MERMAID_THEMES } from '$/constants';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import {
   applyConfigPreset,
   CONFIG_PRESET_GROUPS,
   defaultConfigJson,
+  deleteUserPreset,
   formatConfigJson,
+  loadUserPresets,
+  saveUserPreset,
   type ConfigPreset
 } from './configPresets';
 
@@ -122,5 +125,74 @@ describe('CONFIG_PRESET_GROUPS registry', () => {
   it('covers style, theme and layout dimensions', () => {
     const groups = CONFIG_PRESET_GROUPS.map(({ group }) => group);
     expect(groups).toEqual(['风格', '主题', '版式']);
+  });
+});
+
+describe('user presets (自定义模板)', () => {
+  beforeEach(() => {
+    localStorage.removeItem('flowUserConfigPresets');
+  });
+
+  it('saves and loads back, newest first, label preserved', () => {
+    saveUserPreset('我的手绘', { look: 'handDrawn' });
+    saveUserPreset('深色大字', { theme: 'dark', themeVariables: { fontSize: '20px' } });
+    const presets = loadUserPresets();
+    expect(presets).toHaveLength(2);
+    expect(presets[0].label).toBe('深色大字');
+    expect(presets[1]).toMatchObject({ config: { look: 'handDrawn' }, label: '我的手绘' });
+  });
+
+  it('overwrites an existing preset with the same label', () => {
+    saveUserPreset('主题', { theme: 'dark' });
+    saveUserPreset('主题', { theme: 'forest' });
+    const presets = loadUserPresets();
+    expect(presets).toHaveLength(1);
+    expect(presets[0].config).toEqual({ theme: 'forest' });
+  });
+
+  it('ignores blank labels and trims long ones', () => {
+    saveUserPreset('   ', { theme: 'dark' });
+    expect(loadUserPresets()).toHaveLength(0);
+    saveUserPreset('x'.repeat(60), { theme: 'dark' });
+    expect(loadUserPresets()[0].label).toHaveLength(30);
+  });
+
+  it('deletes by id', () => {
+    saveUserPreset('a', { theme: 'dark' });
+    saveUserPreset('b', { theme: 'forest' });
+    const [first] = loadUserPresets();
+    const next = deleteUserPreset(first.id);
+    expect(next).toHaveLength(1);
+    expect(loadUserPresets()[0].label).toBe('a');
+  });
+
+  it('drops invalid entries from hand-edited storage', () => {
+    localStorage.setItem(
+      'flowUserConfigPresets',
+      JSON.stringify([
+        { config: { theme: 'dark' }, id: 'ok-1', label: '好的' },
+        { config: 'not-an-object', id: 'bad-1', label: '坏的' },
+        { config: {}, id: '', label: '没id' },
+        { config: {}, id: 'bad-2', label: '  ' },
+        'garbage'
+      ])
+    );
+    const presets = loadUserPresets();
+    expect(presets).toHaveLength(1);
+    expect(presets[0].id).toBe('ok-1');
+  });
+
+  it('returns empty for broken or non-array storage', () => {
+    localStorage.setItem('flowUserConfigPresets', '{ not json');
+    expect(loadUserPresets()).toEqual([]);
+    localStorage.setItem('flowUserConfigPresets', '{"a":1}');
+    expect(loadUserPresets()).toEqual([]);
+  });
+
+  it('caps the list at 20 entries', () => {
+    for (let index = 0; index < 25; index++) {
+      saveUserPreset(`t${index}`, { theme: 'dark' });
+    }
+    expect(loadUserPresets()).toHaveLength(20);
   });
 });
