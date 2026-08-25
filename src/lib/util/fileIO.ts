@@ -125,6 +125,15 @@ export const downloadTextFile = (filename: string, text: string, mime: string): 
   a.remove();
 };
 
+/** Download an already-encoded dataURL payload (raster exports). */
+export const downloadDataUrl = (filename: string, dataUrl: string): void => {
+  const a = document.createElement('a');
+  a.download = filename;
+  a.href = dataUrl;
+  a.click();
+  a.remove();
+};
+
 /**
  * 把当前渲染出的图表序列化为独立 SVG 文档（/view 只读页下载用）。
  * 克隆脱离现场：svg-pan-zoom 的 viewport 包装层把用户当前平移/缩放烘在

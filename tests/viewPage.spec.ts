@@ -56,4 +56,32 @@ test.describe('/view 只读页', () => {
     expect(content).not.toContain('matrix(');
     await expect(page.getByText('已下载 SVG')).toBeVisible();
   });
+
+  test('下载 PNG：干净图形光栅化（IHDR 尺寸可读、长边 1080）', async ({ page }) => {
+    await page.goto('/edit');
+    await page.waitForFunction(
+      () => (window as unknown as { __FLOW_EDITOR_API__?: unknown }).__FLOW_EDITOR_API__
+    );
+    const viewUrl = page.url().replace('/edit', '/view');
+    await page.goto(viewUrl);
+    await expect(page.locator('#container')).toContainText('圣诞节', { timeout: 15_000 });
+
+    // 缩放现场不影响下载件
+    await page.getByRole('button', { name: '放大' }).click();
+
+    const downloadPromise = page.waitForEvent('download');
+    await page.getByTestId('view-download-png').click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toMatch(/^mermaid-diagram-.*\.png$/);
+    await expect(page.getByText('已下载 PNG')).toBeVisible();
+
+    // PNG 魔数 + IHDR 大端尺寸（bytes 16-24）：长边恰为 1080
+    const path = await download.path();
+    const bytes = await import('node:fs/promises').then((fs) => fs.readFile(path));
+    expect([...bytes.subarray(0, 8)]).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const width = bytes.readUInt32BE(16);
+    const height = bytes.readUInt32BE(20);
+    expect(Math.max(width, height)).toBe(1080);
+    expect(Math.min(width, height)).toBeGreaterThan(0);
+  });
 });
