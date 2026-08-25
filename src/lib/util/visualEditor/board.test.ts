@@ -4,6 +4,7 @@ import {
   addCard,
   addColumn,
   boardColumns,
+  duplicateCard,
   moveCard,
   moveColumn,
   removeCard,
@@ -121,6 +122,44 @@ describe('card operations', () => {
     const membership = graph.edges.filter((e) => e.target === 'T1');
     expect(membership).toHaveLength(1);
     expect(membership[0]?.source).toBe('C1');
+  });
+
+  it('duplicateCard clones the card and its membership edge, copy right after', () => {
+    const graph = kanbanGraph();
+    const copy = duplicateCard(graph, { cardId: 'T1', groupRole: 'column' });
+    expect(copy).toBeDefined();
+    expect(copy?.id).not.toBe('T1');
+    expect(copy?.label).toBe('甲');
+    // 边序即卡序：拷贝紧跟原卡，仍属同一列
+    const columns = boardColumns(graph, 'column', '新列表');
+    expect(columns[0]?.items.map((n) => n.label)).toEqual(['甲', '甲', '乙']);
+    // 各持一条成员边（first-group-edge-wins 不破）
+    expect(graph.edges.filter((e) => e.target === copy?.id)).toHaveLength(1);
+  });
+
+  it('duplicateCard copies detail and keeps orphans orphan (node order adjacent)', () => {
+    const graph = kanbanGraph();
+    // T3 变孤儿（无成员边）并带详情
+    graph.edges = graph.edges.filter((e) => e.id !== 'E3');
+    const t3 = graph.nodes.find((n) => n.id === 'T3');
+    if (t3) {
+      t3.detail = '3d';
+    }
+    const copy = duplicateCard(graph, { cardId: 'T3', groupRole: 'column' });
+    expect(copy?.detail).toBe('3d');
+    expect(graph.edges.filter((e) => e.target === copy?.id)).toHaveLength(0);
+    const nodeIds = graph.nodes.map((n) => n.id);
+    expect(nodeIds.indexOf(copy?.id ?? '')).toBe(nodeIds.indexOf('T3') + 1);
+    // 孤儿折进最后一列：拷贝与原卡相邻出现
+    const columns = boardColumns(graph, 'column', '新列表');
+    expect(columns[1]?.items.map((n) => n.label)).toEqual(['丙', '丙']);
+  });
+
+  it('duplicateCard on a missing id is a no-op', () => {
+    const graph = kanbanGraph();
+    const before = graph.nodes.length;
+    expect(duplicateCard(graph, { cardId: 'ZZ', groupRole: 'column' })).toBeUndefined();
+    expect(graph.nodes).toHaveLength(before);
   });
 
   it('round-trips through generation and parsing', () => {

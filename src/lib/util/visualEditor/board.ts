@@ -149,6 +149,34 @@ export const removeCard = (graph: VGraph, cardId: string): void => {
 };
 
 /**
+ * Duplicates a card right after the original: same label/detail, new id.
+ * In-column cards clone the membership edge next to the original's (edge
+ * order is card order within a column); orphan cards stay orphans, cloned
+ * next in node order. Returns the copy for autofocus.
+ */
+export const duplicateCard = (
+  graph: VGraph,
+  options: { cardId: string; groupRole: string }
+): VNode | undefined => {
+  const at = graph.nodes.findIndex((n) => n.id === options.cardId);
+  const source = graph.nodes[at];
+  if (!source) {
+    return undefined;
+  }
+  const copy: VNode = { ...source, id: nextNodeId(graph.nodes) };
+  graph.nodes.splice(at + 1, 0, copy);
+  const membership = membershipEdge(graph, options.groupRole, options.cardId);
+  if (membership) {
+    graph.edges.splice(graph.edges.indexOf(membership) + 1, 0, {
+      ...membership,
+      id: nextEdgeId(graph.edges),
+      target: copy.id
+    });
+  }
+  return copy;
+};
+
+/**
  * Moves a card to a column (undefined = orphan) optionally inserting it before
  * `beforeCardId`. Within-column moves reorder; cross-column moves rewire the
  * single membership edge so the "first group edge wins" rule never sees two.

@@ -4,6 +4,7 @@
     addCard,
     addColumn,
     boardColumns,
+    duplicateCard,
     moveCard,
     moveColumn,
     removeCard,
@@ -13,6 +14,7 @@
   import { nextEdgeId } from '$/util/visualEditor/model';
   import AddIcon from '~icons/material-symbols/add-2-rounded';
   import DeleteIcon from '~icons/material-symbols/close-rounded';
+  import CopyIcon from '~icons/material-symbols/content-copy-rounded';
   import LeftIcon from '~icons/material-symbols/arrow-left-alt-rounded';
   import RightIcon from '~icons/material-symbols/arrow-right-alt-rounded';
 
@@ -296,6 +298,19 @@
                       const v = e.currentTarget.value;
                       commit(() => (card.label = v.trim() || card.id));
                     }} />
+                  <button
+                    class="rounded p-0.5 text-muted-foreground hover:bg-accent"
+                    title="复制{config.itemName}（紧邻原位插入）"
+                    onclick={() =>
+                      commit(() => {
+                        // 拷贝获得焦点立即可改名（与 addCard 同一条 focusNew 通道）
+                        lastAddedCardId = duplicateCard(graph, {
+                          cardId: card.id,
+                          groupRole: config.groupRole
+                        })?.id;
+                      })}>
+                    <CopyIcon />
+                  </button>
                   <button
                     class="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-destructive"
                     title="删除{config.itemName}"

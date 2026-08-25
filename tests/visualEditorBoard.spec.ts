@@ -55,6 +55,33 @@ test('kanban board drags cards between columns and reorders within one', async (
   expect(pageErrors).toEqual([]);
 });
 
+test('kanban card duplicates next to the original with autofocus', async ({ page }) => {
+  await openEditor(page);
+  await typeCode(page, 'kanban\ntodo[待办]\n  t1[甲]\n  t2[乙]');
+  const codeOut = await enterVisual(page);
+  const board = page.getByTestId('visual-board');
+
+  await expect(board.getByTestId('visual-board-card')).toHaveCount(2);
+  await page.locator('[data-card-id="t1"]').getByTitle('复制卡片（紧邻原位插入）').click();
+
+  // 拷贝紧跟原卡、同列（边序=卡序），名称输入自动聚焦立即可改名
+  await expect(board.getByTestId('visual-board-card')).toHaveCount(3);
+  await expect(
+    page.locator('section[aria-label="待办"]').getByTestId('visual-board-card')
+  ).toHaveCount(3);
+  const text = (await codeOut.textContent()) ?? '';
+  expect(text.indexOf('甲')).toBeLessThan(text.lastIndexOf('甲'));
+  expect(text.indexOf('乙')).toBeGreaterThan(text.lastIndexOf('甲'));
+  await expect(board.locator('input[aria-label="卡片名称"]:focus')).toHaveValue('甲');
+
+  // 改名拷贝不回染原卡
+  await board.locator('input[aria-label="卡片名称"]:focus').fill('甲改');
+  await board.locator('input[aria-label="卡片名称"]:focus').blur();
+  await expect(codeOut).toContainText('甲改');
+  const after = (await codeOut.textContent()) ?? '';
+  expect(after).toContain('甲]');
+});
+
 test('journey board adds tasks with scores and renames sections inline', async ({ page }) => {
   await openEditor(page);
   await typeCode(page, 'journey\n  title 我的一天\n  section 上班\n    泡茶: 5: 我');
