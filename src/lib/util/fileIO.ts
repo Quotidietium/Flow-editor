@@ -126,6 +126,38 @@ export const downloadTextFile = (filename: string, text: string, mime: string): 
 };
 
 /**
+ * 把当前渲染出的图表序列化为独立 SVG 文档（/view 只读页下载用）。
+ * 克隆脱离现场：svg-pan-zoom 的 viewport 包装层把用户当前平移/缩放烘在
+ * matrix transform 里——剥掉后下载件呈现完整图形而非屏幕截图视角；
+ * 顺带补 xlink 命名空间与自闭合标签规整（与编辑器导出同源规则）。
+ * withBackground 时以页面 --background 垫底（透明底在文档里可能看不清）。
+ */
+export const svgMarkupOf = (root: ParentNode, withBackground = true): string | undefined => {
+  const svg = root.querySelector('#container svg')?.cloneNode(true) as HTMLElement | undefined;
+  if (!svg) {
+    return undefined;
+  }
+  svg.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+  for (const viewport of svg.querySelectorAll('.svg-pan-zoom_viewport')) {
+    // svg-pan-zoom 版本间位置不一：transform 属性 或 style="transform: matrix(…)"
+    viewport.removeAttribute('transform');
+    (viewport as HTMLElement).style?.removeProperty('transform');
+    if (viewport.getAttribute('style')?.trim() === '') {
+      viewport.removeAttribute('style');
+    }
+  }
+  if (withBackground) {
+    svg.style.backgroundColor = window
+      .getComputedStyle(document.body)
+      .getPropertyValue('--background');
+  }
+  const svgString = svg.outerHTML
+    .replaceAll('<br>', '<br/>')
+    .replaceAll(/<img([^>]*)>/g, (_match, attrs: string) => `<img ${attrs} />`);
+  return `<?xml version="1.0" encoding="UTF-8"?>\n${svgString}`;
+};
+
+/**
  * Pick an `<input type=file>` in the DOM (visible or hidden) for uploads.
  * Returns both the decoded text and the raw bytes — plugin import handlers
  * need the bytes for binary formats (zip/datapacks); text alone is lossy for

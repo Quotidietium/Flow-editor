@@ -30,4 +30,30 @@ test.describe('/view 只读页', () => {
     await expect(page.locator('.monaco-editor')).toBeVisible({ timeout: 15_000 });
     await editPage.checkTextInView('圣诞节');
   });
+
+  test('下载 SVG：干净图形（剥掉平移/缩放包装）', async ({ page }) => {
+    await page.goto('/edit');
+    await page.waitForFunction(
+      () => (window as unknown as { __FLOW_EDITOR_API__?: unknown }).__FLOW_EDITOR_API__
+    );
+    const viewUrl = page.url().replace('/edit', '/view');
+    await page.goto(viewUrl);
+    await expect(page.locator('#container')).toContainText('圣诞节', { timeout: 15_000 });
+
+    // 先缩放一下：现场带着 pan-zoom 变换，验证下载件不受其影响
+    await page.getByRole('button', { name: '放大' }).click();
+
+    const downloadPromise = page.waitForEvent('download');
+    await page.getByTestId('view-download-svg').click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toMatch(/^mermaid-diagram-.*\.svg$/);
+
+    const path = await download.path();
+    const content = await import('node:fs/promises').then((fs) => fs.readFile(path, 'utf8'));
+    expect(content.startsWith('<?xml version="1.0" encoding="UTF-8"?>')).toBe(true);
+    expect(content).toContain('xmlns:xlink="http://www.w3.org/1999/xlink"');
+    // pan-zoom 的 matrix 变换被剥掉（下载件呈现完整图形而非屏幕视角）
+    expect(content).not.toContain('matrix(');
+    await expect(page.getByText('已下载 SVG')).toBeVisible();
+  });
 });

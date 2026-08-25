@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
   IMAGE_SIZE_DEFAULT,
   IMAGE_SIZE_MAX,
@@ -9,7 +9,8 @@ import {
   markdownOf,
   openTextFile,
   parseOpenedFile,
-  stateFileOf
+  stateFileOf,
+  svgMarkupOf
 } from './fileIO';
 
 describe('diagramFileName', () => {
@@ -150,5 +151,63 @@ describe('openTextFile lifecycle', () => {
     expect(Array.from(result?.bytes ?? [])).toEqual(Array.from(payload));
     expect(result?.text).toBe('你好 zip');
     expect(result?.name).toBe('pack.zip');
+  });
+});
+
+describe('svgMarkupOf（/view 页 SVG 下载序列化）', () => {
+  const mount = (markup: string): HTMLElement => {
+    const host = document.createElement('div');
+    host.innerHTML = `<div id="container">${markup}</div>`;
+    document.body.append(host);
+    return host;
+  };
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('剥掉 pan-zoom viewport 的 transform，补 xlink 命名空间', () => {
+    const host = mount(
+      '<svg viewBox="0 0 100 50"><g class="svg-pan-zoom_viewport" transform="matrix(1.5,0,0,1.5,10,20)"><g><text>A</text></g></g></svg>'
+    );
+    const markup = svgMarkupOf(host);
+    expect(markup).toBeDefined();
+    expect(markup).toContain('xmlns:xlink="http://www.w3.org/1999/xlink"');
+    expect(markup).not.toContain('matrix(');
+    expect(markup).not.toContain('transform=');
+    expect(markup).toContain('<text>A</text>');
+    expect(markup?.startsWith('<?xml version="1.0" encoding="UTF-8"?>')).toBe(true);
+  });
+
+  it('style 里的 transform（svg-pan-zoom 另一形态）同样剥掉', () => {
+    const host = mount(
+      '<svg viewBox="0 0 100 50"><g class="svg-pan-zoom_viewport" style="transform: matrix(1.4, 0, 0, 1.4, 135, 6);"><g><text>A</text></g></g></svg>'
+    );
+    const markup = svgMarkupOf(host, false);
+    expect(markup).not.toContain('matrix(');
+    expect(markup).not.toContain('style=');
+    expect(markup).toContain('<text>A</text>');
+  });
+
+  it('withBackground 时以页面 --background 垫底；关闭则不带底色', () => {
+    document.body.style.setProperty('--background', 'rgb(255, 255, 255)');
+    const host = mount('<svg viewBox="0 0 10 10"><text>B</text></svg>');
+    expect(svgMarkupOf(host)).toContain('background-color');
+    expect(svgMarkupOf(host, false)).not.toContain('background-color');
+  });
+
+  it('规整 <br> 与 <img> 自闭合', () => {
+    const host = mount(
+      '<svg viewBox="0 0 10 10"><foreignObject><br><img src="x.png"></foreignObject></svg>'
+    );
+    const markup = svgMarkupOf(host, false);
+    expect(markup).toContain('<br/>');
+    // 与编辑器导出同源的正则：属性前的原捕获空白原样保留（合法 XML，不苛求单空格）
+    expect(markup).toMatch(/<img\s+src="x\.png"\s*\/>/);
+  });
+
+  it('容器里没有 svg 时返回 undefined', () => {
+    const host = mount('<p>空</p>');
+    expect(svgMarkupOf(host)).toBeUndefined();
   });
 });
