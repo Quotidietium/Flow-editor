@@ -33,6 +33,7 @@
   import EditIcon from '~icons/material-symbols/edit-note-rounded';
   import GearIcon from '~icons/material-symbols/settings-outline-rounded';
   import PluginIcon from '~icons/material-symbols/extension-rounded';
+  import WrapTextIcon from '~icons/material-symbols/wrap-text-rounded';
 
   const panZoomState = new PanZoomState();
 
@@ -64,6 +65,13 @@
   let visualCompare = $state(readJSON<boolean>(COMPARE_KEY, false));
   $effect(() => {
     writeJSON(COMPARE_KEY, visualCompare);
+  });
+
+  // 编辑器自动换行偏好（代码/配置共用，Monaco 与 CodeMirror 双端生效）。
+  const WRAP_KEY = 'editorWordWrap';
+  let wordWrap = $state(readJSON<boolean>(WRAP_KEY, false));
+  $effect(() => {
+    writeJSON(WRAP_KEY, wordWrap);
   });
 
   let width = $state(0);
@@ -163,11 +171,19 @@
               activeTabID={validatedState.current.editorMode}
               isClosable={false}>
               {#snippet actions()}
+                <Toggle
+                  bind:pressed={wordWrap}
+                  size="sm"
+                  data-testid="editor-word-wrap"
+                  title="自动换行"
+                  aria-label="自动换行">
+                  <WrapTextIcon />
+                </Toggle>
                 {#if validatedState.current.editorMode === 'config'}
                   <ConfigPresets />
                 {/if}
               {/snippet}
-              <Editor {isMobile} />
+              <Editor {isMobile} {wordWrap} />
             </Card>
 
             <div class="group flex flex-wrap justify-between gap-4 sm:gap-6">

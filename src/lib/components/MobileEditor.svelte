@@ -21,8 +21,17 @@
   let currentText = '';
   const themeCompartment = new Compartment();
   const languageCompartment = new Compartment();
+  const wrapCompartment = new Compartment();
 
-  const { onUpdate }: EditorProps = $props();
+  const { onUpdate, wordWrap = false }: EditorProps = $props();
+
+  $effect(() => {
+    // 同 DesktopEditor：先读 wordWrap 再 ?.，否则首跑短路丢掉依赖订阅
+    const wrap = wordWrap;
+    editorView?.dispatch({
+      effects: wrapCompartment.reconfigure(wrap ? EditorView.lineWrapping : [])
+    });
+  });
 
   $effect(() => {
     editorView?.dispatch({
@@ -38,6 +47,9 @@
           basicSetup,
           languageCompartment.of([]),
           themeCompartment.of([]),
+          // 初始换行状态随创建一次就位（与 DesktopEditor 构造参数同理，
+          // 防 effect 首跑早于 editorView 创建丢应用）；后续切换由 effect 管。
+          wrapCompartment.of(wordWrap ? EditorView.lineWrapping : []),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) {
               const newText = update.state.doc.toString();

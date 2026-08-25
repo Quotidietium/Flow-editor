@@ -9,7 +9,7 @@
   import monacoJsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker';
   import { onMount } from 'svelte';
 
-  const { onUpdate }: EditorProps = $props();
+  const { onUpdate, wordWrap = false }: EditorProps = $props();
 
   let divElement: HTMLDivElement | undefined = $state();
   let editor: monaco.editor.IStandaloneCodeEditor | undefined;
@@ -36,6 +36,15 @@
 
   $effect(() => {
     applyEditorTheme(mode.current);
+  });
+
+  // 自动换行开关（持久化偏好在编辑页持有）：长链式代码免去横向滚动。
+  $effect(() => {
+    // 必须先无条件读 wordWrap：editor 未创建时 ?. 短路会跳过这次读取，
+    // effect 从而永不订阅 wordWrap（依赖追踪只认实际执行到的读取），
+    // 之后切换开关 effect 不再触发——探针期 console.log 恰好读了它才"时好时坏"。
+    const wrap = wordWrap;
+    editor?.updateOptions({ wordWrap: wrap ? 'on' : 'off' });
   });
 
   const jsonModel = monaco.editor.createModel(
@@ -71,7 +80,13 @@
 
     initEditor(monaco);
     errorDebug();
-    editor = monaco.editor.create(divElement, editorOptions);
+    // 构造即带上换行偏好：$effect 首跑可能早于 editor 创建（主题 effect 的
+    // if(!editor) 守卫 + onMount 内补应用正是同一坑的既有先例），仅靠
+    // effect 会在「持久化偏好为开」的冷启动丢一次应用。
+    editor = monaco.editor.create(divElement, {
+      ...editorOptions,
+      wordWrap: wordWrap ? 'on' : 'off'
+    });
 
     editor.onDidChangeModelContent(({ isFlush }) => {
       const newText = editor?.getValue();
