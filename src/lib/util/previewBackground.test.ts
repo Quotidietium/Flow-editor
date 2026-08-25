@@ -4,7 +4,8 @@ import {
   PREVIEW_BACKGROUNDS,
   PREVIEW_BG_LABELS,
   previewBgClass,
-  sanitizePreviewBackground
+  sanitizePreviewBackground,
+  type PreviewBackground
 } from './previewBackground';
 
 describe('nextPreviewBackground（四档循环）', () => {

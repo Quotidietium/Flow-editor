@@ -30,7 +30,7 @@
   import { notify } from '$/util/notify';
   import { inputState, validatedState, updateCodeStore, urls } from '$/util/state.svelte';
   import { initHandler } from '$/util/util';
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import CodeIcon from '~icons/custom/code';
   import HistoryIcon from '~icons/material-symbols/history';
   import BackIcon from '~icons/material-symbols/arrow-back-rounded';
@@ -98,6 +98,17 @@
   // 渲染，插件/分享/历史在该区间完全不可达（窄视口 e2e 发现）
   let isMobile = $derived(width < 768);
   let isViewMode = $state(true);
+  // 移动端开启「可视化」时自动翻到预览半屏：画布挂在右半屏，用户在代码
+  // 半屏点开关若无翻页则「点了没反应」。只跟随 visualMode 的上升沿
+  // （untrack 摘掉 isMobile/isViewMode 依赖），用户随后翻回代码半屏不被拽回。
+  $effect(() => {
+    const entering = visualMode;
+    untrack(() => {
+      if (entering && isMobile && !isViewMode) {
+        isViewMode = true;
+      }
+    });
+  });
   // 编辑器组件引用：「插入片段」菜单经其门面方法进入双端编辑器。
   let editorComp: { insertAtCursor?: (text: string) => void } | undefined = $state();
 
