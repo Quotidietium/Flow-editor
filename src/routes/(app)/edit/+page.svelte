@@ -104,13 +104,44 @@
   let isViewMode = $state(true);
 
   // 拖拽文件进工作区直接打开（与「打开」按钮同走 loadFileIntoEditor：
-  // 插件导入钩子优先、输入转换管道、配置安全门）。enter/leave 计数器
-  // 避免子元素间移动时高亮抖动。
+  // 插件导入钩子优先、输入转换管道、配置安全门）。挂在 window 而非容器
+  // div——① 容器是静态元素，元素级 drag 事件触发 a11y 警告而键盘等价路径
+  // 本就在「打开」按钮；② 漏拖（drop 未命中任何目标）浏览器默认会导航
+  // 走丢现场，window 级 preventDefault 一并堵掉。enter/leave 计数器防
+  // 子元素间移动时高亮抖动。
   let dragDepth = $state(0);
   const onDropFile = async (file: File) => {
     const [text, bytes] = await Promise.all([file.text(), file.arrayBuffer()]);
     await loadFileIntoEditor({ bytes: new Uint8Array(bytes), name: file.name, text });
   };
+  onMount(() => {
+    const onDragEnter = (event: DragEvent) => {
+      event.preventDefault();
+      dragDepth += 1;
+    };
+    const onDragOver = (event: DragEvent) => event.preventDefault();
+    const onDragLeave = () => {
+      dragDepth = Math.max(0, dragDepth - 1);
+    };
+    const onDrop = (event: DragEvent) => {
+      event.preventDefault();
+      dragDepth = 0;
+      const file = event.dataTransfer?.files?.[0];
+      if (file) {
+        void onDropFile(file);
+      }
+    };
+    window.addEventListener('dragenter', onDragEnter);
+    window.addEventListener('dragover', onDragOver);
+    window.addEventListener('dragleave', onDragLeave);
+    window.addEventListener('drop', onDrop);
+    return () => {
+      window.removeEventListener('dragenter', onDragEnter);
+      window.removeEventListener('dragover', onDragOver);
+      window.removeEventListener('dragleave', onDragLeave);
+      window.removeEventListener('drop', onDrop);
+    };
+  });
   // 移动端开启「可视化」时自动翻到预览半屏：画布挂在右半屏，用户在代码
   // 半屏点开关若无翻页则「点了没反应」。只跟随 visualMode 的上升沿
   // （untrack 摘掉 isMobile/isViewMode 依赖），用户随后翻回代码半屏不被拽回。
@@ -235,22 +266,6 @@
       dragDepth > 0 && 'ring-2 ring-inset ring-primary'
     ]}
     bind:clientWidth={width}
-    ondragenter={(e) => {
-      e.preventDefault();
-      dragDepth += 1;
-    }}
-    ondragleave={() => {
-      dragDepth = Math.max(0, dragDepth - 1);
-    }}
-    ondragover={(e) => e.preventDefault()}
-    ondrop={(e) => {
-      e.preventDefault();
-      dragDepth = 0;
-      const file = e.dataTransfer?.files?.[0];
-      if (file) {
-        void onDropFile(file);
-      }
-    }}
     data-testid="edit-workspace">
     <div
       class={[
