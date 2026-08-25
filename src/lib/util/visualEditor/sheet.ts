@@ -185,6 +185,29 @@ export const removeRow = (graph: VGraph, rowId: string): void => {
   graph.edges = graph.edges.filter((e) => e.source !== rowId && e.target !== rowId);
 };
 
+/**
+ * Duplicates a row right after the original (node order is row order within
+ * the section). Full-field clone (label/detail/roleData ride along), fresh id;
+ * returns the copy for autofocus. No-op for ids outside the section.
+ */
+export const duplicateRow = (
+  graph: VGraph,
+  section: SheetSection,
+  rowId: string
+): VNode | undefined => {
+  if (!sheetRows(graph, section).some((n) => n.id === rowId)) {
+    return undefined;
+  }
+  const at = graph.nodes.findIndex((n) => n.id === rowId);
+  const source = graph.nodes[at];
+  if (!source) {
+    return undefined;
+  }
+  const copy: VNode = { ...source, id: nextNodeId(graph.nodes) };
+  graph.nodes.splice(at + 1, 0, copy);
+  return copy;
+};
+
 /** Swaps a row with its previous/next sibling within the same section. */
 export const moveRow = (
   graph: VGraph,

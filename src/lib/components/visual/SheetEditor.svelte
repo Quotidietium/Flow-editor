@@ -1,10 +1,18 @@
 <script lang="ts">
   import { TID } from '$/constants';
   import type { SheetSection } from '$/util/visualEditor/sheet';
-  import { addRow, moveRow, removeRow, SHEET_CONFIG, sheetRows } from '$/util/visualEditor/sheet';
+  import {
+    addRow,
+    duplicateRow,
+    moveRow,
+    removeRow,
+    SHEET_CONFIG,
+    sheetRows
+  } from '$/util/visualEditor/sheet';
   import type { DiagramKind, VGraph, VNode } from '$/util/visualEditor/model';
   import AddIcon from '~icons/material-symbols/add-2-rounded';
   import DeleteIcon from '~icons/material-symbols/close-rounded';
+  import CopyIcon from '~icons/material-symbols/content-copy-rounded';
   import UpIcon from '~icons/material-symbols/arrow-upward-alt-rounded';
   import DownIcon from '~icons/material-symbols/arrow-downward-alt-rounded';
 
@@ -133,6 +141,20 @@
                     }
                   }}>
                   <DownIcon />
+                </button>
+                <button
+                  class="rounded p-0.5 text-muted-foreground hover:bg-accent"
+                  title="复制（紧邻原位插入）"
+                  onclick={() => {
+                    const s = sectionOf(row);
+                    if (s) {
+                      commit(() => {
+                        // 拷贝自动聚焦立即可改（与 addRow 同一条 focusNew 通道）
+                        lastAddedRowId = duplicateRow(graph, s, row.id)?.id;
+                      });
+                    }
+                  }}>
+                  <CopyIcon />
                 </button>
                 <button
                   class="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-destructive"

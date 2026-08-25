@@ -59,6 +59,31 @@ test('pie sheet adds, reorders and deletes slices', async ({ page }) => {
   expect(pageErrors).toEqual([]);
 });
 
+test('pie sheet duplicates a slice next to the original with autofocus', async ({ page }) => {
+  await openEditor(page);
+  await typeCode(page, 'pie title Pets\n  "Dogs" : 386\n  "Cats" : 85');
+  const codeOut = await enterVisual(page);
+  const sheet = page.getByTestId('visual-sheet');
+
+  await sheet.locator('[data-row-id="S1"]').getByTitle('复制（紧邻原位插入）').click();
+
+  // 拷贝紧跟原行：同切片名/同数值（N3 紧随 S1/S2 之后签发）、自动聚焦
+  await expect(sheet.locator('[data-row-id]')).toHaveCount(3);
+  const copy = sheet.locator('[data-row-id="N3"]');
+  await expect(copy.getByLabel('切片名')).toHaveValue('Dogs');
+  await expect(copy.getByLabel('数值')).toHaveValue('386');
+  await expect(copy.getByLabel('切片名')).toBeFocused();
+
+  // 代码出现两行 Dogs 且 Cats 仍在；改名拷贝不回染原行
+  const text = (await codeOut.textContent()) ?? '';
+  expect(text.indexOf('"Dogs"')).toBeLessThan(text.lastIndexOf('"Dogs"'));
+  expect(text).toContain('"Cats"');
+  await copy.getByLabel('切片名').fill('Birds');
+  await copy.getByLabel('切片名').blur();
+  await expect(codeOut).toContainText('"Birds"');
+  await expect(codeOut).toContainText('"Dogs"');
+});
+
 test('radar sheet edits axes and curves in separate sections', async ({ page }) => {
   await openEditor(page);
   await typeCode(page, 'radar-beta\n  axis a["Art"], b["Blog"]\n  curve c["Alice"]{1, 2}\n  max 5');

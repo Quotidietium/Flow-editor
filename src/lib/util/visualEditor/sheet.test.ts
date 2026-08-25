@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { generateCode, parseCode } from './model';
-import { addRow, moveRow, removeRow, SHEET_CONFIG, sheetRows } from './sheet';
+import { addRow, duplicateRow, moveRow, removeRow, SHEET_CONFIG, sheetRows } from './sheet';
 import type { DiagramKind, VGraph } from './model';
 
 const parse = (code: string): VGraph => {
@@ -93,5 +93,47 @@ describe('sheet row operations', () => {
     expect(row.roleData).toBe('=');
     row.roleData = '<-';
     expect(generateCode(graph)).toContain('expr <- term "+" term ;');
+  });
+});
+
+describe('duplicateRow (sheet)', () => {
+  const pieSection = () => {
+    const section = SHEET_CONFIG.pie?.[0];
+    if (!section) {
+      throw new Error('pie section missing');
+    }
+    return section;
+  };
+
+  it('clones the row right after the original with a fresh id', () => {
+    const graph = parse('pie title Pets\n  "Dogs" : 386\n  "Cats" : 85');
+    const section = pieSection();
+    const rows = sheetRows(graph, section);
+    const copy = duplicateRow(graph, section, rows[0]?.id ?? '');
+    expect(copy).toBeDefined();
+    expect(copy?.id).not.toBe(rows[0]?.id);
+    expect(copy?.label).toBe(rows[0]?.label);
+    // 行序即节点序：拷贝紧跟原行
+    const labels = sheetRows(graph, section).map((n) => n.label);
+    expect(labels).toEqual([rows[0]?.label, rows[0]?.label, rows[1]?.label]);
+  });
+
+  it('detail（数值）随拷贝同行', () => {
+    const graph = parse('pie title Pets\n  "Dogs" : 386');
+    const section = pieSection();
+    const rows = sheetRows(graph, section);
+    const copy = duplicateRow(graph, section, rows[0]?.id ?? '');
+    expect(copy?.detail).toBe(rows[0]?.detail);
+    // 生成代码含两行同值切片且仍可解析
+    const code = generateCode(graph);
+    const reparsed = parse(code);
+    expect(sheetRows(reparsed, section)).toHaveLength(2);
+  });
+
+  it('section 外的 id 不动手', () => {
+    const graph = parse('pie title Pets\n  "Dogs" : 386');
+    const before = graph.nodes.length;
+    expect(duplicateRow(graph, pieSection(), 'ZZ')).toBeUndefined();
+    expect(graph.nodes).toHaveLength(before);
   });
 });
