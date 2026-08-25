@@ -1579,7 +1579,10 @@
 {/snippet}
 
 <div class="flex h-full min-h-80 flex-col select-none">
-  <div class="flex flex-wrap items-center gap-1.5 border-b p-1.5 text-xs">
+  <!-- 移动端单行横滑（390px 实测 13 钮换行要占 ~159px 画布高度）；桌面保持换行平铺 -->
+  <div
+    class="flex flex-nowrap items-center gap-1.5 overflow-x-auto border-b p-1.5 text-xs sm:flex-wrap sm:overflow-visible [&>*]:shrink-0"
+    data-testid="visual-toolbar">
     {#if canvasView}
       <Button
         size="sm"
@@ -1737,7 +1740,7 @@
       onclick={() => (helpOpen = true)}>
       <HelpIcon />
     </Button>
-    <span class="ml-auto text-muted-foreground">
+    <span class="ml-auto whitespace-nowrap text-muted-foreground">
       {kindSpec.label} · {graph.nodes.length} 节点 · {graph.edges.length} 连线
       {#if canvasView}· {Math.round(view.k * 100)}%{/if}
     </span>
