@@ -3,12 +3,13 @@
   import { Button, buttonVariants } from '$/components/ui/button';
   import * as Popover from '$/components/ui/popover';
   import { getSampleDiagrams, type SampleExample } from '$/util/mermaid';
-  import { loadRecentPresets, pushRecentPreset } from '$/util/recentPresets';
+  import { loadRecentPresets, pushRecentPreset, clearRecentPresets } from '$/util/recentPresets';
   import { detectDiagramKind, type DiagramKind } from '$/util/visualEditor/model';
   import { updateCode, validatedState } from '$lib/util/state.svelte';
   import { cn } from '$lib/utils';
   import ShapesIcon from '~icons/material-symbols/account-tree-outline-rounded';
   import ChevronDownIcon from '~icons/material-symbols/keyboard-arrow-down-rounded';
+  import ClearIcon from '~icons/material-symbols/delete-sweep-outline-rounded';
 
   const extras: Record<string, SampleExample[]> = {
     ZenUML: [
@@ -218,6 +219,18 @@
             {categoryName(key)}
           </Button>
         {/each}
+        <!-- 试错一串后最近行被「随手点开看过」的类目占满：一键清空重攒 -->
+        <button
+          class="ml-auto rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+          title="清空最近使用"
+          aria-label="清空最近使用"
+          data-testid="preset-recent-clear"
+          onclick={() => {
+            clearRecentPresets();
+            recent = [];
+          }}>
+          <ClearIcon />
+        </button>
       </div>
     {/if}
     {#if filteredOrder.length === 0}

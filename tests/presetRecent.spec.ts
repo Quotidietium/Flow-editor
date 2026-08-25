@@ -38,5 +38,14 @@ test.describe('示例图表最近使用', () => {
     await page.getByTestId('preset-recent-Sequence').click();
     const store = await page.evaluate(() => localStorage.getItem('codeStore'));
     expect(store).toContain('sequenceDiagram');
+
+    // 一键清空：行消失、storage 清空、刷新不再出现
+    await page.getByTestId('preset-recent-clear').click();
+    await expect(page.getByTestId('preset-recent')).toHaveCount(0);
+    const cleared = await page.evaluate(() => localStorage.getItem('presetRecent'));
+    expect(cleared).toBeNull();
+    await page.reload();
+    await page.getByRole('button', { name: '流程图', exact: true }).waitFor();
+    await expect(page.getByTestId('preset-recent')).toHaveCount(0);
   });
 });
