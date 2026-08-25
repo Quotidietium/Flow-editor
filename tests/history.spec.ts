@@ -145,6 +145,42 @@ test.describe('History', () => {
     await expect(page.locator('#historyList')).toContainText('暂无已保存状态。');
   });
 
+  test('filters entries by name or diagram content', async ({ page }) => {
+    await page.evaluate(
+      (manual) => localStorage.setItem('manualHistoryStore', manual),
+      JSON.stringify(manualHistory)
+    );
+    await page.reload();
+    await openHistory(page);
+
+    const search = page.getByTestId('history-search');
+    await expect(search).toBeVisible();
+
+    // 按名称过滤
+    await search.fill('hollow');
+    await expect(page.locator('#historyList li')).toHaveCount(1);
+    await expect(page.locator('#historyList')).toContainText('hollow-art');
+
+    // 按图表内容过滤（代码里的标签），大小写不敏感
+    await search.fill('pumpkin');
+    await expect(page.locator('#historyList li')).toHaveCount(1);
+    await expect(page.locator('#historyList')).toContainText('helpful-ocean');
+
+    // 无匹配提示
+    await search.fill('zzz');
+    await expect(page.locator('#historyList li')).toHaveCount(0);
+    await expect(page.locator('#historyList')).toContainText('没有匹配「zzz」的条目。');
+
+    // Esc 恢复全量
+    await search.press('Escape');
+    await expect(page.locator('#historyList li')).toHaveCount(2);
+
+    // 清空按钮同样恢复
+    await search.fill('hollow');
+    await page.getByRole('button', { name: '清空搜索' }).click();
+    await expect(page.locator('#historyList li')).toHaveCount(2);
+  });
+
   test('renames a saved entry inline', async ({ page }) => {
     await openHistory(page);
     await page.locator('#saveHistory').click();
