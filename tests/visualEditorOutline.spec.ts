@@ -96,6 +96,32 @@ test('outline duplicates a subtree next to the original with autofocus', async (
   expect(text).toContain('(乙)');
 });
 
+test('outline filters rows keeping ancestors visible, display-only', async ({ page }) => {
+  await openEditor(page);
+  await typeCode(page, 'mindmap\n  根\n    甲\n      甲一\n    乙');
+  const codeOut = await enterVisual(page);
+  const outline = page.getByTestId('visual-outline');
+
+  // 过滤「甲一」：命中行 + 全部祖先（根/甲）保留，无关分支（乙）隐去
+  const search = outline.getByTestId('visual-outline-search');
+  await search.fill('甲一');
+  await expect(outline.locator('[data-row-id]')).toHaveCount(3);
+  await expect(outline.getByTestId('visual-outline-search-count')).toHaveText('1 行匹配');
+  const names = outline.locator('input[aria-label="节点名称"]');
+  await expect(names.nth(0)).toHaveValue('根');
+  await expect(names.nth(1)).toHaveValue('甲');
+  await expect(names.nth(2)).toHaveValue('甲一');
+
+  // 只过滤显示不动数据：代码里乙仍在
+  const text = (await codeOut.textContent()) ?? '';
+  expect(text).toContain('乙');
+
+  // Esc 清空：全部回来
+  await search.press('Escape');
+  await expect(outline.locator('[data-row-id]')).toHaveCount(4);
+  await expect(outline.getByTestId('visual-outline-search-count')).toHaveCount(0);
+});
+
 test('treemap outline edits leaf values inline', async ({ page }) => {
   await openEditor(page);
   await typeCode(page, 'treemap-beta\n  产品\n    甲: 10\n    乙: 20');

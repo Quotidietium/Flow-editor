@@ -22,6 +22,7 @@
   import OutdentIcon from '~icons/material-symbols/format-indent-decrease-rounded';
   import UpIcon from '~icons/material-symbols/arrow-upward-alt-rounded';
   import DownIcon from '~icons/material-symbols/arrow-downward-alt-rounded';
+  import { SvelteSet } from 'svelte/reactivity';
 
   /**
    * Outline editor for indent-tree kinds (mindmap / treeview / treemap /
@@ -51,6 +52,37 @@
   const rows = $derived(outlineRows(graph));
   const hasDetail = $derived(spec.detail);
   const shapes = $derived(spec.shapes);
+
+  // 行过滤：深 mindmap/大鱼骨图定位节点全靠滚屏。命中行连同全部祖先
+  // 保持可见（树上下文不断链——只隐去无关分支），命中计数、Esc 清空；
+  // 只过滤显示、不动数据。
+  let rowQuery = $state('');
+  const query = $derived(rowQuery.trim().toLowerCase());
+  const filtered = $derived.by(() => {
+    if (query === '') {
+      return { hits: 0, rows };
+    }
+    const rowById = new Map(rows.map((row) => [row.id, row] as const));
+    const keep = new SvelteSet<string>();
+    let hits = 0;
+    for (const row of rows) {
+      const hit =
+        row.node.label.toLowerCase().includes(query) ||
+        (row.node.detail ?? '').toLowerCase().includes(query);
+      if (!hit) {
+        continue;
+      }
+      hits += 1;
+      let current: OutlineRow | undefined = row;
+      while (current && !keep.has(current.id)) {
+        keep.add(current.id);
+        current = current.parentId === undefined ? undefined : rowById.get(current.parentId);
+      }
+    }
+    return { hits, rows: rows.filter((row) => keep.has(row.id)) };
+  });
+  const visibleRows = $derived(filtered.rows);
+  const hitCount = $derived(filtered.hits);
 
   let lastAddedId = $state<string | undefined>();
 
@@ -84,12 +116,34 @@
 
 <div class="min-h-64 flex-1 overflow-auto p-3" data-testid={TID.visualOutline}>
   <div class="mx-auto flex max-w-2xl flex-col">
+    <div class="mb-1 flex items-center justify-end gap-2">
+      {#if query !== ''}
+        <span class="text-[11px] text-muted-foreground" data-testid="visual-outline-search-count">
+          {hitCount} 行匹配
+        </span>
+      {/if}
+      <input
+        class="w-36 rounded border bg-background px-2 py-1 text-xs"
+        placeholder="过滤节点…"
+        aria-label="过滤节点"
+        data-testid="visual-outline-search"
+        bind:value={rowQuery}
+        onkeydown={(e) => {
+          if (e.key === 'Escape') {
+            rowQuery = '';
+          }
+        }} />
+    </div>
     {#if rows.length === 0}
       <div class="flex h-32 items-center justify-center text-sm text-muted-foreground">
         还没有节点，点击下方「添加根节点」开始。
       </div>
+    {:else if visibleRows.length === 0}
+      <div class="flex h-32 items-center justify-center text-sm text-muted-foreground">
+        没有匹配「{rowQuery.trim()}」的节点。
+      </div>
     {/if}
-    {#each rows as row (row.id)}
+    {#each visibleRows as row (row.id)}
       <div
         class="flex items-center gap-1 rounded px-1 py-0.5 hover:bg-muted/40"
         data-row-id={row.id}
