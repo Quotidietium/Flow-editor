@@ -193,6 +193,7 @@
         <Button
           size="sm"
           class={cn('flex-grow normal-case', examples.length > 1 && 'rounded-r-none')}
+          title="Mermaid 关键字：{sample}"
           onclick={() => loadSampleDiagram(sample, examples[0])}>
           {categoryName(sample)}
         </Button>

@@ -41,4 +41,16 @@ test.describe('示例图表搜索', () => {
     await page.getByRole('button', { name: '时序图', exact: true }).click();
     await editPage.checkTextNotInView('圣诞节');
   });
+
+  test('类目按钮悬停提示 Mermaid 关键字', async ({ page, editPage }) => {
+    await editPage.toggleSampleDiagrams();
+    const flowButton = page.getByRole('button', { name: '流程图', exact: true });
+    await flowButton.waitFor();
+    // 悬停提示展示该图类型的 Mermaid 头关键字（学习语法用）
+    await expect(flowButton).toHaveAttribute('title', 'Mermaid 关键字：Flowchart');
+    await expect(page.getByRole('button', { name: '时序图', exact: true })).toHaveAttribute(
+      'title',
+      'Mermaid 关键字：Sequence'
+    );
+  });
 });
