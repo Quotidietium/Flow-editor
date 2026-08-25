@@ -25,6 +25,13 @@
 
   const { onUpdate, wordWrap = false }: EditorProps = $props();
 
+  // 「插入片段」入口：替换当前选区（无选区即在光标处插入）。
+  export const insertAtCursor = (text: string): void => {
+    if (!editorView) return;
+    editorView.dispatch(editorView.state.replaceSelection(text));
+    editorView.focus();
+  };
+
   $effect(() => {
     // 同 DesktopEditor：先读 wordWrap 再 ?.，否则首跑短路丢掉依赖订阅
     const wrap = wordWrap;

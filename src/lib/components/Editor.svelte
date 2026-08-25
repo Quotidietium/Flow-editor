@@ -19,12 +19,26 @@
 
   // 桌面端错误条「定位到错误行」：经 bind:this 调用 DesktopEditor 暴露的
   // revealPosition；移动端无 Monaco 标记体系，按钮不渲染。
-  let desktopEditor: { revealPosition?: (line: number, column: number) => void } | undefined =
-    $state();
+  let desktopEditor:
+    | {
+        insertAtCursor?: (text: string) => void;
+        revealPosition?: (line: number, column: number) => void;
+      }
+    | undefined = $state();
   const revealFirstError = () => {
     const marker = validatedState.current.errorMarkers[0];
     if (marker) {
       desktopEditor?.revealPosition?.(marker.startLineNumber, marker.startColumn);
+    }
+  };
+
+  // 「插入片段」门面：编辑页菜单经此统一进入双端编辑器。
+  let mobileEditor: { insertAtCursor?: (text: string) => void } | undefined = $state();
+  export const insertAtCursor = (text: string): void => {
+    if (isMobile) {
+      mobileEditor?.insertAtCursor?.(text);
+    } else {
+      desktopEditor?.insertAtCursor?.(text);
     }
   };
 
@@ -48,7 +62,7 @@
 
 <div class="flex h-full flex-col">
   {#if isMobile}
-    <MobileEditor {onUpdate} {wordWrap} />
+    <MobileEditor {onUpdate} {wordWrap} bind:this={mobileEditor} />
   {:else}
     <DesktopEditor {onUpdate} {wordWrap} bind:this={desktopEditor} />
   {/if}

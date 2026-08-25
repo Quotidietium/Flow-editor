@@ -42,6 +42,14 @@
     editor.focus();
   };
 
+  // 「插入片段」入口：在当前选区/光标处插入（选中则替换），不触碰其它内容。
+  export const insertAtCursor = (text: string): void => {
+    const selection = editor?.getSelection();
+    if (!editor || !selection) return;
+    editor.executeEdits('insert-snippet', [{ range: selection, text }]);
+    editor.focus();
+  };
+
   $effect(() => {
     applyEditorTheme(mode.current);
   });

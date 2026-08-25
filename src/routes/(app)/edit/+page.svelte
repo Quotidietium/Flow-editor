@@ -5,6 +5,7 @@
   import Editor from '$/components/Editor.svelte';
   import History from '$/components/History/History.svelte';
   import { startAutoSave } from '$/components/History/historyState.svelte';
+  import InsertSnippets from '$/components/InsertSnippets.svelte';
   import Navbar from '$/components/Navbar.svelte';
   import PluginManager from '$/components/PluginManager.svelte';
   import { installEditorApi } from '$/plugins/editorApi';
@@ -79,6 +80,8 @@
   // 渲染，插件/分享/历史在该区间完全不可达（窄视口 e2e 发现）
   let isMobile = $derived(width < 768);
   let isViewMode = $state(true);
+  // 编辑器组件引用：「插入片段」菜单经其门面方法进入双端编辑器。
+  let editorComp: { insertAtCursor?: (text: string) => void } | undefined = $state();
 
   // Record the Timeline for the whole session, not just while the panel is open.
   onMount(() => startAutoSave());
@@ -181,9 +184,11 @@
                 </Toggle>
                 {#if validatedState.current.editorMode === 'config'}
                   <ConfigPresets />
+                {:else}
+                  <InsertSnippets onInsert={(text) => editorComp?.insertAtCursor?.(text)} />
                 {/if}
               {/snippet}
-              <Editor {isMobile} {wordWrap} />
+              <Editor {isMobile} {wordWrap} bind:this={editorComp} />
             </Card>
 
             <div class="group flex flex-wrap justify-between gap-4 sm:gap-6">
