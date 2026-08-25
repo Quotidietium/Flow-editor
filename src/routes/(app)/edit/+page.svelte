@@ -30,12 +30,15 @@
   import { notify } from '$/util/notify';
   import { inputState, validatedState, updateCodeStore, urls } from '$/util/state.svelte';
   import { initHandler } from '$/util/util';
+  import { mode, setMode } from 'mode-watcher';
   import { onMount, untrack } from 'svelte';
   import CodeIcon from '~icons/custom/code';
   import HistoryIcon from '~icons/material-symbols/history';
   import BackIcon from '~icons/material-symbols/arrow-back-rounded';
+  import DarkModeIcon from '~icons/material-symbols/dark-mode-rounded';
   import EditIcon from '~icons/material-symbols/edit-note-rounded';
   import GearIcon from '~icons/material-symbols/settings-outline-rounded';
+  import LightModeIcon from '~icons/material-symbols/light-mode-rounded';
   import PluginIcon from '~icons/material-symbols/extension-rounded';
   import MinimapIcon from '~icons/material-symbols/map-outline-rounded';
   import WrapTextIcon from '~icons/material-symbols/wrap-text-rounded';
@@ -195,6 +198,22 @@
         onclick={() => (pluginManagerOpen = true)}>
         <PluginIcon />
         插件
+      </Button>
+      <!-- 明暗一键切换：主菜单里也有，但深埋一层——高频操作给直达钮 -->
+      <Button
+        size="sm"
+        variant="ghost"
+        class="px-2"
+        data-testid="theme-toggle"
+        title={mode.current === 'dark' ? '切换到浅色模式' : '切换到深色模式'}
+        aria-label="切换明暗主题"
+        aria-pressed={mode.current === 'dark'}
+        onclick={() => setMode(mode.current === 'dark' ? 'light' : 'dark')}>
+        {#if mode.current === 'dark'}
+          <LightModeIcon />
+        {:else}
+          <DarkModeIcon />
+        {/if}
       </Button>
       <Share />
     </Navbar>
