@@ -19,6 +19,11 @@ test.describe('示例图表最近使用', () => {
     const recentRow = page.getByTestId('preset-recent');
     await expect(recentRow).toBeVisible();
     await expect(page.getByTestId('preset-recent-Sequence')).toBeVisible();
+    // 与网格按钮同款的关键字提示（循环 26 的盲区补齐）
+    await expect(page.getByTestId('preset-recent-Sequence')).toHaveAttribute(
+      'title',
+      'Mermaid 关键字：Sequence'
+    );
 
     // 再点用甘特图 → 甘特在前、时序在后
     await gridButton('甘特图').click();

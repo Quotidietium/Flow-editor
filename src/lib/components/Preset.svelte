@@ -215,6 +215,7 @@
             variant="outline"
             class="normal-case"
             data-testid="preset-recent-{key}"
+            title="Mermaid 关键字：{key}"
             onclick={() => loadSampleDiagram(key, samples[key][0])}>
             {categoryName(key)}
           </Button>
