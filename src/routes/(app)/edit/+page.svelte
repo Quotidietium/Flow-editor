@@ -33,6 +33,7 @@
   import { onMount } from 'svelte';
   import CodeIcon from '~icons/custom/code';
   import HistoryIcon from '~icons/material-symbols/history';
+  import BackIcon from '~icons/material-symbols/arrow-back-rounded';
   import EditIcon from '~icons/material-symbols/edit-note-rounded';
   import GearIcon from '~icons/material-symbols/settings-outline-rounded';
   import PluginIcon from '~icons/material-symbols/extension-rounded';
@@ -285,6 +286,17 @@
            used to mount invisibly (hidden sm:flex) while its toggle showed
            pressed — the panel now takes over the workspace instead. -->
       <div class="absolute inset-0 z-30 flex flex-col bg-background p-2">
+        <!-- 全屏接管时显式返回路径：导航栏开关对新用户不够可见 -->
+        <Button
+          size="sm"
+          variant="outline"
+          class="absolute top-3 right-3 z-10 bg-background/90"
+          data-testid="history-mobile-close"
+          title="返回编辑"
+          onclick={() => (isHistoryOpen = false)}>
+          <BackIcon />
+          返回
+        </Button>
         <History />
       </div>
     {/if}
