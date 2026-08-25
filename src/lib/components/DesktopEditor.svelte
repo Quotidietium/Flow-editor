@@ -9,7 +9,7 @@
   import monacoJsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker';
   import { onMount } from 'svelte';
 
-  const { onUpdate, wordWrap = false }: EditorProps = $props();
+  const { onUpdate, wordWrap = false, fontSize = 14 }: EditorProps = $props();
 
   let divElement: HTMLDivElement | undefined = $state();
   let editor: monaco.editor.IStandaloneCodeEditor | undefined;
@@ -63,6 +63,12 @@
     editor?.updateOptions({ wordWrap: wrap ? 'on' : 'off' });
   });
 
+  // 编辑器字号（同 wordWrap 的订阅教训：先无条件读取再 ?.）。
+  $effect(() => {
+    const size = fontSize;
+    editor?.updateOptions({ fontSize: size });
+  });
+
   const jsonModel = monaco.editor.createModel(
     '',
     'json',
@@ -101,6 +107,7 @@
     // effect 会在「持久化偏好为开」的冷启动丢一次应用。
     editor = monaco.editor.create(divElement, {
       ...editorOptions,
+      fontSize,
       wordWrap: wordWrap ? 'on' : 'off'
     });
 

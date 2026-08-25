@@ -3,6 +3,7 @@
   import Card from '$/components/Card/Card.svelte';
   import ConfigPresets from '$/components/ConfigPresets.svelte';
   import Editor from '$/components/Editor.svelte';
+  import FontSizeMenu from '$/components/FontSizeMenu.svelte';
   import History from '$/components/History/History.svelte';
   import { startAutoSave } from '$/components/History/historyState.svelte';
   import InsertSnippets from '$/components/InsertSnippets.svelte';
@@ -73,6 +74,13 @@
   let wordWrap = $state(readJSON<boolean>(WRAP_KEY, false));
   $effect(() => {
     writeJSON(WRAP_KEY, wordWrap);
+  });
+
+  // 编辑器字号偏好（双端生效），默认 14px。
+  const FONT_SIZE_KEY = 'editorFontSize';
+  let editorFontSize = $state(readJSON<number>(FONT_SIZE_KEY, 14));
+  $effect(() => {
+    writeJSON(FONT_SIZE_KEY, editorFontSize);
   });
 
   let width = $state(0);
@@ -182,13 +190,14 @@
                   aria-label="自动换行">
                   <WrapTextIcon />
                 </Toggle>
+                <FontSizeMenu bind:size={editorFontSize} />
                 {#if validatedState.current.editorMode === 'config'}
                   <ConfigPresets />
                 {:else}
                   <InsertSnippets onInsert={(text) => editorComp?.insertAtCursor?.(text)} />
                 {/if}
               {/snippet}
-              <Editor {isMobile} {wordWrap} bind:this={editorComp} />
+              <Editor {isMobile} {wordWrap} fontSize={editorFontSize} bind:this={editorComp} />
             </Card>
 
             <div class="group flex flex-wrap justify-between gap-4 sm:gap-6">

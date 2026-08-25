@@ -74,6 +74,7 @@ export interface ErrorHash {
 export type InputType = Exclude<HTMLInputTypeAttribute, 'file'>;
 
 export interface EditorProps {
+  fontSize?: number;
   onUpdate: (text: string) => void;
   wordWrap?: boolean;
 }

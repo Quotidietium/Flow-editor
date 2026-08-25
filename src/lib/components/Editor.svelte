@@ -6,7 +6,15 @@
   import { debounce } from 'lodash-es';
   import ExclamationCircleIcon from '~icons/material-symbols/error-outline-rounded';
 
-  const { isMobile, wordWrap = false } = $props<{ isMobile: boolean; wordWrap?: boolean }>();
+  const {
+    isMobile,
+    wordWrap = false,
+    fontSize = 14
+  } = $props<{
+    fontSize?: number;
+    isMobile: boolean;
+    wordWrap?: boolean;
+  }>();
   const onUpdate = (text: string) => {
     if (validatedState.current.editorMode === 'code') {
       updateCode(text);
@@ -62,9 +70,9 @@
 
 <div class="flex h-full flex-col">
   {#if isMobile}
-    <MobileEditor {onUpdate} {wordWrap} bind:this={mobileEditor} />
+    <MobileEditor {onUpdate} {wordWrap} {fontSize} bind:this={mobileEditor} />
   {:else}
-    <DesktopEditor {onUpdate} {wordWrap} bind:this={desktopEditor} />
+    <DesktopEditor {onUpdate} {wordWrap} {fontSize} bind:this={desktopEditor} />
   {/if}
   {#if showError && validatedState.current.error instanceof Error}
     <div class="flex flex-col text-sm" data-testid={TID.errorContainer}>

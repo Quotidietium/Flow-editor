@@ -22,8 +22,14 @@
   const themeCompartment = new Compartment();
   const languageCompartment = new Compartment();
   const wrapCompartment = new Compartment();
+  const fontCompartment = new Compartment();
 
-  const { onUpdate, wordWrap = false }: EditorProps = $props();
+  const { onUpdate, wordWrap = false, fontSize = 14 }: EditorProps = $props();
+
+  const fontTheme = (size: number) =>
+    EditorView.theme({
+      '.cm-content, .cm-gutters': { fontSize: `${size}px` }
+    });
 
   // 「插入片段」入口：替换当前选区（无选区即在光标处插入）。
   export const insertAtCursor = (text: string): void => {
@@ -37,6 +43,13 @@
     const wrap = wordWrap;
     editorView?.dispatch({
       effects: wrapCompartment.reconfigure(wrap ? EditorView.lineWrapping : [])
+    });
+  });
+
+  $effect(() => {
+    const size = fontSize;
+    editorView?.dispatch({
+      effects: fontCompartment.reconfigure(fontTheme(size))
     });
   });
 
@@ -57,6 +70,7 @@
           // 初始换行状态随创建一次就位（与 DesktopEditor 构造参数同理，
           // 防 effect 首跑早于 editorView 创建丢应用）；后续切换由 effect 管。
           wrapCompartment.of(wordWrap ? EditorView.lineWrapping : []),
+          fontCompartment.of(fontTheme(fontSize)),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) {
               const newText = update.state.doc.toString();
