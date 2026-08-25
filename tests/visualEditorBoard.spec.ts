@@ -82,6 +82,30 @@ test('kanban card duplicates next to the original with autofocus', async ({ page
   expect(after).toContain('甲]');
 });
 
+test('kanban board filters cards by label/detail without touching data', async ({ page }) => {
+  await openEditor(page);
+  await typeCode(page, 'kanban\ntodo[待办]\n  t1[甲]\n  t2[乙]\ndone[完成]\n  t3[丙]');
+  const codeOut = await enterVisual(page);
+  const board = page.getByTestId('visual-board');
+
+  // 过滤「甲」：只剩一张，计数提示出现；列结构保留（完成列 0 张仍在）
+  const search = board.getByTestId('visual-board-search');
+  await search.fill('甲');
+  await expect(board.getByTestId('visual-board-card')).toHaveCount(1);
+  await expect(board.getByTestId('visual-board-search-count')).toHaveText('1 张匹配');
+  await expect(page.locator('section[aria-label="完成"]')).toBeVisible();
+
+  // 只过滤显示不动数据：代码全文不变
+  const text = (await codeOut.textContent()) ?? '';
+  expect(text).toContain('乙');
+  expect(text).toContain('丙');
+
+  // Esc 清空：全部回来
+  await search.press('Escape');
+  await expect(board.getByTestId('visual-board-card')).toHaveCount(3);
+  await expect(board.getByTestId('visual-board-search-count')).toHaveCount(0);
+});
+
 test('journey board adds tasks with scores and renames sections inline', async ({ page }) => {
   await openEditor(page);
   await typeCode(page, 'journey\n  title 我的一天\n  section 上班\n    泡茶: 5: 我');

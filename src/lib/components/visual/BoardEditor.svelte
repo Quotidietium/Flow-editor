@@ -109,6 +109,24 @@
   const columns = $derived(boardColumns(graph, config.groupRole, config.groupName));
   const domainNodes = $derived(graph.nodes.filter((n) => n.role === 'domain'));
 
+  // 卡片过滤：大甘特图/长看板里按名称或详情定位（MC 设计器树搜索同款交互），
+  // 只过滤显示、不动数据结构；Esc 清空。
+  let cardQuery = $state('');
+  const query = $derived(cardQuery.trim().toLowerCase());
+  const visibleColumns = $derived(
+    query === ''
+      ? columns
+      : columns.map((col) => ({
+          ...col,
+          items: col.items.filter(
+            (card) =>
+              card.label.toLowerCase().includes(query) ||
+              (card.detail ?? '').toLowerCase().includes(query)
+          )
+        }))
+  );
+  const matchCount = $derived(visibleColumns.reduce((total, col) => total + col.items.length, 0));
+
   let dragCardId = $state<string | undefined>();
   let dropHint = $state<string | undefined>(); // column id or `${columnId}:${cardId}`
   let lastAddedCardId = $state<string | undefined>();
@@ -199,8 +217,26 @@
       </button>
     </div>
   {:else}
+    <div class="mb-2 flex items-center justify-end gap-2">
+      {#if query !== ''}
+        <span class="text-[11px] text-muted-foreground" data-testid="visual-board-search-count">
+          {matchCount} 张匹配
+        </span>
+      {/if}
+      <input
+        class="w-44 rounded border bg-background px-2 py-1 text-xs"
+        placeholder="过滤{config.itemName}…"
+        aria-label="过滤{config.itemName}"
+        data-testid="visual-board-search"
+        bind:value={cardQuery}
+        onkeydown={(e) => {
+          if (e.key === 'Escape') {
+            cardQuery = '';
+          }
+        }} />
+    </div>
     <div class="flex items-start gap-3">
-      {#each columns as col, ci (col.id ?? '__virtual__')}
+      {#each visibleColumns as col, ci (col.id ?? '__virtual__')}
         {@const colKey = col.id ?? '__virtual__'}
         <section
           class="w-60 flex-none rounded-lg border bg-muted/30 transition-colors {dropHint === colKey
