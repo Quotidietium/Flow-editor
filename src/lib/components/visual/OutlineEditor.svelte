@@ -7,6 +7,7 @@
     addChild,
     addRoot,
     addSiblingAfter,
+    duplicateRow,
     indentRow,
     moveRow,
     outlineRows,
@@ -15,6 +16,7 @@
   } from '$/util/visualEditor/outline';
   import AddIcon from '~icons/material-symbols/add-2-rounded';
   import DeleteIcon from '~icons/material-symbols/close-rounded';
+  import CopyIcon from '~icons/material-symbols/content-copy-rounded';
   import ChildIcon from '~icons/material-symbols/subdirectory-arrow-right-rounded';
   import IndentIcon from '~icons/material-symbols/format-indent-increase-rounded';
   import OutdentIcon from '~icons/material-symbols/format-indent-decrease-rounded';
@@ -164,6 +166,16 @@
             title="取消缩进（Shift+Tab）"
             onclick={() => commit(() => outdentRow(graph, row))}>
             <OutdentIcon />
+          </button>
+          <button
+            class="rounded p-0.5 hover:bg-accent"
+            title="复制子树（紧邻原位插入）"
+            onclick={() =>
+              commit(() => {
+                // 整棵子树深克隆为下一个同级行，拷贝根自动聚焦立即可改名
+                lastAddedId = duplicateRow(graph, row)?.id;
+              })}>
+            <CopyIcon />
           </button>
           <button
             class="rounded p-0.5 hover:bg-accent hover:text-destructive"

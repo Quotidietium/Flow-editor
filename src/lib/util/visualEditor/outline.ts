@@ -212,5 +212,64 @@ export const moveRow = (graph: VGraph, row: OutlineRow, direction: -1 | 1): void
   }
   const a = graph.edges[indexA];
   graph.edges[indexA] = graph.edges[indexB] as NonNullable<typeof a>;
-  graph.edges[indexB] = a as NonNullable<typeof a>;
+  graph.edges[indexB] = a;
+};
+
+/**
+ * Deep-duplicates the subtree rooted at `row`: every descendant cloned with a
+ * fresh id (labels kept — outline labels are content, not identifiers), the
+ * copy root becoming the original's NEXT SIBLING (or the next root). Returns
+ * the copy root for autofocus.
+ */
+export const duplicateRow = (graph: VGraph, row: OutlineRow): VNode | undefined => {
+  if (!graph.nodes.some((n) => n.id === row.id)) {
+    return undefined;
+  }
+  // DFS in display order: parents before children, children in edge order.
+  const order: string[] = [];
+  const visit = (id: string): void => {
+    order.push(id);
+    for (const kid of childIdsOf(graph, id)) {
+      visit(kid);
+    }
+  };
+  visit(row.id);
+  const members = new Set(order);
+  const idMap = new Map<string, string>();
+  const clones: VNode[] = [];
+  for (const oldId of order) {
+    const node = graph.nodes.find((n) => n.id === oldId) as VNode;
+    const copy: VNode = { ...node, id: nextNodeId([...graph.nodes, ...clones]) };
+    idMap.set(oldId, copy.id);
+    clones.push(copy);
+  }
+  // Root order = node order: the copy root must land right after the original
+  // root; deeper nodes' positions are display-irrelevant (edges carry order).
+  const rootIndex = graph.nodes.findIndex((n) => n.id === row.id);
+  graph.nodes.splice(rootIndex + 1, 0, ...clones);
+  // Inner edges in DFS order so each parent's child order survives the remap.
+  for (const edge of graph.edges.filter((e) => members.has(e.source) && members.has(e.target))) {
+    graph.edges.push({
+      ...edge,
+      id: nextEdgeId(graph.edges),
+      source: idMap.get(edge.source) as string,
+      target: idMap.get(edge.target) as string
+    });
+  }
+  // The copy root links in right after the original (same parent).
+  if (row.parentId !== undefined) {
+    const parentEdge = {
+      id: nextEdgeId(graph.edges),
+      source: row.parentId,
+      target: idMap.get(row.id) as string,
+      type: 'line' as const
+    };
+    const after = graph.edges.findIndex((e) => e.source === row.parentId && e.target === row.id);
+    if (after === -1) {
+      graph.edges.push(parentEdge);
+    } else {
+      graph.edges.splice(after + 1, 0, parentEdge);
+    }
+  }
+  return clones[0];
 };

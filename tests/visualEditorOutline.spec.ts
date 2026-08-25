@@ -70,6 +70,32 @@ test('outline delete promotes children into the deleted slot', async ({ page }) 
   expect(text.indexOf('甲一')).toBeLessThan(text.indexOf('乙'));
 });
 
+test('outline duplicates a subtree next to the original with autofocus', async ({ page }) => {
+  await openEditor(page);
+  await typeCode(page, 'mindmap\n  根\n    甲\n      甲一\n    乙');
+  const codeOut = await enterVisual(page);
+  const outline = page.getByTestId('visual-outline');
+
+  // 复制「甲」：整棵子树（甲→甲一）克隆为下一个同级行
+  await outline.locator('[data-row-id]').nth(1).getByTitle('复制子树（紧邻原位插入）').click();
+  await expect(outline.locator('[data-row-id]')).toHaveCount(6);
+  // 行序：根 / 甲 / 甲一 / 甲(拷贝) / 甲一(拷贝) / 乙
+  const names = outline.locator('input[aria-label="节点名称"]');
+  await expect(names.nth(3)).toHaveValue('甲');
+  await expect(names.nth(4)).toHaveValue('甲一');
+  await expect(names.nth(5)).toHaveValue('乙');
+  // 拷贝根自动聚焦立即可改名
+  await expect(names.nth(3)).toBeFocused();
+
+  // 改名拷贝不回染原行；生成代码含两棵子树且仍可解析
+  await names.nth(3).fill('甲改');
+  await names.nth(3).blur();
+  await expect(codeOut).toContainText('甲改');
+  const text = (await codeOut.textContent()) ?? '';
+  expect(text).toContain('(甲)');
+  expect(text).toContain('(乙)');
+});
+
 test('treemap outline edits leaf values inline', async ({ page }) => {
   await openEditor(page);
   await typeCode(page, 'treemap-beta\n  产品\n    甲: 10\n    乙: 20');
