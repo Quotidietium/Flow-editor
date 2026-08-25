@@ -33,24 +33,33 @@ export const clampImageSize = (value: number): number => {
  * side to the clamped size and scale the other by the content ratio; auto
  * doubles the content size. Zero/non-finite content dimensions collapse to
  * 1px first so the ratio can never be Infinity or NaN.
+ * `scale`（导出倍数 1–4）在结果上整体放大并夹取到单边上限——高倍用于
+ * 投影/打印的清晰位图，超限时退回上限内的最大整数倍。
  */
 export const exportCanvasSize = (
   mode: 'auto' | 'width' | 'height',
   imageSize: number,
   contentWidth: number,
-  contentHeight: number
+  contentHeight: number,
+  scale = 1
 ): { height: number; width: number } => {
   const contentW = Math.max(1, Math.round(contentWidth));
   const contentH = Math.max(1, Math.round(contentHeight));
+  const factor = Number.isFinite(scale) ? Math.min(4, Math.max(1, Math.round(scale))) : 1;
   if (mode === 'width') {
-    const size = clampImageSize(imageSize);
-    return { height: Math.round((size * contentH) / contentW), width: size };
+    const size = clampImageSize(imageSize) * factor;
+    const width = Math.min(IMAGE_SIZE_MAX, size);
+    return { height: Math.round((width * contentH) / contentW), width };
   }
   if (mode === 'height') {
-    const size = clampImageSize(imageSize);
-    return { width: Math.round((size * contentW) / contentH), height: size };
+    const size = clampImageSize(imageSize) * factor;
+    const height = Math.min(IMAGE_SIZE_MAX, size);
+    return { height, width: Math.round((height * contentW) / contentH) };
   }
-  return { height: contentH * 2, width: contentW * 2 };
+  return {
+    height: Math.min(IMAGE_SIZE_MAX, contentH * 2 * factor),
+    width: Math.min(IMAGE_SIZE_MAX, contentW * 2 * factor)
+  };
 };
 
 /** Wrap mermaid source in a fenced Markdown code block. */

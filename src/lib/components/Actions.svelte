@@ -194,7 +194,13 @@ ${svgString}`);
 
     // Typed sizes and degenerate content dimensions are clamped here — the
     // number input's HTML min/max only advises the spinner UI.
-    const size = exportCanvasSize(imageSizeMode, imageSize, contentWidth, contentHeight);
+    const size = exportCanvasSize(
+      imageSizeMode,
+      imageSize,
+      contentWidth,
+      contentHeight,
+      exportScale
+    );
     canvas.width = size.width;
     canvas.height = size.height;
 
@@ -456,6 +462,10 @@ ${svgString}`);
     writeJSON('pngTransparentBg', transparentBg);
   });
 
+  // 导出倍数（1–4x 清晰位图，仅光栅格式）：会话级状态——持久化一个
+  // 被遗忘的 4x 会在下次会话产出意料之外的巨型文件。
+  let exportScale = $state(1);
+
   $effect(() => {
     if (!imageSizeMode) {
       imageSizeMode = 'auto';
@@ -509,6 +519,22 @@ ${svgString}`);
       <input type="checkbox" data-testid="png-transparent" bind:checked={transparentBg} />
       透明背景（PNG / WebP / SVG）
     </label>
+    <div class="flex items-center gap-1 px-1" data-testid="export-scale-chips">
+      <span class="text-xs text-muted-foreground" title="光栅导出按倍数放大，投影/打印更清晰">
+        倍数
+      </span>
+      {#each [1, 2, 3] as scale (scale)}
+        <button
+          class={[
+            'rounded border px-1.5 py-0.5 text-xs hover:bg-accent',
+            exportScale === scale && 'border-primary text-primary'
+          ]}
+          data-testid="export-scale-{scale}"
+          onclick={() => (exportScale = scale)}>
+          {scale}x
+        </button>
+      {/each}
+    </div>
     <div class="flex gap-2">
       <Button
         class="flex-grow"

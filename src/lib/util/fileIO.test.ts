@@ -85,6 +85,21 @@ describe('exportCanvasSize / clampImageSize', () => {
   it('auto mode doubles the (collapsed) content size', () => {
     expect(exportCanvasSize('auto', 1e9, 300, 200)).toEqual({ height: 400, width: 600 });
   });
+
+  it('scale multiplies the result and clamps to the side cap', () => {
+    // 默认 1x 行为不变
+    expect(exportCanvasSize('auto', 1e9, 300, 200, 1)).toEqual({ height: 400, width: 600 });
+    // 3x 清晰位图
+    expect(exportCanvasSize('auto', 1e9, 300, 200, 3)).toEqual({ height: 1200, width: 1800 });
+    expect(exportCanvasSize('width', 1000, 800, 400, 2)).toEqual({ height: 1000, width: 2000 });
+    // 超过单边上限时夹取（2000×4=8000 ok；4000×4=16000 → 10000）
+    expect(exportCanvasSize('auto', 1e9, 4000, 100, 4).width).toBe(IMAGE_SIZE_MAX);
+    // 非法倍数回退 1x
+    expect(exportCanvasSize('auto', 1e9, 300, 200, Number.NaN)).toEqual({
+      height: 400,
+      width: 600
+    });
+  });
 });
 
 describe('openTextFile lifecycle', () => {
