@@ -10,10 +10,12 @@
   const {
     isMobile,
     wordWrap = false,
-    fontSize = 14
+    fontSize = 14,
+    minimap = false
   } = $props<{
     fontSize?: number;
     isMobile: boolean;
+    minimap?: boolean;
     wordWrap?: boolean;
   }>();
   const onUpdate = (text: string) => {
@@ -87,7 +89,7 @@
   {#if isMobile}
     <MobileEditor {onUpdate} {wordWrap} {fontSize} bind:this={mobileEditor} />
   {:else}
-    <DesktopEditor {onUpdate} {wordWrap} {fontSize} bind:this={desktopEditor} />
+    <DesktopEditor {onUpdate} {wordWrap} {fontSize} {minimap} bind:this={desktopEditor} />
   {/if}
   {#if showError && validatedState.current.error instanceof Error}
     <div class="flex flex-col text-sm" data-testid={TID.errorContainer}>

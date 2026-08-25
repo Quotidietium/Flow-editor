@@ -9,7 +9,7 @@
   import monacoJsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker';
   import { onMount } from 'svelte';
 
-  const { onUpdate, wordWrap = false, fontSize = 14 }: EditorProps = $props();
+  const { onUpdate, wordWrap = false, fontSize = 14, minimap = false }: EditorProps = $props();
 
   let divElement: HTMLDivElement | undefined = $state();
   let editor: monaco.editor.IStandaloneCodeEditor | undefined;
@@ -69,6 +69,12 @@
     editor?.updateOptions({ fontSize: size });
   });
 
+  // 小地图开关（长代码导航；默认关，移动端无此选项）。
+  $effect(() => {
+    const show = minimap;
+    editor?.updateOptions({ minimap: { enabled: show } });
+  });
+
   const jsonModel = monaco.editor.createModel(
     '',
     'json',
@@ -108,6 +114,7 @@
     editor = monaco.editor.create(divElement, {
       ...editorOptions,
       fontSize,
+      minimap: { enabled: minimap },
       wordWrap: wordWrap ? 'on' : 'off'
     });
 

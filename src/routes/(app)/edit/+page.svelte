@@ -36,6 +36,7 @@
   import EditIcon from '~icons/material-symbols/edit-note-rounded';
   import GearIcon from '~icons/material-symbols/settings-outline-rounded';
   import PluginIcon from '~icons/material-symbols/extension-rounded';
+  import MinimapIcon from '~icons/material-symbols/map-outline-rounded';
   import WrapTextIcon from '~icons/material-symbols/wrap-text-rounded';
 
   const panZoomState = new PanZoomState();
@@ -82,6 +83,13 @@
   let editorFontSize = $state(readJSON<number>(FONT_SIZE_KEY, 14));
   $effect(() => {
     writeJSON(FONT_SIZE_KEY, editorFontSize);
+  });
+
+  // Monaco 小地图偏好（仅桌面端；长代码导航），默认关。
+  const MINIMAP_KEY = 'editorMinimap';
+  let minimap = $state(readJSON<boolean>(MINIMAP_KEY, false));
+  $effect(() => {
+    writeJSON(MINIMAP_KEY, minimap);
   });
 
   let width = $state(0);
@@ -208,13 +216,27 @@
                   <WrapTextIcon />
                 </Toggle>
                 <FontSizeMenu bind:size={editorFontSize} />
+                <Toggle
+                  bind:pressed={minimap}
+                  size="sm"
+                  class="hidden sm:inline-flex"
+                  data-testid="editor-minimap"
+                  title="小地图（长代码导航）"
+                  aria-label="小地图">
+                  <MinimapIcon />
+                </Toggle>
                 {#if validatedState.current.editorMode === 'config'}
                   <ConfigPresets />
                 {:else}
                   <InsertSnippets onInsert={(text) => editorComp?.insertAtCursor?.(text)} />
                 {/if}
               {/snippet}
-              <Editor {isMobile} {wordWrap} fontSize={editorFontSize} bind:this={editorComp} />
+              <Editor
+                {isMobile}
+                {wordWrap}
+                fontSize={editorFontSize}
+                {minimap}
+                bind:this={editorComp} />
             </Card>
 
             <div class="group flex flex-wrap justify-between gap-4 sm:gap-6">
