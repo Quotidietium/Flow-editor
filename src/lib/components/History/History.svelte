@@ -161,9 +161,16 @@
     const kind = detectDiagramKind(code);
     return kind ? KIND_SPECS[kind]?.label : undefined;
   };
+  // 悬停速览：自动条目名是随机 slug、手动条目也可能同名——title 里放
+  // 压缩后的代码开头（单空白、限长），悬停即辨认内容。
+  const codePreviewOf = (code: string): string => {
+    const flat = code.replaceAll(/\s+/g, ' ').trim();
+    return flat.length > 120 ? `${flat.slice(0, 120)}…` : flat;
+  };
   const entriesWithUrl = $derived(
     historyState.entries.map((entry) => ({
       ...entry,
+      codePreview: codePreviewOf(entry.state.code),
       kindLabel: kindLabelOf(entry.state.code),
       openUrl: entryUrl(entry.state)
     }))
@@ -248,7 +255,7 @@
   {/if}
   <ul class="flex h-full flex-col gap-2 overflow-auto p-2" id="historyList">
     {#if filteredEntries.length > 0}
-      {#each filteredEntries as { id, state, time, name, url, type, kindLabel, openUrl } (id)}
+      {#each filteredEntries as { id, state, time, name, url, type, kindLabel, openUrl, codePreview } (id)}
         <li class="flex flex-col gap-2">
           <div class="flex items-center justify-between">
             <div class="flex min-w-0 flex-1 flex-col">
@@ -274,7 +281,7 @@
                     }}
                     onblur={commitRename} />
                 {:else}
-                  <span class="min-w-0 truncate" title={name}>{name}</span>
+                  <span class="min-w-0 truncate" title="{name} · {codePreview}">{name}</span>
                   {#if kindLabel}
                     <span
                       class="shrink-0 rounded bg-muted px-1 py-0.5 text-[10px] text-muted-foreground"

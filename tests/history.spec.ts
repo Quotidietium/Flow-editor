@@ -232,6 +232,22 @@ test.describe('History', () => {
     await expect(badges).toHaveCount(1);
   });
 
+  test('悬停条目名显示代码速览（压缩空白）', async ({ page }) => {
+    await page.evaluate(
+      (manual) => localStorage.setItem('manualHistoryStore', manual),
+      JSON.stringify(manualHistory)
+    );
+    await page.reload();
+    await openHistory(page);
+
+    // title = 名称 · 压缩后的代码开头（自动/同名条目悬停即辨认）
+    const row = page.locator('#historyList li', { hasText: 'hollow-art' });
+    await expect(row.locator('span[title]').first()).toHaveAttribute(
+      'title',
+      'hollow-art · flowchart TD A[Halloween]'
+    );
+  });
+
   test('Ctrl+S 收藏当前状态到「已保存」', async ({ page }) => {
     // 冷启动 dev server 水合需数秒：等应用装好（桥存在 = onMount 链已跑完），
     // 否则按键落在监听器注册之前
