@@ -44,4 +44,22 @@ test.describe('编辑器状态栏', () => {
     );
     await expect(count).toHaveText(`${configLength} 字符`);
   });
+
+  test('选区出现时显示已选字符数，取消选区消失', async ({ page, editPage }) => {
+    const selection = page.getByTestId('editor-selection');
+    await expect(selection).toHaveCount(0);
+
+    // 全选后「已选」必等于同刻「字符数」（全选不变式，与具体文本/尾换行无关）
+    await editPage.clearEditor();
+    await editPage.typeInEditor('flowchart TD\n  A --> B');
+    await page.keyboard.press('Control+KeyA');
+    const charCountText = await page.getByTestId('editor-char-count').textContent();
+    const total = Number.parseInt(charCountText ?? '0', 10);
+    expect(total).toBeGreaterThan(0);
+    await expect(selection).toHaveText(`已选 ${total} 字符`);
+
+    // 点击取消选区：提示消失
+    await page.locator('.monaco-editor .view-lines > div:nth-child(1)').first().click();
+    await expect(selection).toHaveCount(0);
+  });
 });

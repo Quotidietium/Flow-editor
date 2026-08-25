@@ -76,12 +76,14 @@
             if (!onCursor || (!update.selectionSet && !update.docChanged)) {
               return;
             }
-            const head = update.state.selection.main.head;
+            const main = update.state.selection.main;
+            const head = main.head;
             const line = update.state.doc.lineAt(head);
             onCursor({
               column: head - line.from + 1,
               line: line.number,
-              lines: update.state.doc.lines
+              lines: update.state.doc.lines,
+              selected: Math.abs(main.to - main.from)
             });
           }),
           EditorView.updateListener.of((update) => {

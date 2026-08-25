@@ -151,18 +151,22 @@
       onUpdate(currentText);
     });
 
-    // 状态栏：光标行列 + 总行数（语法错误的行号对照）。
+    // 状态栏：光标行列 + 总行数 + 已选字符数（语法错误的行号对照；
+    // onDidChangeCursorSelection 同时覆盖移动光标与拖选/键盘选区）。
     const emitCursor = () => {
       const position = editor?.getPosition();
+      const model = editor?.getModel();
+      const selection = editor?.getSelection();
       if (position && onCursor) {
         onCursor({
           column: position.column,
           line: position.lineNumber,
-          lines: editor?.getModel()?.getLineCount() ?? 0
+          lines: model?.getLineCount() ?? 0,
+          selected: model && selection ? model.getValueLengthInRange(selection) : 0
         });
       }
     };
-    editor.onDidChangeCursorPosition(emitCursor);
+    editor.onDidChangeCursorSelection(emitCursor);
     emitCursor();
 
     applyEditorTheme(mode.current);

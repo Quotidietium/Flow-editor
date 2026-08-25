@@ -28,8 +28,8 @@
   };
 
   // 状态栏：光标行列 + 总行数（语法错误行号的对照锚点），双端同构。
-  let cursor = $state({ column: 1, line: 1, lines: 0 });
-  const onCursor = (info: { column: number; line: number; lines: number }) => {
+  let cursor = $state({ column: 1, line: 1, lines: 0, selected: 0 });
+  const onCursor = (info: { column: number; line: number; lines: number; selected: number }) => {
     cursor = info;
   };
 
@@ -127,6 +127,10 @@
     data-testid="editor-status">
     {#if diagramKindLabel}
       <span class="mr-auto" data-testid="editor-kind">{diagramKindLabel}</span>
+    {/if}
+    {#if cursor.selected > 0}
+      <!-- VSCode 同款：有选区时显示已选长度（复制/删除前的 sanity check） -->
+      <span data-testid="editor-selection">已选 {cursor.selected} 字符</span>
     {/if}
     <span data-testid="editor-char-count">{charCount} 字符</span>
     <span>行 {cursor.line}，列 {cursor.column}</span>
