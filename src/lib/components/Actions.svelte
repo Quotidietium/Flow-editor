@@ -317,7 +317,10 @@ ${svgString}`);
   };
 
   const onDownloadSVG = () => {
-    simulateDownload(getFileName('svg'), `data:image/svg+xml;base64,${getBase64SVG()}`);
+    simulateDownload(
+      getFileName('svg'),
+      `data:image/svg+xml;base64,${getBase64SVG(undefined, undefined, undefined, !transparentBg)}`
+    );
   };
 
   // 粘贴到支持 SVG 的目标（文档/设计工具）时免下载中转：与下载同源，
@@ -502,9 +505,9 @@ ${svgString}`);
     {/if}
     <label
       class="flex w-fit cursor-pointer items-center gap-1.5 px-1 text-xs select-none"
-      title="PNG / WebP 导出时不填充背景色，便于叠加到其它文档底图上">
+      title="PNG / WebP / SVG 导出时不填充背景色，便于叠加到其它文档底图上">
       <input type="checkbox" data-testid="png-transparent" bind:checked={transparentBg} />
-      透明背景（PNG / WebP）
+      透明背景（PNG / WebP / SVG）
     </label>
     <div class="flex gap-2">
       <Button
