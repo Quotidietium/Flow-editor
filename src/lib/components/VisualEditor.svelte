@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { Button } from '$/components/ui/button';
+  import { Button, buttonVariants } from '$/components/ui/button';
+  import * as Dialog from '$/components/ui/dialog';
   import { Toggle } from '$/components/ui/toggle';
   import BoardEditor from '$/components/visual/BoardEditor.svelte';
   import GitEditor from '$/components/visual/GitEditor.svelte';
@@ -54,6 +55,7 @@
   import StartIcon from '~icons/material-symbols/keyboard-double-arrow-right-rounded';
   import EndIcon from '~icons/material-symbols/keyboard-double-arrow-left-rounded';
   import DetailIcon from '~icons/material-symbols/notes-rounded';
+  import HelpIcon from '~icons/material-symbols/help-outline-rounded';
   import UndoIcon from '~icons/material-symbols/undo-rounded';
   import RedoIcon from '~icons/material-symbols/redo-rounded';
   import { onMount } from 'svelte';
@@ -79,6 +81,58 @@
     right: '右对齐',
     top: '顶端对齐'
   };
+
+  // 快捷键帮助对话框内容（与 onWindowKeydown 实际实现一一对应）。
+  const SHORTCUT_GROUPS: { group: string; items: [keys: string, desc: string][] }[] = [
+    {
+      group: '画布',
+      items: [
+        ['双击空白', '新建节点'],
+        ['双击节点 / 连线（或 F2）', '编辑文字'],
+        ['从锚点拖拽', '创建连线（拖到空白松手 = 新建并连接）'],
+        ['方向箭头', '在该方向快速添加并连接']
+      ]
+    },
+    {
+      group: '选择',
+      items: [
+        ['Shift / Ctrl + 点击', '加选'],
+        ['Shift + 拖拽', '框选（Ctrl + 拖拽追加）'],
+        ['Ctrl + A', '全选'],
+        ['Esc', '取消选择 / 连线 / 菜单']
+      ]
+    },
+    {
+      group: '编辑',
+      items: [
+        ['Delete / Backspace', '删除选中'],
+        ['Ctrl + C / X / V', '复制 / 剪切 / 粘贴'],
+        ['Ctrl + D', '原位复制'],
+        ['Ctrl + 拖拽', '克隆拖放'],
+        ['Alt + Shift + 方向键', '克隆并连接'],
+        ['方向键（Shift 加速）', '微移 1px（10px）'],
+        ['右键 / Shift + F10', '上下文菜单']
+      ]
+    },
+    {
+      group: '历史与视图',
+      items: [
+        ['Ctrl + Z', '撤销'],
+        ['Ctrl + Shift + Z / Ctrl + Y', '重做'],
+        ['空白拖拽 / 空格 + 拖拽', '平移画布'],
+        ['Ctrl + 滚轮', '缩放画布'],
+        ['Ctrl + H', '复位视图']
+      ]
+    },
+    {
+      group: '专用编辑器',
+      items: [
+        ['大纲：Enter / Tab / Shift+Tab', '同级 / 缩进 / 反缩进'],
+        ['看板：拖拽卡片', '换列 / 列内排序'],
+        ['时序 / Git：上下移动行', '调整次序']
+      ]
+    }
+  ];
 
   // Link types drawn with a dashed stroke, regardless of their arrowhead.
   const DASHED_LINKS = new Set<VLinkType>([
@@ -199,6 +253,7 @@
   // 插入 ▾ stencil list (nodeTypes × shapes per kind) and 整理 ▾ layout menu.
   let insertOpen = $state<undefined | { x: number; y: number }>(undefined);
   let layoutMenuOpen = $state(false);
+  let helpOpen = $state(false);
   let showCode = $state(true);
   let editingDetail = $state(false);
   let detailDraft = $state('');
@@ -1645,6 +1700,15 @@
     <Button size="sm" variant="outline" onclick={clearAll} data-testid={TID.visualClear}>
       <ClearIcon /> 清空
     </Button>
+    <Button
+      size="sm"
+      variant="outline"
+      data-testid="visual-help"
+      title="快捷键与操作帮助"
+      aria-label="快捷键与操作帮助"
+      onclick={() => (helpOpen = true)}>
+      <HelpIcon />
+    </Button>
     <span class="ml-auto text-muted-foreground">
       {kindSpec.label} · {graph.nodes.length} 节点 · {graph.edges.length} 连线
       {#if canvasView}· {Math.round(view.k * 100)}%{/if}
@@ -2400,4 +2464,33 @@
       {/if}
     </div>
   {/if}
+
+  <Dialog.Root bind:open={helpOpen}>
+    <Dialog.Content class="max-w-lg" data-testid="visual-help-dialog">
+      <Dialog.Header>
+        <Dialog.Title>快捷键与操作</Dialog.Title>
+        <Dialog.Description>可视化编辑器的全部键盘与鼠标操作</Dialog.Description>
+      </Dialog.Header>
+      <div class="max-h-[60vh] overflow-y-auto pr-1">
+        {#each SHORTCUT_GROUPS as section (section.group)}
+          <div class="mb-3">
+            <div class="mb-1 text-xs font-medium text-muted-foreground">{section.group}</div>
+            <div class="flex flex-col gap-1">
+              {#each section.items as [keys, desc] (keys)}
+                <div class="flex items-center justify-between gap-4 text-sm">
+                  <span>{desc}</span>
+                  <kbd class="rounded border bg-muted px-1.5 py-0.5 text-xs whitespace-nowrap">
+                    {keys}
+                  </kbd>
+                </div>
+              {/each}
+            </div>
+          </div>
+        {/each}
+      </div>
+      <Dialog.Footer>
+        <Dialog.Close class={buttonVariants({ size: 'sm', variant: 'outline' })}>关闭</Dialog.Close>
+      </Dialog.Footer>
+    </Dialog.Content>
+  </Dialog.Root>
 </div>
