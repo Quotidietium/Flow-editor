@@ -3,6 +3,7 @@
   import { Button, buttonVariants } from '$/components/ui/button';
   import * as Popover from '$/components/ui/popover';
   import { getSampleDiagrams, type SampleExample } from '$/util/mermaid';
+  import { loadRecentPresets, pushRecentPreset } from '$/util/recentPresets';
   import { updateCode } from '$lib/util/state.svelte';
   import { cn } from '$lib/utils';
   import ShapesIcon from '~icons/material-symbols/account-tree-outline-rounded';
@@ -101,11 +102,17 @@
   });
 
   const loadSampleDiagram = (diagramType: string, example: SampleExample): void => {
+    recent = pushRecentPreset(diagramType);
     updateCode(example.code, {
       resetPanZoom: true,
       updateDiagram: true
     });
   };
+
+  // 「最近使用」：重复起步高频动作一键直达，localStorage 持久化（最多 6 条）。
+  let recent = $state<string[]>(loadRecentPresets());
+  // 类目 key 只有在目录里有示例时才渲染（目录 chunk 未加载前过滤）。
+  const recentAvailable = $derived(recent.filter((key) => samples[key]));
 
   const mainDiagrams = [
     'Flowchart',
@@ -158,6 +165,23 @@
       }} />
   </div>
   <div class="flex h-fit max-h-52 flex-wrap gap-2 overflow-y-auto p-2">
+    {#if recentAvailable.length > 0}
+      <div
+        class="flex w-full flex-wrap items-center gap-2 border-b border-dashed pb-2"
+        data-testid="preset-recent">
+        <span class="text-xs text-muted-foreground">最近使用</span>
+        {#each recentAvailable as key (key)}
+          <Button
+            size="sm"
+            variant="outline"
+            class="normal-case"
+            data-testid="preset-recent-{key}"
+            onclick={() => loadSampleDiagram(key, samples[key][0])}>
+            {categoryName(key)}
+          </Button>
+        {/each}
+      </div>
+    {/if}
     {#if filteredOrder.length === 0}
       <div class="w-full py-2 text-center text-sm text-muted-foreground">
         没有匹配「{presetQuery.trim()}」的图类型或示例。
