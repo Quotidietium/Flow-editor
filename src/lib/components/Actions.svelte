@@ -8,6 +8,7 @@
   import { waitForRender } from '$/util/autoSync';
   import { exportCanvasSize } from '$/util/fileIO';
   import { notify } from '$/util/notify';
+  import { readJSON, writeJSON } from '$/util/persist.svelte';
   import {
     diagramFileName,
     downloadTextFile,
@@ -77,7 +78,12 @@
     return svgElement;
   };
 
-  const getBase64SVG = (svg?: HTMLElement, width?: number, height?: number): string => {
+  const getBase64SVG = (
+    svg?: HTMLElement,
+    width?: number,
+    height?: number,
+    withBackground = true
+  ): string => {
     if (svg) {
       // Prevents the SVG size of the interface from being changed
       svg = svg.cloneNode(true) as HTMLElement;
@@ -98,9 +104,11 @@
       fixForeignObjectClipping(svg);
     }
 
-    svg.style.backgroundColor = window
-      .getComputedStyle(document.body)
-      .getPropertyValue('--background');
+    if (withBackground) {
+      svg.style.backgroundColor = window
+        .getComputedStyle(document.body)
+        .getPropertyValue('--background');
+    }
 
     const svgString = svg.outerHTML
       .replaceAll('<br>', '<br/>')
@@ -150,19 +158,27 @@ ${svgString}`);
   // restored mid-flight). Buttons are disabled while one is in progress.
   let exporting = $state(false);
 
-  const exportImage = async (event: Event, exporter: Exporter): Promise<void> => {
+  const exportImage = async (
+    event: Event,
+    exporter: Exporter,
+    allowTransparent = true
+  ): Promise<void> => {
     if (exporting) {
       return;
     }
     exporting = true;
     try {
-      await runExport(event, exporter);
+      await runExport(event, exporter, allowTransparent);
     } finally {
       exporting = false;
     }
   };
 
-  const runExport = async (event: Event, exporter: Exporter): Promise<void> => {
+  const runExport = async (
+    event: Event,
+    exporter: Exporter,
+    allowTransparent = true
+  ): Promise<void> => {
     updateCodeStore({ panZoom: false });
     const svg = await waitForCleanSvg();
     const canvas = document.createElement('canvas');
@@ -187,15 +203,20 @@ ${svgString}`);
       throw new Error('context not found');
     }
 
-    context.fillStyle = window.getComputedStyle(document.body).getPropertyValue('--background');
-    context.fillRect(0, 0, canvas.width, canvas.height);
+    // 透明背景只作用于支持 alpha 的格式（PNG/WebP 经 allowTransparent 放行）；
+    // JPEG 无透明通道（透出黑色）、PDF 按文档惯例保留底色，二者强制不透明。
+    const transparent = allowTransparent && transparentBg;
+    if (!transparent) {
+      context.fillStyle = window.getComputedStyle(document.body).getPropertyValue('--background');
+      context.fillRect(0, 0, canvas.width, canvas.height);
+    }
 
     const image = new Image();
     image.addEventListener('load', () => {
       exporter(context, image)();
       updateCodeStore({ panZoom: true });
     });
-    image.src = `data:image/svg+xml;base64,${getBase64SVG(svg, canvas.width, canvas.height)}`;
+    image.src = `data:image/svg+xml;base64,${getBase64SVG(svg, canvas.width, canvas.height, !transparent)}`;
     // Fallback to set panZoom to true after 2 seconds
     // This is a workaround for the case when the image is not loaded
     setTimeout(() => {
@@ -410,7 +431,7 @@ ${svgString}`);
 
   const onDownloadJPEG = async (event: Event) => {
     try {
-      await exportImage(event, canvasExporter('image/jpeg'));
+      await exportImage(event, canvasExporter('image/jpeg'), false);
     } catch {
       notify('导出 JPEG 失败：当前没有可导出的图形');
     }
@@ -418,13 +439,19 @@ ${svgString}`);
 
   const onDownloadPDF = async (event: Event) => {
     try {
-      await exportImage(event, pdfExporter);
+      await exportImage(event, pdfExporter, false);
     } catch {
       notify('导出 PDF 失败：当前没有可导出的图形');
     }
   };
 
   let imageSizeMode: 'auto' | 'width' | 'height' = $state('auto');
+
+  // 透明背景导出偏好（PNG/WebP 有效；JPEG/PDF 强制不透明），跨会话保持。
+  let transparentBg = $state(readJSON<boolean>('pngTransparentBg', false));
+  $effect(() => {
+    writeJSON('pngTransparentBg', transparentBg);
+  });
 
   $effect(() => {
     if (!imageSizeMode) {
@@ -473,6 +500,12 @@ ${svgString}`);
         {/each}
       </div>
     {/if}
+    <label
+      class="flex w-fit cursor-pointer items-center gap-1.5 px-1 text-xs select-none"
+      title="PNG / WebP 导出时不填充背景色，便于叠加到其它文档底图上">
+      <input type="checkbox" data-testid="png-transparent" bind:checked={transparentBg} />
+      透明背景（PNG / WebP）
+    </label>
     <div class="flex gap-2">
       <Button
         class="flex-grow"
