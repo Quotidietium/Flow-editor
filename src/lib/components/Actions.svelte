@@ -14,22 +14,11 @@
     downloadTextFile,
     markdownOf,
     openTextFile,
-    parseOpenedFile,
     stateFileOf
   } from '$/util/fileIO';
-  import {
-    pluginExportFormats,
-    runImportHandler,
-    runInputTransforms,
-    runPluginExport
-  } from '$/plugins/registry.svelte';
-  import {
-    inputState,
-    sanitizeConfig,
-    updateCode,
-    updateCodeStore,
-    validatedState
-  } from '$lib/util/state.svelte';
+  import { loadFileIntoEditor } from '$/util/loadFile';
+  import { pluginExportFormats, runPluginExport } from '$/plugins/registry.svelte';
+  import { inputState, updateCodeStore, validatedState } from '$lib/util/state.svelte';
   import dayjs from 'dayjs';
   import { toBase64 } from 'js-base64';
   import DownloadIcon from '~icons/material-symbols/download';
@@ -393,24 +382,8 @@ ${svgString}`);
     if (!file) {
       return;
     }
-    // Plugin import handlers get first claim (custom formats, incl. binary
-    // via bytes), then the built-in parser; either way the entering source
-    // passes the plugin input-transform pipeline (cleaning/format conversion).
-    const handled = await runImportHandler(file.name, file.text, file.bytes);
-    const parsed = handled ?? parseOpenedFile(file.name, file.text);
-    if (!parsed) {
-      notify(`无法识别文件「${file.name}」的内容`);
-      return;
-    }
-    const code = runInputTransforms(parsed.code, 'file');
-    if (parsed.mermaid !== undefined) {
-      // Opened state files (and plugin-imported configs) are untrusted input
-      // like share links — same confirm-and-strip gate.
-      updateCodeStore({ code, mermaid: sanitizeConfig(parsed.mermaid) });
-    } else {
-      updateCode(code, { updateDiagram: true });
-    }
-    notify(`已载入「${file.name}」`);
+    // 与拖拽放落同走 loadFileIntoEditor（插件导入钩子优先、输入管道、配置安全门）
+    await loadFileIntoEditor(file);
   };
 
   // Plugin-registered export formats run fully inside the plugin and hand

@@ -30,6 +30,7 @@
   import { notify } from '$/util/notify';
   import { inputState, validatedState, updateCodeStore, urls } from '$/util/state.svelte';
   import { initHandler } from '$/util/util';
+  import { loadFileIntoEditor } from '$/util/loadFile';
   import { mode, setMode } from 'mode-watcher';
   import { onMount, untrack } from 'svelte';
   import CodeIcon from '~icons/custom/code';
@@ -101,6 +102,15 @@
   // 渲染，插件/分享/历史在该区间完全不可达（窄视口 e2e 发现）
   let isMobile = $derived(width < 768);
   let isViewMode = $state(true);
+
+  // 拖拽文件进工作区直接打开（与「打开」按钮同走 loadFileIntoEditor：
+  // 插件导入钩子优先、输入转换管道、配置安全门）。enter/leave 计数器
+  // 避免子元素间移动时高亮抖动。
+  let dragDepth = $state(0);
+  const onDropFile = async (file: File) => {
+    const [text, bytes] = await Promise.all([file.text(), file.arrayBuffer()]);
+    await loadFileIntoEditor({ bytes: new Uint8Array(bytes), name: file.name, text });
+  };
   // 移动端开启「可视化」时自动翻到预览半屏：画布挂在右半屏，用户在代码
   // 半屏点开关若无翻页则「点了没反应」。只跟随 visualMode 的上升沿
   // （untrack 摘掉 isMobile/isViewMode 依赖），用户随后翻回代码半屏不被拽回。
@@ -219,7 +229,29 @@
     </Navbar>
   {/if}
 
-  <div class="relative flex flex-1 flex-col overflow-hidden" bind:clientWidth={width}>
+  <div
+    class={[
+      'relative flex flex-1 flex-col overflow-hidden',
+      dragDepth > 0 && 'ring-2 ring-inset ring-primary'
+    ]}
+    bind:clientWidth={width}
+    ondragenter={(e) => {
+      e.preventDefault();
+      dragDepth += 1;
+    }}
+    ondragleave={() => {
+      dragDepth = Math.max(0, dragDepth - 1);
+    }}
+    ondragover={(e) => e.preventDefault()}
+    ondrop={(e) => {
+      e.preventDefault();
+      dragDepth = 0;
+      const file = e.dataTransfer?.files?.[0];
+      if (file) {
+        void onDropFile(file);
+      }
+    }}
+    data-testid="edit-workspace">
     <div
       class={[
         'size-full',
