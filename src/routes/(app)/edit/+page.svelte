@@ -1,6 +1,7 @@
 <script lang="ts">
   import Actions from '$/components/Actions.svelte';
   import Card from '$/components/Card/Card.svelte';
+  import ConfigPresets from '$/components/ConfigPresets.svelte';
   import Editor from '$/components/Editor.svelte';
   import History from '$/components/History/History.svelte';
   import { startAutoSave } from '$/components/History/historyState.svelte';
@@ -161,6 +162,11 @@
               tabs={editorTabs}
               activeTabID={validatedState.current.editorMode}
               isClosable={false}>
+              {#snippet actions()}
+                {#if validatedState.current.editorMode === 'config'}
+                  <ConfigPresets />
+                {/if}
+              {/snippet}
               <Editor {isMobile} />
             </Card>
 

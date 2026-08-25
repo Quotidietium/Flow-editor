@@ -1,6 +1,7 @@
 import type { State } from './types';
 
 export const TID = {
+  configPresetMenu: 'config-preset-menu',
   downloadPNG: 'download-PNG',
   downloadSVG: 'download-SVG',
   embedEditLink: 'embed-edit-link',
