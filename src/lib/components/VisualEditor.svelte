@@ -252,6 +252,34 @@
   let clipboard = $state<ClipboardPayload | undefined>(undefined);
   // 插入 ▾ stencil list (nodeTypes × shapes per kind) and 整理 ▾ layout menu.
   let insertOpen = $state<undefined | { x: number; y: number }>(undefined);
+  // C4 等类型多达 25 种图元：面板内搜索过滤，关闭时重置。
+  let insertQuery = $state('');
+  $effect(() => {
+    if (!insertOpen) {
+      insertQuery = '';
+    }
+  });
+  const filteredInsertShapes = $derived.by(() => {
+    const shapes = kindSpec.shapes ?? [];
+    const query = insertQuery.trim().toLowerCase();
+    if (!query) {
+      return shapes;
+    }
+    return shapes.filter(
+      (shape) => SHAPE_NAMES[shape].includes(query) || shape.toLowerCase().includes(query)
+    );
+  });
+  const filteredInsertTypes = $derived.by(() => {
+    const types = kindSpec.nodeTypes ?? [];
+    const query = insertQuery.trim().toLowerCase();
+    if (!query) {
+      return types;
+    }
+    return types.filter(
+      (nodeType) =>
+        nodeType.name.toLowerCase().includes(query) || nodeType.role.toLowerCase().includes(query)
+    );
+  });
   let layoutMenuOpen = $state(false);
   let helpOpen = $state(false);
   let showCode = $state(true);
@@ -2174,20 +2202,40 @@
       data-testid={TID.visualInsertMenu}
       style="left: {insertOpen.x}px; top: {insertOpen.y}px;"
       onpointerdown={(e) => e.stopPropagation()}>
-      {#each kindSpec.shapes ?? [] as shape (shape)}
-        <button
-          class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
-          onclick={() => insertNode({ shape })}>
-          形状：{SHAPE_NAMES[shape]}
-        </button>
-      {/each}
-      {#each kindSpec.nodeTypes ?? [] as nodeType (nodeType.name)}
-        <button
-          class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
-          onclick={() => insertNode({ role: nodeType.role, roleData: nodeType.data })}>
-          类型：{nodeType.name}
-        </button>
-      {/each}
+      <input
+        class="mb-1 h-7 w-full rounded border bg-background px-1.5"
+        placeholder="搜索图元…"
+        aria-label="搜索图元"
+        data-testid="visual-insert-search"
+        bind:value={insertQuery}
+        use:focusEditor
+        onkeydown={(e) => {
+          if (e.key === 'Escape') {
+            insertQuery = '';
+          }
+          e.stopPropagation();
+        }} />
+      <div class="max-h-64 overflow-y-auto">
+        {#each filteredInsertShapes as shape (shape)}
+          <button
+            class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
+            onclick={() => insertNode({ shape })}>
+            形状：{SHAPE_NAMES[shape]}
+          </button>
+        {/each}
+        {#each filteredInsertTypes as nodeType (nodeType.name)}
+          <button
+            class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
+            onclick={() => insertNode({ role: nodeType.role, roleData: nodeType.data })}>
+            类型：{nodeType.name}
+          </button>
+        {/each}
+        {#if filteredInsertShapes.length === 0 && filteredInsertTypes.length === 0}
+          <div class="px-2 py-1 text-muted-foreground">
+            没有匹配「{insertQuery.trim()}」的图元。
+          </div>
+        {/if}
+      </div>
     </div>
   {/if}
 
