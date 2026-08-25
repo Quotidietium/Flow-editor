@@ -125,11 +125,45 @@
       .filter((key) => !mainDiagrams.includes(key))
       .sort()
   ]);
+
+  // 33 个类目需要快速定位：搜索框同时匹配类目中文名、原始英文名与
+  // 示例标题（如「订单服务」），大小写不敏感。
+  let presetQuery = $state('');
+  const filteredOrder = $derived.by(() => {
+    const query = presetQuery.trim().toLowerCase();
+    if (!query) {
+      return diagramOrder;
+    }
+    return diagramOrder.filter(
+      (name) =>
+        name.toLowerCase().includes(query) ||
+        categoryName(name).toLowerCase().includes(query) ||
+        samples[name]?.some((example) => example.title.toLowerCase().includes(query))
+    );
+  });
 </script>
 
 <Card title="示例图表" isOpen isStackable icon={{ component: ShapesIcon }}>
+  <div class="px-2 pt-2">
+    <input
+      class="h-8 w-full rounded-md border bg-background px-2 text-sm"
+      placeholder="搜索图类型或示例…"
+      aria-label="搜索示例图表"
+      data-testid="preset-search"
+      bind:value={presetQuery}
+      onkeydown={(event) => {
+        if (event.key === 'Escape') {
+          presetQuery = '';
+        }
+      }} />
+  </div>
   <div class="flex h-fit max-h-52 flex-wrap gap-2 overflow-y-auto p-2">
-    {#each diagramOrder as sample (sample)}
+    {#if filteredOrder.length === 0}
+      <div class="w-full py-2 text-center text-sm text-muted-foreground">
+        没有匹配「{presetQuery.trim()}」的图类型或示例。
+      </div>
+    {/if}
+    {#each filteredOrder as sample (sample)}
       {@const examples = samples[sample]}
       <div class="flex min-w-20 flex-grow">
         <Button
