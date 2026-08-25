@@ -139,7 +139,10 @@
   };
 
   const clearAll = () => {
-    if (prompt('确定清空全部已保存项目？')) {
+    // 清空作用于「当前标签页」的存储（clearActive）：时间线页清自动条目、
+    // 已保存页清手动条目——确认文案按页分流，此前两页都写「已保存」。
+    const onTimeline = historyState.mode === 'auto';
+    if (prompt(onTimeline ? '确定清空时间线全部条目？' : '确定清空全部已保存项目？')) {
       clearActive();
     }
   };
@@ -223,7 +226,8 @@
           variant="ghost"
           class="hover:text-destructive"
           onclick={clearAll}
-          title="清空全部已保存状态"><TrashAltIcon /></Button>
+          title={historyState.mode === 'auto' ? '清空时间线全部条目' : '清空全部已保存状态'}
+          ><TrashAltIcon /></Button>
       {/if}
     </div>
   {/snippet}

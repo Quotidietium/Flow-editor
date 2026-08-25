@@ -147,6 +147,34 @@ test.describe('History', () => {
     await expect(page.locator('#historyList')).toContainText('暂无已保存状态。');
   });
 
+  test('时间线页清空：确认文案分流、只清时间线不伤已保存', async ({ page }) => {
+    await page.evaluate(
+      ([manual, auto]) => {
+        localStorage.setItem('manualHistoryStore', manual);
+        localStorage.setItem('autoHistoryStore', auto);
+      },
+      [JSON.stringify(manualHistory), JSON.stringify(autoHistory)]
+    );
+    await page.reload();
+    await openHistory(page);
+    await page.getByRole('tab', { name: '时间线' }).click();
+    await expect(page.locator('#historyList li')).toHaveCount(2);
+
+    // 确认文案按标签页分流（此前两页都写「已保存」）
+    const dialogs: string[] = [];
+    page.on('dialog', (dialog) => {
+      dialogs.push(dialog.message());
+      void dialog.accept();
+    });
+    await page.locator('#clearHistory').click();
+    expect(dialogs).toEqual(['确定清空时间线全部条目？']);
+
+    // 时间线清空，已保存两条完好
+    await expect(page.locator('#historyList li')).toHaveCount(0);
+    await page.getByRole('tab', { name: /已保存/ }).click();
+    await expect(page.locator('#historyList li')).toHaveCount(2);
+  });
+
   test('filters entries by name or diagram content', async ({ page }) => {
     await page.evaluate(
       (manual) => localStorage.setItem('manualHistoryStore', manual),
