@@ -42,6 +42,24 @@ test.describe('示例图表搜索', () => {
     await editPage.checkTextNotInView('圣诞节');
   });
 
+  test('当前图类目在网格中高亮并随载入切换', async ({ page, editPage }) => {
+    await editPage.toggleSampleDiagrams();
+    // 网格按钮（与最近使用行同名按钮用 flex-grow 区分——循环 24 同款）
+    const gridButton = (name: string) =>
+      page.getByRole('button', { exact: true, name }).and(page.locator('[class*="flex-grow"]'));
+    // 默认图为流程图 → 流程图按钮高亮（aria-current + ring）
+    const flowButton = gridButton('流程图');
+    await flowButton.waitFor();
+    await expect(flowButton).toHaveAttribute('aria-current', 'true');
+    await expect(flowButton).toHaveClass(/ring-2/);
+
+    // 载入时序图 → 高亮切换
+    await gridButton('时序图').click();
+    const seqButton = gridButton('时序图');
+    await expect(seqButton).toHaveAttribute('aria-current', 'true');
+    await expect(flowButton).not.toHaveAttribute('aria-current', 'true');
+  });
+
   test('类目按钮悬停提示 Mermaid 关键字', async ({ page, editPage }) => {
     await editPage.toggleSampleDiagrams();
     const flowButton = page.getByRole('button', { name: '流程图', exact: true });

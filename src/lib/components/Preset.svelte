@@ -4,7 +4,8 @@
   import * as Popover from '$/components/ui/popover';
   import { getSampleDiagrams, type SampleExample } from '$/util/mermaid';
   import { loadRecentPresets, pushRecentPreset } from '$/util/recentPresets';
-  import { updateCode } from '$lib/util/state.svelte';
+  import { detectDiagramKind, type DiagramKind } from '$/util/visualEditor/model';
+  import { updateCode, validatedState } from '$lib/util/state.svelte';
   import { cn } from '$lib/utils';
   import ShapesIcon from '~icons/material-symbols/account-tree-outline-rounded';
   import ChevronDownIcon from '~icons/material-symbols/keyboard-arrow-down-rounded';
@@ -83,6 +84,43 @@
   };
 
   const categoryName = (key: string): string => CATEGORY_NAMES[key] ?? key;
+
+  // 当前图类目高亮（方位感：一眼看出正在编辑哪类图）。仅取唯一映射的
+  // 类目——railroad 四变体、swimlane 无对应类目，不高亮。
+  const KIND_TO_CATEGORY: Partial<Record<DiagramKind, string>> = {
+    architecture: 'Architecture',
+    block: 'Block',
+    c4: 'C4',
+    class: 'Class',
+    cynefin: 'Cynefin Framework',
+    er: 'Entity Relationship',
+    eventmodeling: 'Event Modeling',
+    flowchart: 'Flowchart',
+    gantt: 'Gantt',
+    git: 'Git',
+    ishikawa: 'Ishikawa',
+    journey: 'User Journey',
+    kanban: 'Kanban',
+    mindmap: 'Mindmap',
+    packet: 'Packet',
+    pie: 'Pie',
+    quadrant: 'Quadrant',
+    radar: 'Radar',
+    requirement: 'Requirement',
+    sankey: 'Sankey',
+    sequence: 'Sequence',
+    state: 'State',
+    timeline: 'Timeline',
+    treemap: 'Treemap',
+    treeview: 'TreeView',
+    venn: 'Venn',
+    wardley: 'Wardley Maps',
+    xychart: 'XY',
+    zenuml: 'ZenUML'
+  };
+  const currentCategory = $derived(
+    KIND_TO_CATEGORY[detectDiagramKind(validatedState.current.code) ?? 'flowchart']
+  );
 
   // The examples catalogue loads as a separate (non-blocking) chunk; the
   // ZenUML extras render immediately and the catalogue fills the card the
@@ -192,8 +230,13 @@
       <div class="flex min-w-20 flex-grow">
         <Button
           size="sm"
-          class={cn('flex-grow normal-case', examples.length > 1 && 'rounded-r-none')}
+          class={cn(
+            'flex-grow normal-case',
+            examples.length > 1 && 'rounded-r-none',
+            sample === currentCategory && 'ring-2 ring-primary/60 ring-offset-1'
+          )}
           title="Mermaid 关键字：{sample}"
+          aria-current={sample === currentCategory ? 'true' : undefined}
           onclick={() => loadSampleDiagram(sample, examples[0])}>
           {categoryName(sample)}
         </Button>
