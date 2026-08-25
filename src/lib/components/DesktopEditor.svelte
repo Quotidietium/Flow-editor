@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { EditorProps, MarkerData } from '$/types';
+  import { MERMAID_CONFIG_SCHEMA_URI, mermaidConfigSchema } from '$/util/mermaidConfigSchema';
   import { validatedState } from '$/util/state.svelte';
   import { initEditor } from '$lib/util/monacoExtra';
   import { errorDebug } from '$lib/util/util';
@@ -107,8 +108,17 @@
     }
 
     // Local syntax validation only — no schema is fetched from the network.
+    // 挂手工精简 schema：配置模式敲键名/枚举值即有补全与中文说明
+    // （schema 只做提示，未知 Mermaid 键照常可写）。
     monaco.json.jsonDefaults.setDiagnosticsOptions({
       enableSchemaRequest: false,
+      schemas: [
+        {
+          fileMatch: ['internal://config.json'],
+          schema: mermaidConfigSchema,
+          uri: MERMAID_CONFIG_SCHEMA_URI
+        }
+      ],
       validate: true
     });
 
