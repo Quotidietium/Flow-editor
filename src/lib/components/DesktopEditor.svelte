@@ -9,7 +9,13 @@
   import monacoJsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker';
   import { onMount } from 'svelte';
 
-  const { onUpdate, wordWrap = false, fontSize = 14, minimap = false }: EditorProps = $props();
+  const {
+    onUpdate,
+    wordWrap = false,
+    fontSize = 14,
+    minimap = false,
+    onCursor
+  }: EditorProps = $props();
 
   let divElement: HTMLDivElement | undefined = $state();
   let editor: monaco.editor.IStandaloneCodeEditor | undefined;
@@ -130,6 +136,20 @@
       currentText = newText ?? '';
       onUpdate(currentText);
     });
+
+    // 状态栏：光标行列 + 总行数（语法错误的行号对照）。
+    const emitCursor = () => {
+      const position = editor?.getPosition();
+      if (position && onCursor) {
+        onCursor({
+          column: position.column,
+          line: position.lineNumber,
+          lines: editor?.getModel()?.getLineCount() ?? 0
+        });
+      }
+    };
+    editor.onDidChangeCursorPosition(emitCursor);
+    emitCursor();
 
     applyEditorTheme(mode.current);
 

@@ -76,6 +76,7 @@ export type InputType = Exclude<HTMLInputTypeAttribute, 'file'>;
 export interface EditorProps {
   fontSize?: number;
   minimap?: boolean;
+  onCursor?: (info: { column: number; line: number; lines: number }) => void;
   onUpdate: (text: string) => void;
   wordWrap?: boolean;
 }

@@ -24,7 +24,7 @@
   const wrapCompartment = new Compartment();
   const fontCompartment = new Compartment();
 
-  const { onUpdate, wordWrap = false, fontSize = 14 }: EditorProps = $props();
+  const { onUpdate, wordWrap = false, fontSize = 14, onCursor }: EditorProps = $props();
 
   const fontTheme = (size: number) =>
     EditorView.theme({
@@ -71,6 +71,19 @@
           // 防 effect 首跑早于 editorView 创建丢应用）；后续切换由 effect 管。
           wrapCompartment.of(wordWrap ? EditorView.lineWrapping : []),
           fontCompartment.of(fontTheme(fontSize)),
+          // 状态栏：光标行列 + 总行数（与桌面端一致）。
+          EditorView.updateListener.of((update) => {
+            if (!onCursor || (!update.selectionSet && !update.docChanged)) {
+              return;
+            }
+            const head = update.state.selection.main.head;
+            const line = update.state.doc.lineAt(head);
+            onCursor({
+              column: head - line.from + 1,
+              line: line.number,
+              lines: update.state.doc.lines
+            });
+          }),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) {
               const newText = update.state.doc.toString();

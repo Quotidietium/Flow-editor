@@ -26,6 +26,12 @@
     }
   };
 
+  // 状态栏：光标行列 + 总行数（语法错误行号的对照锚点），双端同构。
+  let cursor = $state({ column: 1, line: 1, lines: 0 });
+  const onCursor = (info: { column: number; line: number; lines: number }) => {
+    cursor = info;
+  };
+
   let showError = $state(false);
 
   // 桌面端错误条「定位到错误行」：经 bind:this 调用 DesktopEditor 暴露的
@@ -87,10 +93,22 @@
 
 <div class="flex h-full flex-col">
   {#if isMobile}
-    <MobileEditor {onUpdate} {wordWrap} {fontSize} bind:this={mobileEditor} />
+    <MobileEditor {onUpdate} {wordWrap} {fontSize} {onCursor} bind:this={mobileEditor} />
   {:else}
-    <DesktopEditor {onUpdate} {wordWrap} {fontSize} {minimap} bind:this={desktopEditor} />
+    <DesktopEditor
+      {onUpdate}
+      {wordWrap}
+      {fontSize}
+      {minimap}
+      {onCursor}
+      bind:this={desktopEditor} />
   {/if}
+  <div
+    class="flex flex-none items-center justify-end gap-3 px-2 py-0.5 text-[11px] text-muted-foreground tabular-nums"
+    data-testid="editor-status">
+    <span>行 {cursor.line}，列 {cursor.column}</span>
+    <span>共 {cursor.lines} 行</span>
+  </div>
   {#if showError && validatedState.current.error instanceof Error}
     <div class="flex flex-col text-sm" data-testid={TID.errorContainer}>
       <div class="flex items-center justify-between gap-2 bg-slate-900 p-2 text-white">
