@@ -108,6 +108,33 @@ test('radar sheet edits axes and curves in separate sections', async ({ page }) 
   await expect(codeOut).toContainText('"Bob"]{3, 4, 5}');
 });
 
+test('railroad sheet filters rules by name without touching data', async ({ page }) => {
+  await openEditor(page);
+  await typeCode(
+    page,
+    'railroad-ebnf-beta\n  expr = term "+" term ;\n  term = factor ;\n  factor = "x" ;'
+  );
+  const codeOut = await enterVisual(page);
+  const sheet = page.getByTestId('visual-sheet');
+
+  await expect(sheet.locator('[data-row-id]')).toHaveCount(3);
+  const search = sheet.getByTestId('visual-sheet-search');
+  await search.fill('term');
+  await expect(sheet.locator('[data-row-id]')).toHaveCount(2);
+  await expect(sheet.getByTestId('visual-sheet-search-count')).toHaveText('2 行匹配');
+
+  // 只过滤显示不动数据：三条规则都在代码里
+  const text = (await codeOut.textContent()) ?? '';
+  for (const rule of ['expr', 'term', 'factor']) {
+    expect(text).toContain(rule);
+  }
+
+  // Esc 清空：全部回来
+  await search.press('Escape');
+  await expect(sheet.locator('[data-row-id]')).toHaveCount(3);
+  await expect(sheet.getByTestId('visual-sheet-search-count')).toHaveCount(0);
+});
+
 test('eventmodeling sheet switches element types via select', async ({ page }) => {
   await openEditor(page);
   await typeCode(page, 'eventmodeling\n  tf S1 ui Screen\n  tf C1 cmd Do-It');

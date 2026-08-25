@@ -34,6 +34,24 @@
 
   const sections = $derived(SHEET_CONFIG[kind] ?? []);
 
+  // 行过滤：railroad 规则表等长列表定位全靠滚屏（Board/Sequence/Outline
+  // 同款交互），匹配名称/数值/角色数据全字段；只过滤显示、不动数据。
+  let rowQuery = $state('');
+  const query = $derived(rowQuery.trim().toLowerCase());
+  const rowMatches = (row: VNode): boolean =>
+    query === '' ||
+    row.label.toLowerCase().includes(query) ||
+    (row.detail ?? '').toLowerCase().includes(query) ||
+    (row.roleData ?? '').toLowerCase().includes(query);
+  const matchCount = $derived(
+    query === ''
+      ? 0
+      : sections.reduce(
+          (total, section) => total + sheetRows(graph, section).filter(rowMatches).length,
+          0
+        )
+  );
+
   let lastAddedRowId = $state<string | undefined>();
 
   const focusNew = (el: HTMLElement, id: string): void => {
@@ -67,12 +85,31 @@
 
 <div class="min-h-64 flex-1 overflow-auto p-3" data-testid={TID.visualSheet}>
   <div class="mx-auto flex max-w-3xl flex-col gap-4">
+    <div class="flex items-center justify-end gap-2">
+      {#if query !== ''}
+        <span class="text-[11px] text-muted-foreground" data-testid="visual-sheet-search-count">
+          {matchCount} 行匹配
+        </span>
+      {/if}
+      <input
+        class="w-36 rounded border bg-background px-2 py-1 text-xs"
+        placeholder="过滤行…"
+        aria-label="过滤行"
+        data-testid="visual-sheet-search"
+        bind:value={rowQuery}
+        onkeydown={(e) => {
+          if (e.key === 'Escape') {
+            rowQuery = '';
+          }
+        }} />
+    </div>
     {#each sections as section (section.title)}
-      {@const rows = sheetRows(graph, section)}
+      {@const total = sheetRows(graph, section).length}
+      {@const rows = sheetRows(graph, section).filter(rowMatches)}
       <section class="rounded-lg border">
         <header
           class="flex items-center justify-between border-b bg-muted/30 px-3 py-1.5 text-xs font-semibold">
-          <span>{section.title} · {rows.length}</span>
+          <span>{section.title} · {query === '' ? total : `${rows.length}/${total}`}</span>
           <button
             class="rounded border px-2 py-0.5 text-[11px] font-normal hover:bg-accent"
             data-testid="visual-sheet-add-row"
