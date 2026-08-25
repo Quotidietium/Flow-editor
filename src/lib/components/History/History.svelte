@@ -4,6 +4,7 @@
   import { notify, prompt } from '$lib/util/notify';
   import { serializeState } from '$lib/util/serde';
   import { inputState, replaceInputState } from '$lib/util/state.svelte';
+  import { detectDiagramKind, KIND_SPECS } from '$lib/util/visualEditor/model';
   import dayjs from 'dayjs';
   import dayjsRelativeTime from 'dayjs/plugin/relativeTime';
   import BookmarkIcon from '~icons/material-symbols/bookmark-outline-rounded';
@@ -147,8 +148,17 @@
     `${window.location.origin}${window.location.pathname}#${serializeState(state)}`;
 
   // Serialize each entry's URL once per change rather than per row on every render.
+  // 类型徽章复用可视化模型的首行探测（frontmatter/注释跳过）与本地化类型名。
+  const kindLabelOf = (code: string): string | undefined => {
+    const kind = detectDiagramKind(code);
+    return kind ? KIND_SPECS[kind]?.label : undefined;
+  };
   const entriesWithUrl = $derived(
-    historyState.entries.map((entry) => ({ ...entry, openUrl: entryUrl(entry.state) }))
+    historyState.entries.map((entry) => ({
+      ...entry,
+      kindLabel: kindLabelOf(entry.state.code),
+      openUrl: entryUrl(entry.state)
+    }))
   );
 
   // 搜索过滤：默认名是随机英文 slug，只按名称搜等于没得搜——同时匹配
@@ -230,7 +240,7 @@
   {/if}
   <ul class="flex h-full flex-col gap-2 overflow-auto p-2" id="historyList">
     {#if filteredEntries.length > 0}
-      {#each filteredEntries as { id, state, time, name, url, type, openUrl } (id)}
+      {#each filteredEntries as { id, state, time, name, url, type, kindLabel, openUrl } (id)}
         <li class="flex flex-col gap-2">
           <div class="flex items-center justify-between">
             <div class="flex min-w-0 flex-1 flex-col">
@@ -257,6 +267,13 @@
                     onblur={commitRename} />
                 {:else}
                   <span class="min-w-0 truncate" title={name}>{name}</span>
+                  {#if kindLabel}
+                    <span
+                      class="shrink-0 rounded bg-muted px-1 py-0.5 text-[10px] text-muted-foreground"
+                      data-testid="history-kind-badge">
+                      {kindLabel}
+                    </span>
+                  {/if}
                   {#if type !== 'loader'}
                     <button
                       type="button"

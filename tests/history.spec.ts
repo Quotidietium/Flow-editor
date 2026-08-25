@@ -209,6 +209,27 @@ test.describe('History', () => {
     await expect(page.locator('#historyList li')).toHaveCount(1);
   });
 
+  test('条目行显示图表类型徽章', async ({ page }) => {
+    await page.evaluate(
+      ([manual, auto]) => {
+        localStorage.setItem('manualHistoryStore', manual);
+        localStorage.setItem('autoHistoryStore', auto);
+      },
+      [JSON.stringify(manualHistory), JSON.stringify(autoHistory)]
+    );
+    await page.reload();
+    await openHistory(page);
+
+    // 种子条目均为 flowchart 代码 → 徽章显示本地化类型名
+    const badges = page.getByTestId('history-kind-badge');
+    await expect(badges).toHaveCount(2);
+    await expect(badges.first()).toHaveText('流程图');
+
+    // 搜索不过滤掉徽章（随条目行同生同灭）
+    await page.getByTestId('history-search').fill('hollow');
+    await expect(badges).toHaveCount(1);
+  });
+
   test('renames a saved entry inline', async ({ page }) => {
     await openHistory(page);
     await page.locator('#saveHistory').click();
