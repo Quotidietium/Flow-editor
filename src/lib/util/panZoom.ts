@@ -178,6 +178,26 @@ export class PanZoomState {
   }
 
   /**
+   * 适应窗口：全图缩放到视口内并居中——大图找不到全貌时一键归位。
+   * 与手动平移/缩放同级：新视口写入状态（isDirty + 回调），重载可恢复。
+   */
+  public fitAndCenter() {
+    if (!this.pzoom) {
+      return;
+    }
+    this.pzoom.resize();
+    this.pzoom.fit();
+    this.pzoom.center();
+    const zoom = this.pzoom.getZoom();
+    const pan = this.pzoom.getPan();
+    this.zoom = zoom;
+    this.pan = pan;
+    this.isDirty = true;
+    this.onPanZoomChange?.(pan, zoom);
+    this.onZoomLevelChange?.(zoom);
+  }
+
+  /**
    * Release everything this wrapper holds: the svg-pan-zoom instance (which
    * owns window-level resize listeners) and the ResizeObserver. The remembered
    * pan/zoom survive so a later updateElement can restore the viewport.

@@ -7,6 +7,7 @@
   import { previewBackground } from '$/util/previewBackground.svelte';
   import BgIcon from '~icons/material-symbols/format-color-fill-rounded';
   import ExpandIcon from '~icons/material-symbols/open-in-full-rounded';
+  import FitIcon from '~icons/material-symbols/fit-screen-rounded';
   import ArrowsToCircleIcon from '~icons/material-symbols/screenshot-frame-2';
   import MagnifyingGlassPlusIcon from '~icons/material-symbols/zoom-in';
   import MagnifyingGlassMinusIcon from '~icons/material-symbols/zoom-out';
@@ -41,6 +42,15 @@
 <FloatingToolbar>
   <Button variant="ghost" size="icon" title="重置视图" onclick={() => panZoomState.reset()}>
     <ArrowsToCircleIcon />
+  </Button>
+  <!-- 适应窗口：全图缩放到视口内并居中（大图找不到全貌时一键归位） -->
+  <Button
+    variant="ghost"
+    size="icon"
+    data-testid="zoom-fit"
+    title="适应窗口"
+    onclick={() => panZoomState.fitAndCenter()}>
+    <FitIcon />
   </Button>
   <Separator orientation="vertical" />
   <Button
