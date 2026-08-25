@@ -94,7 +94,7 @@
     aria-label="配置模板"
     class={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'gap-1 px-2')}>
     <PresetIcon />
-    模板
+    <span class="hidden sm:inline">模板</span>
   </Popover.Trigger>
   <Popover.Content align="end" class="flex max-h-[70vh] w-60 flex-col gap-0.5 overflow-y-auto p-1">
     <div class="px-2 pt-1 text-xs text-muted-foreground">我的模板</div>

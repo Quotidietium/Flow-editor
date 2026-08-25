@@ -14,7 +14,11 @@
     data-testid="editor-font-size-menu"
     title="编辑器字号"
     aria-label="编辑器字号"
-    class={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'gap-1 px-2 tabular-nums')}>
+    class={cn(
+      buttonVariants({ variant: 'ghost', size: 'sm' }),
+      // 移动端头部空间不足（390px 实测溢出 ~60px）：字号调节留给桌面端
+      'hidden gap-1 px-2 tabular-nums sm:inline-flex'
+    )}>
     <FontIcon />
     {size}
   </Popover.Trigger>

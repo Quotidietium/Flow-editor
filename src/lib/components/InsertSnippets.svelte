@@ -36,7 +36,7 @@
     aria-label="插入代码片段"
     class={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'gap-1 px-2')}>
     <InsertIcon />
-    插入
+    <span class="hidden sm:inline">插入</span>
   </Popover.Trigger>
   <Popover.Content align="end" class="flex w-56 flex-col gap-0.5 p-1">
     {#each SNIPPETS as snippet (snippet.id)}
