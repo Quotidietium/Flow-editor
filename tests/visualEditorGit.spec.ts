@@ -72,3 +72,32 @@ test('git editor edits tags and removes operations', async ({ page }) => {
   await editor.locator('[data-operation-id="C2"]').getByTitle('删除').click();
   await expect(codeOut).not.toContainText('a2');
 });
+
+test('git editor duplicates an operation (fresh row keeps branch, clears id/tag)', async ({
+  page
+}) => {
+  await openEditor(page);
+  await typeCode(page, 'gitGraph\n  commit id: "a1"\n  commit id: "a2" tag: "v1"');
+  const codeOut = await enterVisual(page);
+  const editor = page.getByTestId('visual-git');
+
+  await editor
+    .locator('[data-operation-id="C2"]')
+    .getByTitle('复制操作（新行清空提交 ID 与标签）')
+    .click();
+
+  // 拷贝紧跟原行：同分支、commit 类型；提交 ID 与标签留空（须唯一，不 cloned）
+  await expect(editor.locator('[data-operation-id]')).toHaveCount(3);
+  const copy = editor.locator('[data-operation-id="N3"]');
+  await expect(copy.getByLabel('操作类型')).toHaveValue('commit');
+  await expect(copy.getByLabel('所在分支')).toHaveValue('main');
+  await expect(copy.getByLabel('提交 ID')).toHaveValue('');
+  await expect(copy.getByLabel('标签')).toHaveValue('');
+
+  // 代码：原行原样保留，多出一条裸 commit；拷贝改名后不回染原行
+  await expect(codeOut).toContainText('commit id: "a2" tag: "v1"');
+  await copy.getByLabel('提交 ID').fill('a3');
+  await copy.getByLabel('提交 ID').blur();
+  await expect(codeOut).toContainText('commit id: "a3"');
+  await expect(codeOut).toContainText('commit id: "a2" tag: "v1"');
+});

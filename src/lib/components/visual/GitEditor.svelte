@@ -4,6 +4,7 @@
   import { nextEdgeId, nextNodeId } from '$/util/visualEditor/model';
   import AddIcon from '~icons/material-symbols/add-2-rounded';
   import DeleteIcon from '~icons/material-symbols/close-rounded';
+  import CopyIcon from '~icons/material-symbols/content-copy-rounded';
   import UpIcon from '~icons/material-symbols/arrow-upward-alt-rounded';
   import DownIcon from '~icons/material-symbols/arrow-downward-alt-rounded';
 
@@ -110,6 +111,29 @@
       graph.edges = graph.edges.filter((e) => e.source !== id && e.target !== id);
     });
   };
+
+  // 复制操作：紧邻原位重放一份同分支/同类型拷贝（merge 行连来源边一起
+  // 克隆）。提交 ID 与标签须唯一，新行留空另填——复制的是「这一步操作」，
+  // 而不是再造一个同名提交。
+  const duplicateOperation = (id: string): void => {
+    commit(() => {
+      const at = graph.nodes.findIndex((n) => n.id === id);
+      const source = graph.nodes[at];
+      if (!source) {
+        return;
+      }
+      const copy: VNode = { ...source, detail: undefined, id: nextNodeId(graph.nodes), label: '' };
+      graph.nodes.splice(at + 1, 0, copy);
+      const mergeEdge = graph.edges.find((e) => e.role === 'mergeFrom' && e.target === id);
+      if (mergeEdge) {
+        graph.edges.splice(graph.edges.indexOf(mergeEdge) + 1, 0, {
+          ...mergeEdge,
+          id: nextEdgeId(graph.edges),
+          target: copy.id
+        });
+      }
+    });
+  };
 </script>
 
 <div class="min-h-64 flex-1 overflow-auto p-3" data-testid={TID.visualGit}>
@@ -193,6 +217,12 @@
               title="下移"
               onclick={() => moveOperation(node.id, 1)}>
               <DownIcon />
+            </button>
+            <button
+              class="rounded p-0.5 hover:bg-accent"
+              title="复制操作（新行清空提交 ID 与标签）"
+              onclick={() => duplicateOperation(node.id)}>
+              <CopyIcon />
             </button>
             <button
               class="rounded p-0.5 hover:bg-accent hover:text-destructive"
