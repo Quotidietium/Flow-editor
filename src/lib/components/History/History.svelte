@@ -7,6 +7,7 @@
   import dayjs from 'dayjs';
   import dayjsRelativeTime from 'dayjs/plugin/relativeTime';
   import BookmarkIcon from '~icons/material-symbols/bookmark-outline-rounded';
+  import BookmarkAddIcon from '~icons/material-symbols/bookmark-add-outline-rounded';
   import CloseIcon from '~icons/material-symbols/close-rounded';
   import TrashAltIcon from '~icons/material-symbols/delete-outline-rounded';
   import DownloadIcon from '~icons/material-symbols/download-rounded';
@@ -119,6 +120,15 @@
   const saveHistory = () => {
     if (!addManualEntry($state.snapshot(inputState))) {
       notify('该状态已保存过。');
+    }
+  };
+
+  // 时间线条目收藏到「已保存」：保留原名称，去重语义与手动保存一致。
+  const bookmarkEntry = (state: State, name?: string) => {
+    if (addManualEntry($state.snapshot(state), name)) {
+      notify('已收藏到「已保存」。');
+    } else {
+      notify('该状态已在「已保存」中。');
     }
   };
 
@@ -286,6 +296,16 @@
                 onclick={() => restoreHistoryItem(state)}>
                 <UndoIcon />
               </Button>
+              {#if type === 'auto'}
+                <!-- 时间线只留 30 条且先进先出：重要版本一键收进「已保存」（200 条槽位） -->
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  title="收藏到「已保存」"
+                  onclick={() => bookmarkEntry(state, name)}>
+                  <BookmarkAddIcon />
+                </Button>
+              {/if}
               {#if type !== 'loader'}
                 <Button
                   size="icon"

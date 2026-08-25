@@ -181,6 +181,34 @@ test.describe('History', () => {
     await expect(page.locator('#historyList li')).toHaveCount(2);
   });
 
+  test('时间线条目一键收藏到「已保存」', async ({ page }) => {
+    await page.evaluate(
+      (auto) => localStorage.setItem('autoHistoryStore', auto),
+      JSON.stringify(autoHistory)
+    );
+    await page.reload();
+    await openHistory(page);
+
+    await page.getByRole('tab', { name: '时间线' }).click();
+    await expect(page.locator('#historyList li')).toHaveCount(2);
+
+    // 收藏第一条（barking-dog / NewYear）
+    await page.getByRole('button', { name: '收藏到「已保存」' }).first().click();
+    await expect(page.getByText('已收藏到「已保存」。')).toBeVisible();
+
+    // 「已保存」里出现该条目（内容同为 NewYear）
+    await page.getByRole('tab', { name: '已保存' }).click();
+    await expect(page.locator('#historyList li')).toHaveCount(1);
+    await expect(page.locator('#historyList')).toContainText('barking-dog');
+
+    // 再收藏同一状态：与最新已保存条目去重
+    await page.getByRole('tab', { name: '时间线' }).click();
+    await page.getByRole('button', { name: '收藏到「已保存」' }).first().click();
+    await expect(page.getByText('该状态已在「已保存」中。')).toBeVisible();
+    await page.getByRole('tab', { name: '已保存' }).click();
+    await expect(page.locator('#historyList li')).toHaveCount(1);
+  });
+
   test('renames a saved entry inline', async ({ page }) => {
     await openHistory(page);
     await page.locator('#saveHistory').click();
