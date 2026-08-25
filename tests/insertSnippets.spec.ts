@@ -42,4 +42,42 @@ test.describe('插入代码片段', () => {
     await expect(editPage.editor).toContainText('end');
     await editPage.checkTextInView('分组');
   });
+
+  test('我的片段：保存当前代码、光标处插回、删除', async ({ page, editPage }) => {
+    // 造一段可辨识的代码
+    await editPage.clearEditor();
+    await editPage.typeInEditor('flowchart TD\n  Alpha --> Beta');
+
+    // 保存为我的片段
+    await page.getByTestId('insert-snippet-menu').click();
+    await page.getByTestId('user-snippet-save').click();
+    await page.getByTestId('user-snippet-save-name').fill('双节点骨架');
+    await page.getByTestId('user-snippet-save-name').press('Enter');
+    await expect(page.getByText('已保存片段「双节点骨架」')).toBeVisible();
+
+    // 清空文档后从菜单插回（光标处，不弹整图替换）
+    await editPage.clearEditor();
+    await page.getByTestId('insert-snippet-menu').click();
+    const item = page.locator('[data-testid^="user-snippet-snippet-"]');
+    await expect(item).toHaveCount(1);
+    await expect(item).toContainText('双节点骨架');
+    // 预览行展示首行压缩文本
+    await expect(item).toContainText('flowchart TD');
+    await item.click();
+    await expect(editPage.editor).toContainText('Alpha --> Beta');
+    await editPage.checkTextInView('Alpha');
+
+    // 刷新后仍在（持久化），随后删除
+    await page.reload();
+    await page.getByTestId('insert-snippet-menu').click();
+    const stored = await page.evaluate(() => {
+      const list = JSON.parse(localStorage.getItem('flowUserSnippets') ?? '[]') as {
+        id: string;
+      }[];
+      return list[0]?.id;
+    });
+    await page.getByTestId(`user-snippet-delete-${stored}`).click();
+    await expect(page.getByText('已删除片段「双节点骨架」')).toBeVisible();
+    await expect(page.locator('[data-testid^="user-snippet-snippet-"]')).toHaveCount(0);
+  });
 });
