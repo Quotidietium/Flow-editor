@@ -45,6 +45,23 @@
   const arrows = $derived(kind === 'zenuml' ? ZENUML_ARROWS : SEQUENCE_ARROWS);
   const participants = $derived(graph.nodes);
 
+  // 消息过滤：长时序图按消息内容或参与者名定位（Board 卡片过滤同款交互），
+  // 只过滤显示、不动数据；Esc 清空。
+  let messageQuery = $state('');
+  const query = $derived(messageQuery.trim().toLowerCase());
+  const participantLabel = (id: string): string =>
+    graph.nodes.find((n) => n.id === id)?.label ?? id;
+  const visibleEdges = $derived(
+    query === ''
+      ? graph.edges
+      : graph.edges.filter(
+          (edge) =>
+            (edge.label ?? '').toLowerCase().includes(query) ||
+            participantLabel(edge.source).toLowerCase().includes(query) ||
+            participantLabel(edge.target).toLowerCase().includes(query)
+        )
+  );
+
   let lastAddedId = $state<string | undefined>();
 
   const focusNew = (el: HTMLElement, id: string): void => {
@@ -196,23 +213,44 @@
 
     <section class="rounded-lg border">
       <header
-        class="flex items-center justify-between border-b bg-muted/30 px-3 py-1.5 text-xs font-semibold">
-        <span>消息 · {graph.edges.length}（顺序 = 从上到下）</span>
-        <button
-          class="rounded border px-2 py-0.5 text-[11px] font-normal hover:bg-accent disabled:opacity-30"
-          data-testid="visual-sequence-add-message"
-          disabled={participants.length === 0}
-          onclick={addMessage}>
-          <AddIcon class="inline" /> 消息
-        </button>
+        class="flex items-center justify-between gap-2 border-b bg-muted/30 px-3 py-1.5 text-xs font-semibold">
+        <span>
+          消息 · {query === ''
+            ? graph.edges.length
+            : `${visibleEdges.length}/${graph.edges.length}`}（顺序 = 从上到下）
+        </span>
+        <span class="flex items-center gap-2 font-normal">
+          <input
+            class="w-32 rounded border bg-background px-1.5 py-0.5 text-[11px]"
+            placeholder="过滤消息…"
+            aria-label="过滤消息"
+            data-testid="visual-sequence-search"
+            bind:value={messageQuery}
+            onkeydown={(e) => {
+              if (e.key === 'Escape') {
+                messageQuery = '';
+              }
+            }} />
+          <button
+            class="rounded border px-2 py-0.5 text-[11px] font-normal hover:bg-accent disabled:opacity-30"
+            data-testid="visual-sequence-add-message"
+            disabled={participants.length === 0}
+            onclick={addMessage}>
+            <AddIcon class="inline" /> 消息
+          </button>
+        </span>
       </header>
       {#if graph.edges.length === 0}
         <div class="px-3 py-2 text-[11px] text-muted-foreground">
           还没有消息{participants.length < 2 ? '（先添加两个参与者）' : ''}。
         </div>
+      {:else if visibleEdges.length === 0}
+        <div class="px-3 py-2 text-[11px] text-muted-foreground">
+          没有匹配「{messageQuery.trim()}」的消息。
+        </div>
       {/if}
       <ul class="divide-y">
-        {#each graph.edges as edge, ei (edge.id)}
+        {#each visibleEdges as edge, ei (edge.id)}
           <li class="flex items-center gap-1.5 px-3 py-1.5" data-message-id={edge.id}>
             <select
               class="w-0 min-w-16 flex-1 rounded border bg-background px-1 py-1 text-xs"

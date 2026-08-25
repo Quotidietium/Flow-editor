@@ -110,6 +110,39 @@ test('sequence editor duplicates a message right after the original', async ({ p
   await expect(codeOut).toContainText('A->>B: 请求');
 });
 
+test('sequence editor filters messages by label/participant without touching data', async ({
+  page
+}) => {
+  await openEditor(page);
+  await typeCode(
+    page,
+    'sequenceDiagram\n  participant A as 爱丽丝\n  participant B as 鲍勃\n  participant C as 卡罗\n  A->>B: 你好\n  B-->>A: 回复\n  A->>C: 拜托'
+  );
+  const codeOut = await enterVisual(page);
+  const editor = page.getByTestId('visual-sequence');
+
+  // 按内容过滤「回复」：1/3，无匹配提示的分支不触发
+  const search = editor.getByTestId('visual-sequence-search');
+  await search.fill('回复');
+  await expect(editor.locator('[data-message-id]')).toHaveCount(1);
+  await expect(editor).toContainText('消息 · 1/3');
+
+  // 按参与者名过滤「鲍勃」：涉及鲍勃的两条
+  await search.fill('鲍勃');
+  await expect(editor.locator('[data-message-id]')).toHaveCount(2);
+
+  // 只过滤显示不动数据：代码三条都在
+  const text = (await codeOut.textContent()) ?? '';
+  for (const label of ['你好', '回复', '拜托']) {
+    expect(text).toContain(label);
+  }
+
+  // Esc 清空：全部回来
+  await search.press('Escape');
+  await expect(editor.locator('[data-message-id]')).toHaveCount(3);
+  await expect(editor).toContainText('消息 · 3');
+});
+
 test('zenuml uses the sequence editor with its two arrow types', async ({ page }) => {
   await openEditor(page);
   await typeCode(page, 'zenuml\n  title: 演示\n  A->B: 同步\n  B-->A: 异步');
