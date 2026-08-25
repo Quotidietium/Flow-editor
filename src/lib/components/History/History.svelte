@@ -144,8 +144,11 @@
     }
   };
 
-  const restoreHistoryItem = (state: State): void => {
+  const restoreHistoryItem = (state: State, name?: string): void => {
     replaceInputState({ ...state, updateDiagram: true });
+    // 恢复是静默的全量替换：toast 给出明确反馈（尤其对比模式/窄屏下
+    // 用户不一定立刻注意到画布已换）
+    notify(`已恢复「${name ?? '该版本'}」。`);
   };
 
   // Absolute editor URL for an entry, so the link can be opened in a new tab or copied.
@@ -315,7 +318,7 @@
                 size="icon"
                 variant="ghost"
                 title="恢复此版本"
-                onclick={() => restoreHistoryItem(state)}>
+                onclick={() => restoreHistoryItem(state, name)}>
                 <UndoIcon />
               </Button>
               {#if type === 'auto'}

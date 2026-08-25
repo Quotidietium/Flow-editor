@@ -55,6 +55,8 @@ test.describe('History', () => {
 
     await page.getByRole('button', { name: '恢复此版本' }).first().click();
     await expect(page.locator('#view')).toContainText('Halloween');
+    // 恢复操作给出 toast 反馈（循环 29）
+    await expect(page.getByText('已恢复「hollow-art」。')).toBeVisible();
 
     // Switching to the Timeline tab shows the auto entries only.
     await page.getByRole('tab', { name: '时间线' }).click();
