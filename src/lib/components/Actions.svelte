@@ -273,19 +273,24 @@ ${svgString}`);
       const { canvas } = context;
       context.drawImage(image, 0, 0, canvas.width, canvas.height);
       canvas.toBlob((blob) => {
-        try {
-          if (!blob) {
-            throw new Error('blob is empty');
+        // 此前 fire-and-forget：写入被拒只进 console，按钮却照显 ✓——
+        // 假阳性反馈。成败都给用户明确 toast（与复制 SVG/Mermaid 源码一致）。
+        void (async () => {
+          try {
+            if (!blob) {
+              throw new Error('blob is empty');
+            }
+            await navigator.clipboard.write([
+              new ClipboardItem({
+                [blob.type]: blob
+              })
+            ]);
+            notify('已复制图像到剪贴板');
+          } catch {
+            notify('复制图像失败：浏览器拒绝了剪贴板写入');
           }
-          void navigator.clipboard.write([
-            new ClipboardItem({
-              [blob.type]: blob
-            })
-          ]);
-        } catch (error) {
-          console.error(error);
-        }
-      });
+        })();
+      }, 'image/png');
     };
   };
 
