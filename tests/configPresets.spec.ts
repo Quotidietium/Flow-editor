@@ -71,6 +71,26 @@ test.describe('配置模板', () => {
     await expect(editor).not.toContainText('broken');
   });
 
+  test('菜单对当前生效模板打勾并随应用切换', async ({ page, editPage }) => {
+    await editPage.setEditorMode('配置');
+    // 默认配置 theme:default → 默认主题打勾，深色无勾
+    await openPresetMenu(page);
+    await expect(page.getByTestId('config-preset-active-theme-default')).toBeVisible();
+    await expect(page.getByTestId('config-preset-active-theme-dark')).toHaveCount(0);
+
+    // 应用深色主题 → 勾选切换
+    await page.getByTestId('config-preset-theme-dark').click();
+    await openPresetMenu(page);
+    await expect(page.getByTestId('config-preset-active-theme-dark')).toBeVisible();
+    await expect(page.getByTestId('config-preset-active-theme-default')).toHaveCount(0);
+
+    // 再叠手绘 → 两个都打勾（子集语义：各自叶子都在配置里）
+    await page.getByTestId('config-preset-hand-drawn').click();
+    await openPresetMenu(page);
+    await expect(page.getByTestId('config-preset-active-theme-dark')).toBeVisible();
+    await expect(page.getByTestId('config-preset-active-hand-drawn')).toBeVisible();
+  });
+
   test('格式化 JSON 一键整理缩进', async ({ page, editPage }) => {
     await editPage.setEditorMode('配置');
     await replaceConfig(page, '{"theme":"forest","look":"handDrawn"}');

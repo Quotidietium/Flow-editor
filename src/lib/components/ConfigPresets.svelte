@@ -9,6 +9,7 @@
     defaultConfigJson,
     deleteUserPreset,
     formatConfigJson,
+    isConfigSubset,
     loadUserPresets,
     saveUserPreset,
     type ConfigPreset,
@@ -48,6 +49,20 @@
   };
 
   /* ---------------- 我的模板（用户自定义，localStorage 持久化） ---------------- */
+
+  // 当前配置（解析失败按空对象）：给「已生效」模板打勾（子集匹配——
+  // 配置的每个叶子值都在当前配置中出现即视为生效）。
+  const currentConfig = $derived.by((): Record<string, unknown> => {
+    try {
+      const parsed: unknown = JSON.parse(validatedState.current.mermaid || '{}');
+      return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : {};
+    } catch {
+      return {};
+    }
+  });
+  const isActive = (preset: ConfigPreset): boolean => isConfigSubset(currentConfig, preset.config);
 
   let userPresets = $state<UserPreset[]>(loadUserPresets());
   let saveOpen = $state(false);
@@ -158,7 +173,12 @@
           data-testid="config-preset-{preset.id}"
           class="flex w-full flex-col rounded px-2 py-1 text-left hover:bg-accent"
           onclick={() => applyPreset(preset)}>
-          <span class="text-sm">{preset.label}</span>
+          <span class="flex items-center justify-between text-sm">
+            <span>{preset.label}</span>
+            {#if isActive(preset)}
+              <span class="text-primary" data-testid="config-preset-active-{preset.id}">✓</span>
+            {/if}
+          </span>
           <span class="text-xs text-muted-foreground">{preset.hint}</span>
         </Popover.Close>
       {/each}

@@ -156,6 +156,19 @@ export const formatConfigJson = (currentJson: string): string | undefined => {
   }
 };
 
+/**
+ * 子集匹配：preset 的每个叶子值都与 current 同路径值相等（current 允许
+ * 多出其它键）——用于模板菜单给「当前已生效」的模板打勾。
+ */
+export const isConfigSubset = (current: unknown, preset: unknown): boolean => {
+  if (isPlainObject(current) && isPlainObject(preset)) {
+    return Object.entries(preset).every(([key, value]) =>
+      isConfigSubset((current as Record<string, unknown>)[key], value)
+    );
+  }
+  return current === preset;
+};
+
 /** 出厂默认配置（与 defaultState.mermaid 同形）。 */
 export const defaultConfigJson = (): string => formatJSON({ theme: 'default' });
 

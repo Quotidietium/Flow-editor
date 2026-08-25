@@ -6,6 +6,7 @@ import {
   defaultConfigJson,
   deleteUserPreset,
   formatConfigJson,
+  isConfigSubset,
   loadUserPresets,
   saveUserPreset,
   type ConfigPreset
@@ -125,6 +126,33 @@ describe('CONFIG_PRESET_GROUPS registry', () => {
   it('covers style, theme and layout dimensions', () => {
     const groups = CONFIG_PRESET_GROUPS.map(({ group }) => group);
     expect(groups).toEqual(['风格', '主题', '版式']);
+  });
+});
+
+describe('isConfigSubset（当前生效判定）', () => {
+  it('matches when the preset leaf values are all present', () => {
+    expect(isConfigSubset({ look: 'handDrawn', theme: 'default' }, { look: 'handDrawn' })).toBe(
+      true
+    );
+  });
+
+  it('matches nested subsets with extra keys allowed', () => {
+    const current = { flowchart: { htmlLabels: false, nodeSpacing: 25, rankSpacing: 35 } };
+    expect(isConfigSubset(current, { flowchart: { nodeSpacing: 25, rankSpacing: 35 } })).toBe(true);
+  });
+
+  it('rejects mismatched or missing values', () => {
+    expect(isConfigSubset({ theme: 'dark' }, { theme: 'forest' })).toBe(false);
+    expect(isConfigSubset({}, { look: 'handDrawn' })).toBe(false);
+    expect(
+      isConfigSubset({ flowchart: { nodeSpacing: 25 } }, { flowchart: { rankSpacing: 35 } })
+    ).toBe(false);
+  });
+
+  it('compares scalars strictly and never treats non-objects as containers', () => {
+    expect(isConfigSubset({ theme: 'dark' }, { theme: 'dark' })).toBe(true);
+    expect(isConfigSubset('dark', { theme: 'dark' })).toBe(false);
+    expect(isConfigSubset({ a: [1, 2] }, { a: [1, 2] })).toBe(false);
   });
 });
 
