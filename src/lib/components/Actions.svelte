@@ -343,6 +343,16 @@ ${svgString}`);
     }
   };
 
+  // 复制 Mermaid 源码本体：粘进聊天/Issue/文档的最短路径（免下载 .mmd 中转）。
+  const onCopyMermaidSource = async () => {
+    try {
+      await navigator.clipboard.writeText(validatedState.current.code);
+      notify('已复制 Mermaid 源码');
+    } catch {
+      notify('复制失败');
+    }
+  };
+
   // --- local file save / open / extra export formats ---
 
   let exportOpen = $state(false);
@@ -636,6 +646,15 @@ ${svgString}`);
               onSaveMmd();
             }}>
             Mermaid 源码（.mmd）
+          </button>
+          <button
+            class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
+            data-testid="copy-mermaid-source"
+            onclick={() => {
+              exportOpen = false;
+              void onCopyMermaidSource();
+            }}>
+            复制 Mermaid 源码
           </button>
           <button
             class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"

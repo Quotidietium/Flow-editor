@@ -15,4 +15,15 @@ test.describe('复制 SVG 源码', () => {
     // 与下载同源的干净 SVG：补了 xlink 命名空间
     expect(clipboard).toContain('xmlns:xlink');
   });
+
+  test('复制 Mermaid 源码本体到剪贴板', async ({ page, context, editPage }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await editPage.openExportMenu();
+    await page.getByTestId('copy-mermaid-source').click();
+
+    await expect(page.getByText('已复制 Mermaid 源码')).toBeVisible();
+    const clipboard = await page.evaluate(() => navigator.clipboard.readText());
+    expect(clipboard).toContain('flowchart TD');
+    expect(clipboard).toContain('圣诞节');
+  });
 });
