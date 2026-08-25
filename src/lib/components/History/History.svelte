@@ -351,7 +351,20 @@
         没有匹配「{searchQuery.trim()}」的条目。
       </div>
     {:else}
-      <div class="m-2 text-center whitespace-pre-line">{emptyMessage}</div>
+      <div class="m-2 flex flex-col items-center gap-2 text-center whitespace-pre-line">
+        <span>{emptyMessage}</span>
+        {#if historyState.mode === 'manual'}
+          <!-- 空态即引导：新用户的第一条收藏零查找成本 -->
+          <Button
+            size="sm"
+            variant="outline"
+            data-testid="history-empty-save"
+            onclick={saveHistory}>
+            <SaveIcon />
+            立即收藏当前图表
+          </Button>
+        {/if}
+      </div>
     {/if}
   </ul>
 </Card>

@@ -276,6 +276,19 @@ test.describe('History', () => {
     await expect(page.getByRole('tab', { name: /已保存 \(2\)/ })).toBeVisible();
   });
 
+  test('空「已保存」提供立即收藏引导', async ({ page }) => {
+    await openHistory(page);
+    // 空态：引导按钮可见
+    const emptySave = page.getByTestId('history-empty-save');
+    await expect(emptySave).toBeVisible();
+
+    // 点击收藏 → 出现条目、引导消失、计数变 1
+    await emptySave.click();
+    await expect(page.locator('#historyList li')).toHaveCount(1);
+    await expect(emptySave).toHaveCount(0);
+    await expect(page.getByRole('tab', { name: /已保存 \(1\)/ })).toBeVisible();
+  });
+
   test('renames a saved entry inline', async ({ page }) => {
     await openHistory(page);
     await page.locator('#saveHistory').click();
