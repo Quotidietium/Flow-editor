@@ -230,6 +230,26 @@ test.describe('History', () => {
     await expect(badges).toHaveCount(1);
   });
 
+  test('Ctrl+S 收藏当前状态到「已保存」', async ({ page }) => {
+    // 冷启动 dev server 水合需数秒：等应用装好（桥存在 = onMount 链已跑完），
+    // 否则按键落在监听器注册之前
+    await page.waitForFunction(
+      () => (window as unknown as { __FLOW_EDITOR_API__?: unknown }).__FLOW_EDITOR_API__
+    );
+    // 首次 Ctrl+S：收藏成功
+    await page.keyboard.press('Control+KeyS');
+    await expect(page.getByText('已收藏到历史「已保存」')).toBeVisible();
+
+    await openHistory(page);
+    await expect(page.locator('#historyList li')).toHaveCount(1);
+
+    // 状态未变时再次 Ctrl+S：去重提示
+    await page.keyboard.press('Escape'); // 关掉可能的面板焦点
+    await page.getByRole('button', { name: '历史记录' }).click(); // 收起面板
+    await page.keyboard.press('Control+KeyS');
+    await expect(page.getByText('该状态已保存过。')).toBeVisible();
+  });
+
   test('renames a saved entry inline', async ({ page }) => {
     await openHistory(page);
     await page.locator('#saveHistory').click();

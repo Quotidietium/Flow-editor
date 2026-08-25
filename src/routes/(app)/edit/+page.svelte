@@ -5,7 +5,7 @@
   import Editor from '$/components/Editor.svelte';
   import FontSizeMenu from '$/components/FontSizeMenu.svelte';
   import History from '$/components/History/History.svelte';
-  import { startAutoSave } from '$/components/History/historyState.svelte';
+  import { addManualEntry, startAutoSave } from '$/components/History/historyState.svelte';
   import InsertSnippets from '$/components/InsertSnippets.svelte';
   import Navbar from '$/components/Navbar.svelte';
   import PluginManager from '$/components/PluginManager.svelte';
@@ -27,7 +27,8 @@
   import type { EditorMode, Tab } from '$/types';
   import { PanZoomState } from '$/util/panZoom';
   import { readJSON, writeJSON } from '$/util/persist.svelte';
-  import { validatedState, updateCodeStore, urls } from '$/util/state.svelte';
+  import { notify } from '$/util/notify';
+  import { inputState, validatedState, updateCodeStore, urls } from '$/util/state.svelte';
   import { initHandler } from '$/util/util';
   import { onMount } from 'svelte';
   import CodeIcon from '~icons/custom/code';
@@ -93,6 +94,22 @@
 
   // Record the Timeline for the whole session, not just while the panel is open.
   onMount(() => startAutoSave());
+
+  // Ctrl+S 把当前状态收藏进历史「已保存」（浏览器默认的保存网页被拦截）。
+  onMount(() => {
+    const onKeydown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        if (addManualEntry($state.snapshot(inputState))) {
+          notify('已收藏到历史「已保存」');
+        } else {
+          notify('该状态已保存过。');
+        }
+      }
+    };
+    window.addEventListener('keydown', onKeydown);
+    return () => window.removeEventListener('keydown', onKeydown);
+  });
 
   let isHistoryOpen = $state(false);
   let pluginManagerOpen = $state(false);
