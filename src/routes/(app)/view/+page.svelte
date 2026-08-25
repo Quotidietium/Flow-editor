@@ -18,6 +18,7 @@
   import DownloadIcon from '~icons/material-symbols/download-rounded';
   import EditIcon from '~icons/material-symbols/edit-note-rounded';
   import ImageIcon from '~icons/material-symbols/image-outline-rounded';
+  import LinkIcon from '~icons/material-symbols/link-rounded';
 
   const panZoomState = new PanZoomState();
 
@@ -38,6 +39,16 @@
     }
     downloadTextFile(diagramFileName('svg'), markup, 'image/svg+xml');
     notify('已下载 SVG');
+  };
+
+  // 观看者再分享：地址栏长串 pako 不用手选。
+  const onCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      notify('已复制链接');
+    } catch {
+      notify('复制失败');
+    }
   };
 
   // PNG 走同一份干净 SVG 光栅化：长边 1080 等比，底色随 --background。
@@ -102,6 +113,16 @@
       onclick={() => void onDownloadPng()}>
       <ImageIcon />
       {pngExporting ? '导出中…' : '下载 PNG'}
+    </Button>
+    <Button
+      size="sm"
+      variant="outline"
+      class="bg-background/80"
+      data-testid="view-copy-link"
+      title="复制当前图表的分享链接"
+      onclick={() => void onCopyLink()}>
+      <LinkIcon />
+      复制链接
     </Button>
     <PanZoomToolbar {panZoomState} compact />
   </div>

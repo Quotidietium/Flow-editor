@@ -84,4 +84,20 @@ test.describe('/view 只读页', () => {
     expect(Math.max(width, height)).toBe(1080);
     expect(Math.min(width, height)).toBeGreaterThan(0);
   });
+
+  test('复制链接：观看者再分享免手选地址栏', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await page.goto('/edit');
+    // 等 #pako 落地址栏再换 /view——hash 经 250ms 去抖写入，waitForFunction
+    // 只证明桥就绪不证明 hash 已写（裸 /view 进页 = 默认图）。
+    await page.waitForURL(/#pako:/);
+    const viewUrl = page.url().replace('/edit', '/view');
+    await page.goto(viewUrl);
+    await expect(page.locator('#container')).toContainText('圣诞节', { timeout: 15_000 });
+
+    await page.getByTestId('view-copy-link').click();
+    await expect(page.getByText('已复制链接')).toBeVisible();
+    const clipboard = await page.evaluate(() => navigator.clipboard.readText());
+    expect(clipboard).toContain('/view#pako:');
+  });
 });
