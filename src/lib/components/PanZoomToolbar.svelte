@@ -21,6 +21,18 @@
   } = $props();
 
   const zoomClass = $derived(compact ? undefined : 'hidden sm:block');
+
+  // 缩放百分比读数：种子值取实例当前缩放，之后经回调随缩放交互更新。
+  let zoomLevel = $state(1);
+  $effect(() => {
+    zoomLevel = panZoomState.currentZoom();
+    panZoomState.onZoomLevelChange = (zoom) => {
+      zoomLevel = zoom;
+    };
+    return () => {
+      panZoomState.onZoomLevelChange = undefined;
+    };
+  });
 </script>
 
 <FloatingToolbar>
@@ -36,6 +48,11 @@
     onclick={() => panZoomState.zoomOut()}>
     <MagnifyingGlassMinusIcon />
   </Button>
+  <span
+    class="w-11 self-center text-center text-xs text-muted-foreground tabular-nums {zoomClass}"
+    data-testid="zoom-level">
+    {Math.round(zoomLevel * 100)}%
+  </span>
   <Button
     variant="ghost"
     size="icon"

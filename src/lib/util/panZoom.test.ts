@@ -33,4 +33,16 @@ describe('PanZoomState lifecycle', () => {
     // Destroying again must not throw.
     expect(() => state.destroy()).not.toThrow();
   });
+
+  it('currentZoom defaults to 1 and destroy clears the zoom-level callback', () => {
+    vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+    const state = new PanZoomState();
+    state.onZoomLevelChange = vi.fn();
+
+    // 未挂接 svg-pan-zoom 实例时回落默认值
+    expect(state.currentZoom()).toBe(1);
+
+    state.destroy();
+    expect(state.onZoomLevelChange).toBeUndefined();
+  });
 });

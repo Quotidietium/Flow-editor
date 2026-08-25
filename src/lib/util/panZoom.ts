@@ -13,6 +13,13 @@ export class PanZoomState {
 
   public isPanEnabled: boolean;
   public onPanZoomChange?: (pan: Point, zoom: number) => void;
+  /** 缩放百分比读数的订阅（工具栏 UI）；与 onPanZoomChange 互不干扰。 */
+  public onZoomLevelChange?: (zoom: number) => void;
+
+  /** 当前缩放（实例实时值优先，未初始化时回落记忆值/1）。 */
+  public currentZoom(): number {
+    return this.pzoom?.getZoom() ?? this.zoom ?? 1;
+  }
 
   constructor() {
     this.isPanEnabled = true;
@@ -84,6 +91,7 @@ export class PanZoomState {
         this.isDirty = true;
         if (this.zoom) {
           this.onPanZoomChange?.(this.pan, this.zoom);
+          this.onZoomLevelChange?.(this.zoom);
         }
       },
       onZoom: (zoom) => {
@@ -93,6 +101,7 @@ export class PanZoomState {
         if (this.pan) {
           this.onPanZoomChange?.(this.pan, this.zoom);
         }
+        this.onZoomLevelChange?.(zoom);
       },
       panEnabled: true,
       zoomEnabled: true
@@ -142,6 +151,7 @@ export class PanZoomState {
     }
     this.pzoom.zoom(zoom);
     this.pzoom.pan(pan);
+    this.onZoomLevelChange?.(zoom);
   }
 
   public resize() {
@@ -163,6 +173,7 @@ export class PanZoomState {
     this.pzoom?.reset();
     // Zoom out a bit to avoid overlap with the toolbar
     this.pzoom?.zoom(0.875);
+    this.onZoomLevelChange?.(0.875);
     this.isDirty = false;
   }
 
@@ -178,5 +189,6 @@ export class PanZoomState {
     this.pzoom = undefined;
     this.resizeObserver.disconnect();
     this.onPanZoomChange = undefined;
+    this.onZoomLevelChange = undefined;
   }
 }
