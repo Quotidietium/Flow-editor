@@ -2310,12 +2310,16 @@
               class="h-24 w-full rounded border border-input bg-background p-1 font-mono text-xs text-foreground"
               onkeydown={(e) => {
                 e.stopPropagation();
-                if (e.key === 'Escape') editingDetail = false;
+                // 多行文本域：Enter 换行照旧，Ctrl+Enter 保存（IDE 惯例）
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                  e.preventDefault();
+                  commitDetail();
+                } else if (e.key === 'Escape') editingDetail = false;
               }}></textarea>
             <div class="mt-1 flex justify-end gap-1">
               <Button size="sm" variant="ghost" onclick={() => (editingDetail = false)}
                 >取消</Button>
-              <Button size="sm" onclick={commitDetail}>保存</Button>
+              <Button size="sm" title="保存（Ctrl+Enter）" onclick={commitDetail}>保存</Button>
             </div>
           </div>
         {/if}
