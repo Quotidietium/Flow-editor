@@ -58,9 +58,21 @@
       options.isSectionEnd && 'border-border-dark',
       options.class
     )}>
-    <span class="flex items-center gap-2">
+    <!-- 行文本自身即切换入口（role=button+键盘全可达——整行 cursor-pointer
+         却只有 Switch 可点的「点击假象」消除；Switch 保留为视觉发现路径） -->
+    <span
+      class="flex items-center gap-2"
+      role="button"
+      tabindex="0"
+      onclick={() => setMode(mode.current === 'dark' ? 'light' : 'dark')}
+      onkeydown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          setMode(mode.current === 'dark' ? 'light' : 'dark');
+        }
+      }}>
       <ContrastIcon />
-      深色模式
+      {options.label}
     </span>
     <Switch
       checked={mode.current === 'dark'}
