@@ -1,6 +1,7 @@
 <script lang="ts">
   import * as Popover from '$/components/ui/popover';
   import { Switch } from '$/components/ui/switch';
+  import { editorFontSize } from '$/util/editorFontSize.svelte';
   import { urls } from '$/util/state.svelte';
   import { cn } from '$/utils';
   import { mode, setMode } from 'mode-watcher';
@@ -8,6 +9,7 @@
   import AddIcon from '~icons/material-symbols/add-2-rounded';
   import DuplicateIcon from '~icons/material-symbols/content-copy-outline-rounded';
   import ContrastIcon from '~icons/material-symbols/contrast';
+  import FontIcon from '~icons/material-symbols/format-size-rounded';
   import MenuIcon from '~icons/material-symbols/menu-rounded';
 
   interface MenuItem {
@@ -33,6 +35,12 @@
       icon: ContrastIcon,
       label: '深色模式',
       renderer: darkModeMenuItem
+    },
+    {
+      href: '#',
+      icon: FontIcon,
+      label: '编辑器字号',
+      renderer: fontSizeMenuItem
     }
   ]);
 </script>
@@ -77,6 +85,34 @@
     <Switch
       checked={mode.current === 'dark'}
       onCheckedChange={(dark) => setMode(dark ? 'dark' : 'light')} />
+  </div>
+{/snippet}
+
+{#snippet fontSizeMenuItem(options: Omit<MenuItem, 'renderer'>)}
+  <!-- 移动端 390px 头部字号菜单被空间妥协隐藏后，移动端唯一调节入口
+       （偏好单例化，桌面 FontSizeMenu 与本行共享同一值） -->
+  <div class={cn('flex items-center justify-between px-3 py-2 hover:bg-muted', options.class)}>
+    <span class="flex items-center gap-2">
+      <FontIcon />
+      编辑器字号
+    </span>
+    <span class="flex items-center gap-1 tabular-nums">
+      <button
+        class="rounded border px-1.5 hover:bg-background"
+        data-testid="menu-font-dec"
+        aria-label="减小字号"
+        onclick={() => editorFontSize.step(-2)}>
+        −
+      </button>
+      <span class="w-7 text-center" data-testid="menu-font-size">{editorFontSize.current}</span>
+      <button
+        class="rounded border px-1.5 hover:bg-background"
+        data-testid="menu-font-inc"
+        aria-label="增大字号"
+        onclick={() => editorFontSize.step(2)}>
+        ＋
+      </button>
+    </span>
   </div>
 {/snippet}
 

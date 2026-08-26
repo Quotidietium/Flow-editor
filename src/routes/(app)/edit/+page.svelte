@@ -30,6 +30,7 @@
   import { notify } from '$/util/notify';
   import { inputState, validatedState, updateCodeStore, urls } from '$/util/state.svelte';
   import { initHandler } from '$/util/util';
+  import { editorFontSize } from '$/util/editorFontSize.svelte';
   import { loadFileIntoEditor } from '$/util/loadFile';
   import { mode, setMode } from 'mode-watcher';
   import { onMount, untrack } from 'svelte';
@@ -83,13 +84,8 @@
     writeJSON(WRAP_KEY, wordWrap);
   });
 
-  // 编辑器字号偏好（双端生效），默认 14px。
-  const FONT_SIZE_KEY = 'editorFontSize';
-  let editorFontSize = $state(readJSON<number>(FONT_SIZE_KEY, 14));
-  $effect(() => {
-    writeJSON(FONT_SIZE_KEY, editorFontSize);
-  });
-
+  // 编辑器字号偏好（双端生效），默认 14px——单例见 util/editorFontSize.svelte，
+  // 主菜单字号行共享同一偏好（移动端 390px 头部菜单被隐藏后也可调）。
   // Monaco 小地图偏好（仅桌面端；长代码导航），默认关。
   const MINIMAP_KEY = 'editorMinimap';
   let minimap = $state(readJSON<boolean>(MINIMAP_KEY, false));
@@ -293,7 +289,9 @@
                   aria-label="自动换行">
                   <WrapTextIcon />
                 </Toggle>
-                <FontSizeMenu bind:size={editorFontSize} />
+                <FontSizeMenu
+                  size={editorFontSize.current}
+                  onSizeChange={(next) => (editorFontSize.current = next)} />
                 <Toggle
                   bind:pressed={minimap}
                   size="sm"
@@ -312,7 +310,7 @@
               <Editor
                 {isMobile}
                 {wordWrap}
-                fontSize={editorFontSize}
+                fontSize={editorFontSize.current}
                 {minimap}
                 bind:this={editorComp} />
             </Card>

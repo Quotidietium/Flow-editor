@@ -4,7 +4,7 @@
   import { cn } from '$lib/utils';
   import FontIcon from '~icons/material-symbols/format-size-rounded';
 
-  let { size = $bindable(14) } = $props<{ size?: number }>();
+  let { onSizeChange, size } = $props<{ onSizeChange: (next: number) => void; size: number }>();
 
   const SIZES = [12, 14, 16, 18, 20];
 </script>
@@ -27,7 +27,7 @@
       <Popover.Close
         data-testid="editor-font-size-{option}"
         class="flex w-full items-center justify-between rounded px-2 py-1 text-left text-sm hover:bg-accent"
-        onclick={() => (size = option)}>
+        onclick={() => onSizeChange(option)}>
         <span>{option}px</span>
         {#if size === option}<span>✓</span>{/if}
       </Popover.Close>
