@@ -16,6 +16,74 @@
     %sveltekit.head%
   </head>
   <body>
-    <div id="svelte">%sveltekit.body%</div>
+    <div id="svelte">
+      %sveltekit.body%
+      <!-- 启动指示：SPA 首屏在水合完成前是空白（冷启动可达数秒），
+           纯 HTML/CSS 无 JS 依赖；Svelte 挂载时清空 #svelte 自动消失。 -->
+      <style>
+        .boot-splash {
+          position: fixed;
+          inset: 0;
+          z-index: 0;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 12px;
+          background: #ffffff;
+          color: #6b7280;
+          font-family:
+            system-ui,
+            -apple-system,
+            sans-serif;
+          font-size: 13px;
+        }
+        .boot-spinner {
+          width: 28px;
+          height: 28px;
+          border: 3px solid currentColor;
+          border-top-color: transparent;
+          border-radius: 50%;
+          opacity: 0.7;
+          animation: boot-spin 0.9s linear infinite;
+        }
+        @keyframes boot-spin {
+          to {
+            transform: rotate(360deg);
+          }
+        }
+        @media (prefers-color-scheme: dark) {
+          .boot-splash {
+            background: #171717;
+            color: #9ca3af;
+          }
+        }
+      </style>
+      <div class="boot-splash" data-testid="boot-splash">
+        <div class="boot-spinner"></div>
+        <div>Flow 编辑器加载中…</div>
+      </div>
+      <script>
+        // Svelte 挂载是向 #svelte 追加而非清空（实测 splash 残留）：
+        // 一旦出现应用内容（非 style/非 splash 的子元素）即移除 splash。
+        new MutationObserver(function (_, obs) {
+          var root = document.getElementById('svelte');
+          if (!root) {
+            return;
+          }
+          for (var i = 0; i < root.children.length; i++) {
+            var child = root.children[i];
+            if (child.tagName !== 'STYLE' && !child.classList.contains('boot-splash')) {
+              var splash = root.querySelector('.boot-splash');
+              if (splash) {
+                splash.remove();
+              }
+              obs.disconnect();
+              return;
+            }
+          }
+        }).observe(document.getElementById('svelte'), { childList: true });
+      </script>
+    </div>
   </body>
 </html>
