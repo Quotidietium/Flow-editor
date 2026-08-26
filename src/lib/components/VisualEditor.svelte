@@ -1569,6 +1569,27 @@
     el.focus();
   };
 
+  // 打开时按估计宽度夹取（152px）只是防闪屏第一帧；面板宽度随内容
+  // （实测 177px+），挂载后按实测宽度精确收进视口。
+  const clampMenuToViewport = (el: HTMLElement): void => {
+    const rect = el.getBoundingClientRect();
+    if (rect.right > window.innerWidth - 8) {
+      el.style.left = `${Math.max(8, window.innerWidth - rect.width - 8)}px`;
+    }
+  };
+
+  // 浮层 portal 到 body：移动端 200% 滑屏容器带 transform（-translate-x-1/2），
+  // position:fixed 在 transform 祖先内会相对祖先而非视口定位——实测菜单偏移
+  // 整整 390px（102-390=-288）。挂到 body 下 fixed 才恒等于视口坐标。
+  const portal = (el: HTMLElement): { destroy: () => void } => {
+    document.body.append(el);
+    return {
+      destroy: () => {
+        el.remove();
+      }
+    };
+  };
+
   const handles = (node: VNode): { key: string; x: number; y: number }[] => {
     const size = nodeSize(node);
     return [
@@ -1635,7 +1656,14 @@
           onclick={(e) => {
             e.stopPropagation();
             const box = e.currentTarget.getBoundingClientRect();
-            insertOpen = insertOpen ? undefined : { x: box.left, y: box.bottom + 4 };
+            if (insertOpen) {
+              insertOpen = undefined;
+              return;
+            }
+            // 视口内夹取：移动端横滑工具栏下按钮可在任意 x，面板不得出屏
+            // （152 = min-w-36 的 144px + 8px 边距；宽度另有 max-w 兜底）
+            const maxX = Math.max(8, window.innerWidth - 152);
+            insertOpen = { x: Math.max(8, Math.min(box.left, maxX)), y: box.bottom + 4 };
           }}>
           插入 ▾
         </Button>
@@ -2263,9 +2291,11 @@
   {#if insertOpen}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
-      class="fixed z-50 min-w-36 rounded-md border bg-popover p-1 text-xs text-popover-foreground shadow-md"
+      class="fixed z-50 min-w-36 max-w-[calc(100vw-16px)] rounded-md border bg-popover p-1 text-xs text-popover-foreground shadow-md"
       data-testid={TID.visualInsertMenu}
       style="left: {insertOpen.x}px; top: {insertOpen.y}px;"
+      use:portal
+      use:clampMenuToViewport
       onpointerdown={(e) => e.stopPropagation()}>
       <input
         class="mb-1 h-7 w-full rounded border bg-background px-1.5"
@@ -2310,6 +2340,7 @@
       class="fixed z-50 min-w-36 rounded-md border bg-popover p-1 text-xs text-popover-foreground shadow-md"
       data-testid={TID.visualLayoutMenuList}
       style="right: 16px; bottom: 120px;"
+      use:portal
       onpointerdown={(e) => e.stopPropagation()}>
       <button
         class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
