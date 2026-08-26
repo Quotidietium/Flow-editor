@@ -346,4 +346,29 @@ test.describe('History', () => {
     await expect(page.locator('#historyList')).toContainText('my-custom-name');
     await expect(page.locator('#historyList li')).toHaveCount(1);
   });
+
+  test('双击名称或键盘回车直接进入重命名（铅笔按钮之外的直达路径）', async ({ page }) => {
+    await openHistory(page);
+    await page.locator('#saveHistory').click();
+    await expect(page.locator('#historyList li')).toHaveCount(1);
+
+    // 双击名称 → 重命名输入框出现
+    const currentName = await page
+      .locator('#historyList li [role="button"][tabindex="0"]')
+      .first()
+      .textContent();
+    await page.locator('#historyList li [role="button"][tabindex="0"]').first().dblclick();
+    const input = page.getByRole('textbox', { name: '重命名条目' });
+    await expect(input).toBeVisible();
+    await expect(input).toHaveValue(currentName?.trim() ?? '');
+    await input.press('Escape');
+
+    // 键盘路径：焦点到名称按 Enter 同样进入
+    await page.locator('#historyList li [role="button"][tabindex="0"]').first().focus();
+    await page.keyboard.press('Enter');
+    await expect(input).toBeVisible();
+    await input.fill('renamed-via-keys');
+    await input.press('Enter');
+    await expect(page.locator('#historyList')).toContainText('renamed-via-keys');
+  });
 });

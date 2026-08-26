@@ -285,7 +285,26 @@
                     }}
                     onblur={commitRename} />
                 {:else}
-                  <span class="min-w-0 truncate" title="{name} · {codePreview}">{name}</span>
+                  <!-- 名称自身即重命名入口（双击/回车/空格——MC 树行同款全键盘
+                       可达模式；铅笔按钮保留为视觉发现路径） -->
+                  <span
+                    class="min-w-0 cursor-pointer truncate"
+                    role="button"
+                    tabindex="0"
+                    title="{name} · {codePreview}"
+                    ondblclick={() => {
+                      editingId = id;
+                      editValue = name ?? '';
+                    }}
+                    onkeydown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        editingId = id;
+                        editValue = name ?? '';
+                      }
+                    }}>
+                    {name}
+                  </span>
                   {#if kindLabel}
                     <span
                       class="shrink-0 rounded bg-muted px-1 py-0.5 text-[10px] text-muted-foreground"
