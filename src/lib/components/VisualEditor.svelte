@@ -2378,6 +2378,7 @@
         menu.clientY,
         window.innerHeight - 380
       )}px;"
+      use:portal
       onpointerdown={(e) => e.stopPropagation()}
       oncontextmenu={(e) => e.preventDefault()}>
       {#if menu.target.kind === 'node'}
