@@ -437,6 +437,39 @@
     zoomAt(event.clientX, event.clientY, event.deltaY < 0 ? 1.1 : 1 / 1.1);
   };
 
+  // 触屏捏合缩放：移动端没有 ctrl+滚轮。双指距离比折算目标倍率，
+  // 锚点取双指中心（svg 已有 touch-action:none，浏览器不抢手势，
+  // 无需 preventDefault，passive 监听即可）。
+  let pinch: { d0: number; k0: number } | undefined;
+  const touchDistance = (event: TouchEvent): number => {
+    const a = event.touches.item(0);
+    const b = event.touches.item(1);
+    if (!a || !b) {
+      return 1;
+    }
+    return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+  };
+  const onCanvasTouchStart = (event: TouchEvent): void => {
+    if (event.touches.length === 2) {
+      pinch = { d0: touchDistance(event), k0: view.k };
+    }
+  };
+  const onCanvasTouchMove = (event: TouchEvent): void => {
+    if (!pinch || event.touches.length !== 2) {
+      return;
+    }
+    const a = event.touches.item(0);
+    const b = event.touches.item(1);
+    if (!a || !b || pinch.d0 === 0) {
+      return;
+    }
+    const targetK = pinch.k0 * (touchDistance(event) / pinch.d0);
+    zoomAt((a.clientX + b.clientX) / 2, (a.clientY + b.clientY) / 2, targetK / view.k);
+  };
+  const onCanvasTouchEnd = (): void => {
+    pinch = undefined;
+  };
+
   // Last code this editor produced or parsed; used to detect external edits
   // (in the Code tab) so switching back to Visual reloads them.
   let lastSyncedCode = '';
@@ -1869,6 +1902,9 @@
               addNodeAt(p.x, p.y);
             }}
             onpointerdown={onCanvasPointerDown}
+            ontouchend={onCanvasTouchEnd}
+            ontouchmove={onCanvasTouchMove}
+            ontouchstart={onCanvasTouchStart}
             role="application"
             aria-label="可视化画布">
             <defs>
