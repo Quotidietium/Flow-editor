@@ -1,10 +1,11 @@
 <script lang="ts">
   import type { EditorProps } from '$/types';
   import { validatedState } from '$/util/state.svelte';
-  import { json, jsonLanguage } from '@codemirror/lang-json';
+  import { json, jsonLanguage, jsonParseLinter } from '@codemirror/lang-json';
   import { markdown } from '@codemirror/lang-markdown';
   import { yamlFrontmatter } from '@codemirror/lang-yaml';
   import { language } from '@codemirror/language';
+  import { linter } from '@codemirror/lint';
   import { Compartment, EditorState } from '@codemirror/state';
   import { EditorView } from '@codemirror/view';
   import { vsCodeDark } from '@fsegurai/codemirror-theme-vscode-dark';
@@ -139,7 +140,9 @@
     }
     editorView.dispatch({
       effects: languageCompartment.reconfigure(
-        isCodeJson ? json() : yamlFrontmatter({ content: markdown() })
+        // 配置模式：JSON 语法高亮 + 行内校验波浪线（与桌面端 Monaco json
+        // worker 的 squiggles 对齐——此前移动端配置错误只有横幅没有行内定位）
+        isCodeJson ? [json(), linter(jsonParseLinter())] : yamlFrontmatter({ content: markdown() })
       )
     });
   });
