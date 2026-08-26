@@ -53,6 +53,24 @@
       id: 'activate',
       label: '时序激活',
       text: 'activate A\nA->>B: 调用\ndeactivate A\n'
+    },
+    {
+      hint: 'gantt section + 任务行',
+      id: 'gantt',
+      label: '甘特骨架',
+      text: 'gantt\n  title 标题\n  section 阶段\n  任务: 2024-01-01, 3d\n'
+    },
+    {
+      hint: 'stateDiagram-v2 起点转移',
+      id: 'state',
+      label: '状态转移',
+      text: '[*] --> 状态\n'
+    },
+    {
+      hint: 'classDiagram 继承关系',
+      id: 'class',
+      label: '类继承',
+      text: 'A <|-- B\n'
     }
   ];
 

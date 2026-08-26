@@ -98,4 +98,28 @@ test.describe('插入代码片段', () => {
     // 三段同文仍是合法时序图（预览无错误条）
     await expect(page.getByTestId('error-container')).toHaveCount(0);
   });
+
+  test('甘特/状态/类骨架插入（覆盖流程图与时序之外的高频类）', async ({ page, editPage }) => {
+    await editPage.clearEditor();
+    await editPage.typeInEditor('gantt\n  ');
+    await page.getByTestId('insert-snippet-menu').click();
+    await page.getByTestId('insert-snippet-gantt').click();
+    // 甘特骨架落在光标处：既有 gantt 声明保留，section/任务补入
+    await expect(editPage.editor).toContainText('section 阶段');
+    await expect(editPage.editor).toContainText('任务: 2024-01-01, 3d');
+
+    await editPage.clearEditor();
+    await editPage.typeInEditor('stateDiagram-v2\n  ');
+    await page.getByTestId('insert-snippet-menu').click();
+    await page.getByTestId('insert-snippet-state').click();
+    await expect(editPage.editor).toContainText('[*] --> 状态');
+    await expect(page.getByTestId('error-container')).toHaveCount(0);
+
+    await editPage.clearEditor();
+    await editPage.typeInEditor('classDiagram\n  ');
+    await page.getByTestId('insert-snippet-menu').click();
+    await page.getByTestId('insert-snippet-class').click();
+    await expect(editPage.editor).toContainText('A <|-- B');
+    await expect(page.getByTestId('error-container')).toHaveCount(0);
+  });
 });
