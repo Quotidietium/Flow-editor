@@ -64,6 +64,8 @@ test.describe('History', () => {
     await expect(page.locator('#historyList')).toContainText('barking-dog');
     await expect(page.locator('#historyList')).toContainText('needy-mosquito');
     await expect(page.locator('#historyList')).not.toContainText('hollow-art');
+    // FIFO 规则进 UI（循环 77）：时间线页可见保留策略说明
+    await expect(page.getByTestId('history-fifo-hint')).toContainText('最近 30 条');
 
     await page.getByRole('button', { name: '恢复此版本' }).first().click();
     await expect(page.locator('#view')).toContainText('NewYear');

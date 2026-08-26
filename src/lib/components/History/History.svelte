@@ -397,4 +397,14 @@
       </div>
     {/if}
   </ul>
+  {#if historyState.mode === 'auto' && entriesWithUrl.length > 0}
+    <!-- FIFO 规则进 UI：时间线只留 30 条且先进先出——不知道这条规则，
+         用户会以为旧版本「丢了」；指引重要版本收进「已保存」（200 槽位）。
+         放 ul 外：li 伪元素会撞 '#historyList li' 的计数断言（循环77 实证） -->
+    <div
+      class="border-t px-2 py-1.5 text-center text-[11px] text-muted-foreground"
+      data-testid="history-fifo-hint">
+      时间线自动保留最近 30 条（先进先出）；重要版本请收藏到「已保存」（可存 200 条）
+    </div>
+  {/if}
 </Card>
