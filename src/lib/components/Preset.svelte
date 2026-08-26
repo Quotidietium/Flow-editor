@@ -3,12 +3,14 @@
   import { Button, buttonVariants } from '$/components/ui/button';
   import * as Popover from '$/components/ui/popover';
   import { getSampleDiagrams, type SampleExample } from '$/util/mermaid';
+  import { notify } from '$/util/notify';
   import { loadRecentPresets, pushRecentPreset, clearRecentPresets } from '$/util/recentPresets';
   import { detectDiagramKind, type DiagramKind } from '$/util/visualEditor/model';
   import { updateCode, validatedState } from '$lib/util/state.svelte';
   import { cn } from '$lib/utils';
   import ShapesIcon from '~icons/material-symbols/account-tree-outline-rounded';
   import ChevronDownIcon from '~icons/material-symbols/keyboard-arrow-down-rounded';
+  import CopyIcon from '~icons/material-symbols/content-copy-outline-rounded';
   import ClearIcon from '~icons/material-symbols/delete-sweep-outline-rounded';
 
   const extras: Record<string, SampleExample[]> = {
@@ -148,6 +150,16 @@
     });
   };
 
+  // 复制示例代码：借鉴骨架不必整图替换当前文档（不触发 recent/不更新代码）。
+  const copyExampleCode = async (example: SampleExample): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(example.code);
+      notify(`已复制「${example.title}」的代码`);
+    } catch {
+      notify('复制失败');
+    }
+  };
+
   // 「最近使用」：重复起步高频动作一键直达，localStorage 持久化（最多 6 条）。
   let recent = $state<string[]>(loadRecentPresets());
   // 类目 key 只有在目录里有示例时才渲染（目录 chunk 未加载前过滤）。
@@ -278,14 +290,28 @@
             </Popover.Trigger>
             <Popover.Content align="start" class="flex w-fit flex-col gap-1 p-1">
               {#each examples as example (example.title)}
-                <Popover.Close
-                  class={cn(
-                    buttonVariants({ variant: 'ghost', size: 'sm' }),
-                    'justify-start normal-case'
-                  )}
-                  onclick={() => loadSampleDiagram(sample, example)}>
-                  {example.title}
-                </Popover.Close>
+                <div class="flex items-center gap-0.5">
+                  <Popover.Close
+                    class={cn(
+                      buttonVariants({ variant: 'ghost', size: 'sm' }),
+                      'flex-1 justify-start normal-case'
+                    )}
+                    onclick={() => loadSampleDiagram(sample, example)}>
+                    {example.title}
+                  </Popover.Close>
+                  <!-- 复制代码：借鉴骨架不必整图替换当前文档（只取不替） -->
+                  <button
+                    class="rounded p-1 opacity-50 hover:bg-accent hover:opacity-100"
+                    title="复制「{example.title}」的代码"
+                    aria-label="复制{example.title}的代码"
+                    data-testid="preset-example-copy"
+                    onclick={(event) => {
+                      event.stopPropagation();
+                      void copyExampleCode(example);
+                    }}>
+                    <CopyIcon class="size-3.5" />
+                  </button>
+                </div>
               {/each}
             </Popover.Content>
           </Popover.Root>

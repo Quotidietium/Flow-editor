@@ -25,10 +25,11 @@ test.describe('示例数角标', () => {
     const count = Number.parseInt((await firstBadge.textContent()) ?? '0', 10);
     expect(count).toBeGreaterThan(1);
 
-    // 角标所在按钮组的下拉：项数与角标一致（不变式）
+    // 角标所在按钮组的下拉：复制按钮与示例一一对应（循环 90 行内双钮，
+    // 载入钮与复制钮各一份——数复制钮即为项数）
     const group = firstBadge.locator('xpath=ancestor::div[contains(@class,"flex-grow")][1]');
     await group.getByRole('button', { name: /选择.*示例/ }).click();
-    const options = page.locator('[data-popover-content] button');
+    const options = page.locator('[data-popover-content] [data-testid="preset-example-copy"]');
     await expect.poll(async () => options.count()).toBe(count);
   });
 });
