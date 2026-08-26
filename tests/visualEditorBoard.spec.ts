@@ -106,6 +106,18 @@ test('kanban board filters cards by label/detail without touching data', async (
   await expect(board.getByTestId('visual-board-search-count')).toHaveCount(0);
 });
 
+test('kanban column name commits on Enter (blur-free)', async ({ page }) => {
+  await openEditor(page);
+  await typeCode(page, 'kanban\ntodo[待办]\n  t1[甲]');
+  const codeOut = await enterVisual(page);
+  const board = page.getByTestId('visual-board');
+
+  const columnName = board.getByLabel('列表名称').first();
+  await columnName.fill('进行中');
+  await columnName.press('Enter');
+  await expect(codeOut).toContainText('进行中');
+});
+
 test('journey board adds tasks with scores and renames sections inline', async ({ page }) => {
   await openEditor(page);
   await typeCode(page, 'journey\n  title 我的一天\n  section 上班\n    泡茶: 5: 我');

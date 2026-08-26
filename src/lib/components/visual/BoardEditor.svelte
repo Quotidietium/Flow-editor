@@ -260,6 +260,7 @@
               <input
                 class="w-0 flex-1 rounded bg-transparent px-1 py-0.5 text-xs font-semibold outline-none focus:bg-background focus:ring-1 focus:ring-primary"
                 aria-label="{config.groupName}名称"
+                use:enterCommit
                 value={col.label}
                 onchange={(e) => {
                   const v = e.currentTarget.value;
