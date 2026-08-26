@@ -189,7 +189,12 @@
   });
 </script>
 
-<Card title="示例图表" isOpen isStackable icon={{ component: ShapesIcon }}>
+<Card
+  title="示例图表"
+  isOpen
+  isStackable
+  persistKey="flowCardPreset"
+  icon={{ component: ShapesIcon }}>
   <div class="px-2 pt-2">
     <input
       class="h-8 w-full rounded-md border bg-background px-2 text-sm"

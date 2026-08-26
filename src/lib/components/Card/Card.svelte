@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { Tab } from '$/types';
+  import { readJSON, writeJSON } from '$/util/persist.svelte';
   import type { Component, Snippet } from 'svelte';
+  import { untrack } from 'svelte';
   import { quintOut } from 'svelte/easing';
   import { slide } from 'svelte/transition';
   import CollapseAllIcon from '~icons/material-symbols/collapse-all-rounded';
@@ -10,6 +12,8 @@
     isClosable?: boolean;
     isOpen?: boolean;
     isStackable?: boolean;
+    /** 折叠状态跨会话记忆的 localStorage 键；不设则不持久化。 */
+    persistKey?: string;
     tabs?: Tab[];
     activeTabID?: string;
     title?: string;
@@ -24,8 +28,9 @@
 
   let {
     isClosable = true,
-    isOpen = false,
+    isOpen: initialOpen = false,
     isStackable = false,
+    persistKey: openStateKey,
     tabs = [],
     activeTabID = '',
     title,
@@ -35,9 +40,19 @@
     children
   }: Props = $props();
 
+  // 折叠状态跨会话记忆：用户收起示例卡片专心作图（或常驻展开），
+  // 重载后保持——不给 key 的卡片行为不变（编辑卡恒展开）。
+  // untrack 显式声明「只取初始值」（编译器认可的消警模式）。
+  let isOpen = $state(
+    untrack(() => (openStateKey ? readJSON<boolean>(openStateKey, initialOpen) : initialOpen))
+  );
+
   const toggleCardOpen = () => {
     if (isClosable) {
       isOpen = !isOpen;
+      if (openStateKey) {
+        writeJSON(openStateKey, isOpen);
+      }
     }
   };
 

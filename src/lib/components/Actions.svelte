@@ -465,7 +465,11 @@ ${svgString}`);
 
 <svelte:window onpointerdown={onWindowPointerDown} />
 
-<Card title="操作" isStackable icon={{ component: DownloadIcon, class: 'rotate-180' }}>
+<Card
+  title="操作"
+  isStackable
+  persistKey="flowCardActions"
+  icon={{ component: DownloadIcon, class: 'rotate-180' }}>
   <div class="flex min-w-fit flex-col gap-2 p-2">
     <div class="flex w-full items-center gap-2 py-2 whitespace-nowrap">
       PNG 尺寸
