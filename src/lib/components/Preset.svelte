@@ -253,13 +253,6 @@
           aria-current={sample === currentCategory ? 'true' : undefined}
           onclick={() => loadSampleDiagram(sample, examples[0])}>
           {categoryName(sample)}
-          {#if examples.length > 1}
-            <!-- 示例数角标：一眼看出哪些类目有备选变体。aria-hidden 保证
-                 不进入可访问名——循环 31 教训：加可见文本会撞按名选择器。 -->
-            <span aria-hidden="true" class="ml-1 rounded bg-primary/10 px-1 text-[10px]">
-              {examples.length}
-            </span>
-          {/if}
         </Button>
         {#if examples.length > 1}
           <Popover.Root>
@@ -270,6 +263,13 @@
                 'rounded-l-none border-l border-primary-foreground/30 px-0.5 [&_svg]:size-5'
               )}>
               <ChevronDownIcon />
+              <!-- 示例数角标：一眼看出哪些类目有备选变体。放在触发钮内——
+                   主钮 textContent 绝不能污染（getByText exact 选择器会撞，
+                   循环 31/本轮 loadSite+actions 双实证）；aria-label 不受
+                   子文本影响，aria-hidden 只是双保险。 -->
+              <span aria-hidden="true" class="rounded bg-primary/10 px-0.5 text-[10px]">
+                {examples.length}
+              </span>
             </Popover.Trigger>
             <Popover.Content align="start" class="flex w-fit flex-col gap-1 p-1">
               {#each examples as example (example.title)}
