@@ -42,6 +42,25 @@ test.describe('示例图表搜索', () => {
     await editPage.checkTextNotInView('圣诞节');
   });
 
+  test('搜索后 Enter 载入首个匹配（键盘闭环）', async ({ page, editPage }) => {
+    await editPage.toggleSampleDiagrams();
+    await page.getByRole('button', { name: '流程图', exact: true }).waitFor();
+
+    // 输入即过滤，Enter 载入首匹配（时序图），无需挪手点按钮
+    const search = page.getByTestId('preset-search');
+    await search.fill('时序');
+    await search.press('Enter');
+    await editPage.checkTextNotInView('圣诞节');
+    const store = await page.evaluate(() => localStorage.getItem('codeStore'));
+    expect(store).toContain('sequenceDiagram');
+
+    // 无匹配时 Enter 无行为（不破坏手头内容）
+    await search.fill('不存在的图型xyz');
+    await search.press('Enter');
+    const after = await page.evaluate(() => localStorage.getItem('codeStore'));
+    expect(after).toContain('sequenceDiagram');
+  });
+
   test('当前图类目在网格中高亮并随载入切换', async ({ page, editPage }) => {
     await editPage.toggleSampleDiagrams();
     // 网格按钮（与最近使用行同名按钮用 flex-grow 区分——循环 24 同款）

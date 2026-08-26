@@ -217,6 +217,16 @@
       onkeydown={(event) => {
         if (event.key === 'Escape') {
           presetQuery = '';
+        } else if (
+          event.key === 'Enter' &&
+          !event.isComposing &&
+          event.keyCode !== 229 &&
+          filteredOrder.length > 0
+        ) {
+          // Enter 载入首个匹配（键盘闭环：搜索→回车，不必挪手点按钮；
+          // IME 选词回车不算——双守卫）
+          const first = filteredOrder[0];
+          loadSampleDiagram(first, samples[first][0]);
         }
       }} />
   </div>
