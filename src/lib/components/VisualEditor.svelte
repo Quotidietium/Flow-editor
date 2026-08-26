@@ -1065,6 +1065,17 @@
     syncCode();
   };
 
+  // 属性对话框键盘路径：Enter 即保存（isComposing+keyCode229 双守卫——
+  // 拼音输入法选词的回车不是提交，MC 设计器循环 72 同款），Esc 取消。
+  const onMetaKeydown = (event: KeyboardEvent): void => {
+    if (event.key === 'Enter' && !event.isComposing && event.keyCode !== 229) {
+      event.preventDefault();
+      commitMeta();
+    } else if (event.key === 'Escape') {
+      editingMeta = false;
+    }
+  };
+
   const openDetailEditor = (): void => {
     if (!selectedNode) return;
     detailDraft = selectedNode.detail ?? '';
@@ -1650,14 +1661,16 @@
         <input
           id="ve-meta-title"
           class="mb-2 w-full rounded border border-input bg-background p-1 text-xs text-foreground"
-          bind:value={metaTitleDraft} />
+          bind:value={metaTitleDraft}
+          onkeydown={onMetaKeydown} />
       {/if}
       {#each kindSpec.metaKeys ?? [] as metaKey (metaKey.key)}
         <label class="mb-1 block text-xs" for="ve-meta-{metaKey.key}">{metaKey.label}</label>
         <input
           id="ve-meta-{metaKey.key}"
           class="mb-2 w-full rounded border border-input bg-background p-1 text-xs text-foreground"
-          bind:value={metaDrafts[metaKey.key]} />
+          bind:value={metaDrafts[metaKey.key]}
+          onkeydown={onMetaKeydown} />
       {/each}
       <div class="mt-1 flex justify-end gap-1">
         <Button size="sm" variant="ghost" onclick={() => (editingMeta = false)}>取消</Button>
