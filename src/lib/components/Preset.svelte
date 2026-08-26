@@ -5,6 +5,12 @@
   import { getSampleDiagrams, type SampleExample } from '$/util/mermaid';
   import { notify } from '$/util/notify';
   import { loadRecentPresets, pushRecentPreset, clearRecentPresets } from '$/util/recentPresets';
+  import {
+    deleteUserSample,
+    loadUserSamples,
+    saveUserSample,
+    type UserSample
+  } from '$/util/userSamples';
   import { detectDiagramKind, type DiagramKind } from '$/util/visualEditor/model';
   import { updateCode, validatedState } from '$lib/util/state.svelte';
   import { cn } from '$lib/utils';
@@ -165,6 +171,43 @@
   // 类目 key 只有在目录里有示例时才渲染（目录 chunk 未加载前过滤）。
   const recentAvailable = $derived(recent.filter((key) => samples[key]));
 
+  /* ---------------- 我的示例（用户整图模板，localStorage 持久化） ----------------
+     与「我的配置模板」（配置）/「我的代码片段」（光标处插入）三足鼎立：
+     我的示例 = 整图载入（updateCode 网关，与内置示例同路径）。 */
+  let userSamples = $state<UserSample[]>(loadUserSamples());
+  let sampleSaveOpen = $state(false);
+  let sampleSaveName = $state('');
+
+  const startSampleSave = () => {
+    sampleSaveName = '';
+    sampleSaveOpen = true;
+  };
+
+  const confirmSampleSave = () => {
+    const label = sampleSaveName.trim();
+    if (!label) {
+      notify('请输入示例名称');
+      return;
+    }
+    const code = validatedState.current.code;
+    if (code.trim().length === 0) {
+      notify('当前代码为空，未保存');
+      return;
+    }
+    userSamples = saveUserSample(label, code);
+    sampleSaveOpen = false;
+    notify(`已保存示例「${label}」`);
+  };
+
+  const loadUserSample = (sample: UserSample) => {
+    updateCode(sample.code, { resetPanZoom: true, updateDiagram: true });
+  };
+
+  const removeUserSample = (sample: UserSample) => {
+    userSamples = deleteUserSample(sample.id);
+    notify(`已删除示例「${sample.label}」`);
+  };
+
   const mainDiagrams = [
     'Flowchart',
     'Class',
@@ -231,6 +274,62 @@
       }} />
   </div>
   <div class="flex h-fit max-h-52 flex-wrap gap-2 overflow-y-auto p-2">
+    <div
+      class="flex w-full flex-wrap items-center gap-2 border-b border-dashed pb-2"
+      data-testid="user-samples">
+      <span class="text-xs text-muted-foreground">我的示例</span>
+      {#each userSamples as sample (sample.id)}
+        <span class="inline-flex items-center">
+          <Button
+            size="sm"
+            variant="outline"
+            class="normal-case"
+            data-testid="user-sample-{sample.id}"
+            title="载入示例（整图替换当前文档）"
+            onclick={() => loadUserSample(sample)}>
+            {sample.label}
+          </Button>
+          <button
+            class="rounded p-1 opacity-40 hover:bg-accent hover:opacity-100"
+            title="删除示例「{sample.label}」"
+            aria-label="删除示例{sample.label}"
+            data-testid="user-sample-delete-{sample.id}"
+            onclick={() => removeUserSample(sample)}>
+            <ClearIcon class="size-3.5" />
+          </button>
+        </span>
+      {/each}
+      {#if sampleSaveOpen}
+        <span class="inline-flex items-center gap-1">
+          <input
+            class="h-7 w-28 rounded border bg-background px-1.5 text-xs"
+            placeholder="示例名称…"
+            aria-label="示例名称"
+            data-testid="user-sample-save-name"
+            bind:value={sampleSaveName}
+            onkeydown={(event) => {
+              if (event.key === 'Enter' && !event.isComposing && event.keyCode !== 229) {
+                confirmSampleSave();
+              } else if (event.key === 'Escape') {
+                sampleSaveOpen = false;
+              }
+            }} />
+          <button
+            class="h-7 shrink-0 rounded border px-2 text-xs hover:bg-accent"
+            data-testid="user-sample-save-confirm"
+            onclick={confirmSampleSave}>
+            保存
+          </button>
+        </span>
+      {:else}
+        <button
+          class="rounded border border-dashed px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent"
+          data-testid="user-sample-save"
+          onclick={startSampleSave}>
+          ＋ 保存当前图为示例
+        </button>
+      {/if}
+    </div>
     {#if recentAvailable.length > 0}
       <div
         class="flex w-full flex-wrap items-center gap-2 border-b border-dashed pb-2"
