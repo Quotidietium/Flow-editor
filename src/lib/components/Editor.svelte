@@ -2,6 +2,7 @@
   import DesktopEditor from '$/components/DesktopEditor.svelte';
   import MobileEditor from '$/components/MobileEditor.svelte';
   import { TID } from '$/constants';
+  import { defaultConfigJson } from '$/util/configPresets';
   import { updateCode, updateConfig, validatedState } from '$lib/util/state.svelte';
   import { notify } from '$lib/util/notify';
   import { detectDiagramKind, KIND_SPECS } from '$lib/util/visualEditor/model';
@@ -92,6 +93,13 @@
     }
   };
 
+  // 配置错误的一键恢复：横幅现场给「重置为默认配置」直达钮——用户不必
+  // 知道模板菜单里藏着同一个功能（双端可用，与模板菜单的重置同语义）。
+  const resetConfig = () => {
+    updateConfig(defaultConfigJson());
+    notify('已重置为默认配置');
+  };
+
   const showErrorDebounced = debounce(() => {
     showError = true;
   }, 3000);
@@ -154,6 +162,14 @@
             data-testid="error-reveal"
             onclick={revealFirstError}>
             定位到错误行
+          </button>
+        {/if}
+        {#if validatedState.current.errorSource === 'config'}
+          <button
+            class="rounded px-2 py-0.5 text-xs hover:bg-slate-700"
+            data-testid="error-reset-config"
+            onclick={resetConfig}>
+            重置为默认配置
           </button>
         {/if}
         <button

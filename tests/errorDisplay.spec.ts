@@ -110,6 +110,30 @@ test.describe('Error display tests', () => {
     await expect(editPage.page.getByTestId('error-reveal')).toBeVisible();
   });
 
+  test('配置错误横幅提供「重置为默认配置」直达钮', async ({ page, editPage }) => {
+    // 破坏配置 JSON（剪贴板粘贴防 Monaco 自动闭括号）
+    await editPage.setEditorMode('配置');
+    await editPage.editor.click();
+    await page.evaluate((c) => navigator.clipboard.writeText(c), '{ broken');
+    await page.keyboard.press('Control+KeyA');
+    await page.keyboard.press('Control+V');
+    await editPage.checkError('配置 JSON 错误');
+
+    // 直达钮只在配置错误时出现（代码错误不给）
+    await expect(page.getByTestId('error-reset-config')).toBeVisible();
+    await page.getByTestId('error-reset-config').click();
+    await expect(page.getByText('已重置为默认配置')).toBeVisible();
+    await expect(page.getByTestId('error-container')).toHaveCount(0);
+    await expect(editPage.editor).toContainText('"theme": "default"');
+
+    // 代码错误时该钮不出现
+    await editPage.setEditorMode('代码');
+    await editPage.clearEditor();
+    await editPage.typeInEditor('graph TD\nA --> B -->');
+    await editPage.checkError('图表语法错误');
+    await expect(page.getByTestId('error-reset-config')).toHaveCount(0);
+  });
+
   test('复制错误内容到剪贴板', async ({ page, context, editPage }) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await editPage.clearEditor();
