@@ -80,4 +80,22 @@ test.describe('插入代码片段', () => {
     await expect(page.getByText('已删除片段「双节点骨架」')).toBeVisible();
     await expect(page.locator('[data-testid^="user-snippet-snippet-"]')).toHaveCount(0);
   });
+
+  test('时序结构骨架（loop/alt/activate）插入即合法渲染', async ({ page, editPage }) => {
+    await editPage.clearEditor();
+    await editPage.typeInEditor('sequenceDiagram\n  participant A\n  participant B\n  ');
+    await page.getByTestId('insert-snippet-menu').click();
+    await page.getByTestId('insert-snippet-loop').click();
+    await expect(editPage.editor).toContainText('loop 循环描述');
+    await editPage.typeInEditor('\n  ', { bottom: false });
+    await page.getByTestId('insert-snippet-menu').click();
+    await page.getByTestId('insert-snippet-alt').click();
+    await expect(editPage.editor).toContainText('else 条件B');
+    await editPage.typeInEditor('\n  ', { bottom: false });
+    await page.getByTestId('insert-snippet-menu').click();
+    await page.getByTestId('insert-snippet-activate').click();
+    await expect(editPage.editor).toContainText('deactivate A');
+    // 三段同文仍是合法时序图（预览无错误条）
+    await expect(page.getByTestId('error-container')).toHaveCount(0);
+  });
 });

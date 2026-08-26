@@ -35,7 +35,25 @@
       label: '时序参与者',
       text: 'participant A as 参与者\n'
     },
-    { hint: '时序图 Note over 说明', id: 'note', label: '时序注释', text: 'Note over A: 说明\n' }
+    { hint: '时序图 Note over 说明', id: 'note', label: '时序注释', text: 'Note over A: 说明\n' },
+    {
+      hint: 'loop 循环块 … end',
+      id: 'loop',
+      label: '时序循环',
+      text: 'loop 循环描述\n  A->>B: 消息\nend\n'
+    },
+    {
+      hint: 'alt/else 分支块 … end',
+      id: 'alt',
+      label: '时序分支',
+      text: 'alt 条件A\n  A->>B: 情况一\nelse 条件B\n  A->>B: 情况二\nend\n'
+    },
+    {
+      hint: 'activate/deactivate 生命线激活',
+      id: 'activate',
+      label: '时序激活',
+      text: 'activate A\nA->>B: 调用\ndeactivate A\n'
+    }
   ];
 
   /* ---------------- 我的片段（用户自定义，localStorage 持久化） ---------------- */
