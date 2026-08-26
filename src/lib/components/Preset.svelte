@@ -253,6 +253,13 @@
           aria-current={sample === currentCategory ? 'true' : undefined}
           onclick={() => loadSampleDiagram(sample, examples[0])}>
           {categoryName(sample)}
+          {#if examples.length > 1}
+            <!-- 示例数角标：一眼看出哪些类目有备选变体。aria-hidden 保证
+                 不进入可访问名——循环 31 教训：加可见文本会撞按名选择器。 -->
+            <span aria-hidden="true" class="ml-1 rounded bg-primary/10 px-1 text-[10px]">
+              {examples.length}
+            </span>
+          {/if}
         </Button>
         {#if examples.length > 1}
           <Popover.Root>
