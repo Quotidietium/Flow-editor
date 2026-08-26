@@ -230,8 +230,9 @@
   // 33 个类目需要快速定位：搜索框同时匹配类目中文名、原始英文名与
   // 示例标题（如「订单服务」），大小写不敏感。
   let presetQuery = $state('');
+  const presetQueryLower = $derived(presetQuery.trim().toLowerCase());
   const filteredOrder = $derived.by(() => {
-    const query = presetQuery.trim().toLowerCase();
+    const query = presetQueryLower;
     if (!query) {
       return diagramOrder;
     }
@@ -242,6 +243,12 @@
         samples[name]?.some((example) => example.title.toLowerCase().includes(query))
     );
   });
+  // 我的示例行吃同一个查询词（标签匹配；保存入口始终可见）
+  const visibleUserSamples = $derived(
+    presetQueryLower === ''
+      ? userSamples
+      : userSamples.filter((sample) => sample.label.toLowerCase().includes(presetQueryLower))
+  );
 </script>
 
 <Card
@@ -278,7 +285,7 @@
       class="flex w-full flex-wrap items-center gap-2 border-b border-dashed pb-2"
       data-testid="user-samples">
       <span class="text-xs text-muted-foreground">我的示例</span>
-      {#each userSamples as sample (sample.id)}
+      {#each visibleUserSamples as sample (sample.id)}
         <span class="inline-flex items-center">
           <Button
             size="sm"
