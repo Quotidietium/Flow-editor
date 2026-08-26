@@ -153,7 +153,10 @@ test('journey board adds tasks with scores and renames sections inline', async (
 
 test('cynefin board keeps fixed domains and edits transitions', async ({ page }) => {
   await openEditor(page);
-  await typeCode(page, 'cynefin-beta\n  complex\n    "试点"\n  clear\n    "手册"');
+  await typeCode(
+    page,
+    'cynefin-beta\n  complex\n    "试点"\n  clear\n    "手册"\n  chaotic\n    "救火"'
+  );
   const codeOut = await enterVisual(page);
   const board = page.getByTestId('visual-board');
   await expect(board).toBeVisible();
@@ -169,6 +172,12 @@ test('cynefin board keeps fixed domains and edits transitions', async ({ page })
   await complex.getByLabel('转换说明').fill('沉淀');
   await complex.getByRole('button', { name: '添加', exact: true }).click();
   await expect(codeOut).toContainText('complex --> clear : "沉淀"');
+
+  // 第二条转换走键盘路径：Enter 即添加（循环 91）
+  await complex.getByLabel('转换目标域').selectOption({ label: '混沌域' });
+  await complex.getByLabel('转换说明').fill('归零');
+  await complex.getByLabel('转换说明').press('Enter');
+  await expect(codeOut).toContainText('complex --> chaotic : "归零"');
 
   // Cards keep working on the fixed columns.
   await complex.getByTestId('visual-board-add-card').click();

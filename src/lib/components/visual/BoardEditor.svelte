@@ -438,6 +438,17 @@
                       ...transitionDrafts,
                       [domainId]: { ...cur, label: e.currentTarget.value }
                     };
+                  }}
+                  onkeydown={(e) => {
+                    // Enter 即添加（目标已选时；IME 选词回车不算——双守卫）
+                    if (
+                      e.key === 'Enter' &&
+                      !e.isComposing &&
+                      e.keyCode !== 229 &&
+                      transitionDrafts[domainId]?.target
+                    ) {
+                      addTransition(domainId);
+                    }
                   }} />
                 <button
                   class="rounded border px-1.5 py-0.5 text-[11px] hover:bg-accent disabled:opacity-30"
