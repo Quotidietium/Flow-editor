@@ -10,6 +10,7 @@
     sheetRows
   } from '$/util/visualEditor/sheet';
   import type { DiagramKind, VGraph, VNode } from '$/util/visualEditor/model';
+  import { enterCommit } from '$/util/enterCommit';
   import AddIcon from '~icons/material-symbols/add-2-rounded';
   import DeleteIcon from '~icons/material-symbols/close-rounded';
   import CopyIcon from '~icons/material-symbols/content-copy-rounded';
@@ -149,6 +150,7 @@
                     class="min-w-0 flex-1 rounded bg-transparent px-1 py-1 text-xs outline-none focus:ring-1 focus:ring-primary"
                     aria-label={field.label}
                     placeholder={field.placeholder ?? field.label}
+                    use:enterCommit
                     use:focusNew={row.id}
                     value={fieldValue(row, field.key)}
                     onchange={(e) => setField(row, field.key, e.currentTarget.value)} />

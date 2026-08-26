@@ -2,6 +2,7 @@
   import { TID } from '$/constants';
   import type { VGraph, VNode } from '$/util/visualEditor/model';
   import { nextEdgeId, nextNodeId } from '$/util/visualEditor/model';
+  import { enterCommit } from '$/util/enterCommit';
   import AddIcon from '~icons/material-symbols/add-2-rounded';
   import DeleteIcon from '~icons/material-symbols/close-rounded';
   import CopyIcon from '~icons/material-symbols/content-copy-rounded';
@@ -166,6 +167,7 @@
             class="w-24 flex-none rounded border bg-background px-1 py-1 text-xs"
             aria-label="所在分支"
             placeholder="main"
+            use:enterCommit
             value={node.roleData ?? 'main'}
             onchange={(e) => {
               const v = e.currentTarget.value;
@@ -189,6 +191,7 @@
             class="w-0 min-w-16 flex-1 rounded bg-transparent px-1 py-1 text-xs outline-none focus:ring-1 focus:ring-primary"
             aria-label="提交 ID"
             placeholder="提交 ID（可空）"
+            use:enterCommit
             value={node.label}
             onchange={(e) => {
               const v = e.currentTarget.value;
@@ -198,6 +201,7 @@
             class="w-20 flex-none rounded bg-transparent px-1 py-1 text-xs outline-none focus:ring-1 focus:ring-primary"
             aria-label="标签"
             placeholder="标签（可空）"
+            use:enterCommit
             value={node.detail ?? ''}
             onchange={(e) => {
               const v = e.currentTarget.value;

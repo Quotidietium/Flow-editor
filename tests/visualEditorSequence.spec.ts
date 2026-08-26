@@ -143,6 +143,25 @@ test('sequence editor filters messages by label/participant without touching dat
   await expect(editor).toContainText('消息 · 3');
 });
 
+test('participant name commits on Enter (blur-free, IME-guarded)', async ({ page }) => {
+  await openEditor(page);
+  await typeCode(page, 'sequenceDiagram\n  participant A\n  participant B\n  A->>B: 一');
+  const codeOut = await enterVisual(page);
+  const editor = page.getByTestId('visual-sequence');
+
+  // Enter 即提交（change-on-blur 路径由 enterCommit 触发 blur 完成）
+  const nameInput = editor.locator('[data-participant-id="A"]').getByLabel('参与者名称');
+  await nameInput.fill('爱丽丝');
+  await nameInput.press('Enter');
+  await expect(codeOut).toContainText('participant A as 爱丽丝');
+
+  // 消息内容同路径
+  const messageInput = editor.locator('[data-message-id="E1"]').getByLabel('消息内容');
+  await messageInput.fill('你好世界');
+  await messageInput.press('Enter');
+  await expect(codeOut).toContainText('A->>B: 你好世界');
+});
+
 test('zenuml uses the sequence editor with its two arrow types', async ({ page }) => {
   await openEditor(page);
   await typeCode(page, 'zenuml\n  title: 演示\n  A->B: 同步\n  B-->A: 异步');

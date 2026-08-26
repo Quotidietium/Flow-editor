@@ -2,6 +2,7 @@
   import { TID } from '$/constants';
   import type { DiagramKind, VGraph, VLinkType } from '$/util/visualEditor/model';
   import { nextEdgeId, nextNodeId } from '$/util/visualEditor/model';
+  import { enterCommit } from '$/util/enterCommit';
   import AddIcon from '~icons/material-symbols/add-2-rounded';
   import DeleteIcon from '~icons/material-symbols/close-rounded';
   import CopyIcon from '~icons/material-symbols/content-copy-rounded';
@@ -167,6 +168,7 @@
               class="min-w-0 flex-1 rounded bg-transparent px-1 py-1 text-xs outline-none focus:ring-1 focus:ring-primary"
               aria-label="参与者名称"
               placeholder="参与者名称"
+              use:enterCommit
               use:focusNew={p.id}
               value={p.label}
               onchange={(e) => {
@@ -302,6 +304,7 @@
               class="w-0 min-w-20 flex-1 rounded bg-transparent px-1 py-1 text-xs outline-none focus:ring-1 focus:ring-primary"
               aria-label="消息内容"
               placeholder="消息内容"
+              use:enterCommit
               value={edge.label ?? ''}
               onchange={(e) => {
                 const v = e.currentTarget.value;

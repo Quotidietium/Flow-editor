@@ -12,6 +12,7 @@
   } from '$/util/visualEditor/board';
   import type { DiagramKind, VGraph } from '$/util/visualEditor/model';
   import { nextEdgeId } from '$/util/visualEditor/model';
+  import { enterCommit } from '$/util/enterCommit';
   import AddIcon from '~icons/material-symbols/add-2-rounded';
   import DeleteIcon from '~icons/material-symbols/close-rounded';
   import CopyIcon from '~icons/material-symbols/content-copy-rounded';
@@ -328,6 +329,7 @@
                     class="w-0 flex-1 rounded bg-transparent px-1 py-0.5 text-xs outline-none focus:ring-1 focus:ring-primary"
                     aria-label="{config.itemName}名称"
                     placeholder="{config.itemName}名称"
+                    use:enterCommit
                     use:focusNew={card.id}
                     value={card.label}
                     onchange={(e) => {
@@ -359,6 +361,7 @@
                     class="mt-1 w-full rounded bg-muted/50 px-1 py-0.5 text-[11px] text-muted-foreground outline-none focus:ring-1 focus:ring-primary"
                     aria-label="{config.itemName}详情"
                     placeholder={config.detailPlaceholder}
+                    use:enterCommit
                     value={card.detail ?? ''}
                     onchange={(e) => {
                       const v = e.currentTarget.value;

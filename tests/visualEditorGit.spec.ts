@@ -73,6 +73,23 @@ test('git editor edits tags and removes operations', async ({ page }) => {
   await expect(codeOut).not.toContainText('a2');
 });
 
+test('git editor commits text fields on Enter (branch/id/tag)', async ({ page }) => {
+  await openEditor(page);
+  await typeCode(page, 'gitGraph\n  commit id: "a1"');
+  const codeOut = await enterVisual(page);
+  const editor = page.getByTestId('visual-git');
+
+  const idInput = editor.locator('[data-operation-id="C1"]').getByLabel('提交 ID');
+  await idInput.fill('b2');
+  await idInput.press('Enter');
+  await expect(codeOut).toContainText('commit id: "b2"');
+
+  const tagInput = editor.locator('[data-operation-id="C1"]').getByLabel('标签');
+  await tagInput.fill('v2');
+  await tagInput.press('Enter');
+  await expect(codeOut).toContainText('tag: "v2"');
+});
+
 test('git editor duplicates an operation (fresh row keeps branch, clears id/tag)', async ({
   page
 }) => {
