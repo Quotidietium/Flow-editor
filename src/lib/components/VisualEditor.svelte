@@ -1769,7 +1769,11 @@
         <span
           class="whitespace-nowrap text-muted-foreground"
           data-testid="visual-canvas-search-count">
-          {canvasHitCount} 匹配
+          {#if canvasHitCount === 0}
+            无匹配（Esc 清除）
+          {:else}
+            {canvasHitCount} 匹配
+          {/if}
         </span>
       {/if}
       {#if kindSpec.startEnd}

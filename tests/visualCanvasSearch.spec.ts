@@ -13,6 +13,11 @@ test.describe('画布节点搜索', () => {
     expect(total).toBeGreaterThanOrEqual(5);
 
     const search = page.getByTestId('visual-canvas-search');
+    // 无匹配（循环 121）：明确提示 Esc 清除，避免全暗画布看着像卡死
+    await search.fill('不存在的节点xyz');
+    await expect(page.getByTestId('visual-canvas-search-count')).toHaveText('无匹配（Esc 清除）');
+    await search.press('Escape');
+
     await search.fill('圣诞');
     await expect(page.getByTestId('visual-canvas-search-count')).toHaveText('1 匹配');
     // 命中节点：data-search-hit、无降透明；其余节点 opacity=0.25
