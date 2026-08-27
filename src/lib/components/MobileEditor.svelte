@@ -39,6 +39,20 @@
     editorView.focus();
   };
 
+  // 「定位到错误行」入口（与桌面 Monaco revealPosition 对齐——循环 45
+  // 只给了桌面端）：置光标于该行并滚动居中。
+  export const revealPosition = (line: number, column: number): void => {
+    if (!editorView) return;
+    const docLine = editorView.state.doc.line(
+      Math.max(1, Math.min(line, editorView.state.doc.lines))
+    );
+    editorView.dispatch({
+      effects: EditorView.scrollIntoView(docLine.from, { y: 'center' }),
+      selection: { anchor: docLine.from + Math.max(0, column - 1) }
+    });
+    editorView.focus();
+  };
+
   $effect(() => {
     // 同 DesktopEditor：先读 wordWrap 再 ?.，否则首跑短路丢掉依赖订阅
     const wrap = wordWrap;

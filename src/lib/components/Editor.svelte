@@ -54,8 +54,8 @@
 
   let showError = $state(false);
 
-  // 桌面端错误条「定位到错误行」：经 bind:this 调用 DesktopEditor 暴露的
-  // revealPosition；移动端无 Monaco 标记体系，按钮不渲染。
+  // 错误条「定位到错误行」：经 bind:this 调用两端各自暴露的
+  // revealPosition（桌面 Monaco / 移动 CodeMirror 对齐——循环 107 补移动端）。
   let desktopEditor:
     | {
         insertAtCursor?: (text: string) => void;
@@ -65,12 +65,18 @@
   const revealFirstError = () => {
     const marker = validatedState.current.errorMarkers[0];
     if (marker) {
-      desktopEditor?.revealPosition?.(marker.startLineNumber, marker.startColumn);
+      const reveal = isMobile ? mobileEditor?.revealPosition : desktopEditor?.revealPosition;
+      reveal?.(marker.startLineNumber, marker.startColumn);
     }
   };
 
   // 「插入片段」门面：编辑页菜单经此统一进入双端编辑器。
-  let mobileEditor: { insertAtCursor?: (text: string) => void } | undefined = $state();
+  let mobileEditor:
+    | {
+        insertAtCursor?: (text: string) => void;
+        revealPosition?: (line: number, column: number) => void;
+      }
+    | undefined = $state();
   export const insertAtCursor = (text: string): void => {
     if (isMobile) {
       mobileEditor?.insertAtCursor?.(text);
@@ -155,8 +161,9 @@
         </div>
         <!-- 标记只带代码文档位置（state 网关只对 mermaid 代码产出 markers）；
              配置错误横幅或配置页在前时若仍给「定位」，会拿代码旧标记在配置
-             文档里跳错行——只在「代码错误 + 代码页在前」时提供跳转。 -->
-        {#if !isMobile && validatedState.current.errorSource === 'code' && validatedState.current.editorMode === 'code' && validatedState.current.errorMarkers.length > 0}
+             文档里跳错行——只在「代码错误 + 代码页在前」时提供跳转。
+             双端可用（移动端经 CodeMirror revealPosition，循环 107）。 -->
+        {#if validatedState.current.errorSource === 'code' && validatedState.current.editorMode === 'code' && validatedState.current.errorMarkers.length > 0}
           <button
             class="rounded px-2 py-0.5 text-xs hover:bg-slate-700"
             data-testid="error-reveal"
