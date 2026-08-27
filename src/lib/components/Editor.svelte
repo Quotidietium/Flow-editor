@@ -52,6 +52,18 @@
       : validatedState.current.mermaid.length
   );
 
+  // 标签页标题跟随图类型：多标签开多张图时一眼区分（浏览器原生标题栏/
+  // 标签悬停），与状态栏标识同源；无法识别时保持默认标题。
+  const titleKindLabel = $derived.by(() => {
+    const kind = detectDiagramKind(validatedState.current.code);
+    return kind ? KIND_SPECS[kind]?.label : undefined;
+  });
+  $effect(() => {
+    document.title = titleKindLabel
+      ? `${titleKindLabel} - Flow 编辑器`
+      : '在线流程图与图表编辑器 - Flow 编辑器';
+  });
+
   let showError = $state(false);
 
   // 错误条「定位到错误行」：经 bind:this 调用两端各自暴露的
