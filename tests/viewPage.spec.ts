@@ -57,6 +57,26 @@ test.describe('/view 只读页', () => {
     await expect(page.getByText('已下载 SVG')).toBeVisible();
   });
 
+  test('SVG 下载尊重编辑器的透明背景偏好（循环 114）', async ({ page }) => {
+    // 预置透明偏好后进 /view
+    await page.goto('/edit');
+    await page.evaluate(() => localStorage.setItem('pngTransparentBg', 'true'));
+    const viewUrl = page.url().replace('/edit', '/view');
+    await page.goto(viewUrl);
+    await expect(page.locator('#container')).toContainText('圣诞节', { timeout: 15_000 });
+
+    const downloadPromise = page.waitForEvent('download');
+    await page.getByTestId('view-download-svg').click();
+    const path = await (await downloadPromise).path();
+    const content = await import('node:fs/promises').then((fs) => fs.readFile(path, 'utf8'));
+    // 根 svg 的内联底色被去掉（透明），toast 注明
+    expect(content).not.toMatch(/<svg[^>]*background-color/s);
+    await expect(page.getByText('已下载 SVG（透明背景）')).toBeVisible();
+
+    // 清理偏好避免污染其它用例
+    await page.evaluate(() => localStorage.removeItem('pngTransparentBg'));
+  });
+
   test('下载 PNG：干净图形光栅化（IHDR 尺寸可读、长边 1080）', async ({ page }) => {
     await page.goto('/edit');
     await page.waitForFunction(

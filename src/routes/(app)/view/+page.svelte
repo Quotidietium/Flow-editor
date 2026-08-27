@@ -11,6 +11,7 @@
     svgMarkupOf
   } from '$/util/fileIO';
   import { notify } from '$/util/notify';
+  import { readJSON } from '$/util/persist.svelte';
   import { PanZoomState } from '$/util/panZoom';
   import { rasterizeSvgMarkup } from '$/util/rasterize';
   import { initHandler } from '$/util/util';
@@ -33,14 +34,17 @@
 
   // 分享链接的接收者只有缩放工具——不下中转编辑器即可拿走一张干净 SVG
   // （剥掉 pan-zoom 的平移/缩放包装，呈现完整图形而非屏幕视角）。
+  // 透明背景沿用编辑器的 pngTransparentBg 偏好（在编辑器开了透明导出的
+  // 用户，此处语义一致）。
   const onDownloadSvg = () => {
-    const markup = svgMarkupOf(document);
+    const transparent = readJSON<boolean>('pngTransparentBg', false);
+    const markup = svgMarkupOf(document, !transparent);
     if (markup === undefined) {
       notify('当前没有可导出的图形');
       return;
     }
     downloadTextFile(diagramFileName('svg'), markup, 'image/svg+xml');
-    notify('已下载 SVG');
+    notify(transparent ? '已下载 SVG（透明背景）' : '已下载 SVG');
   };
 
   // 观看者再分享：地址栏长串 pako 不用手选。
