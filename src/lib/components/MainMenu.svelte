@@ -18,6 +18,10 @@
     label: string;
     icon: Component;
     href: string;
+    /** 点击时求值的打开动作（href 为 '#' 时生效）——复制副本必须取
+     *  点击时刻的 URL：挂载期捕获的 href 在编辑后是旧图（循环 100
+     *  同族过期缺陷）。 */
+    onClick?: () => void;
     class?: string;
     isSectionEnd?: boolean;
     renderer: Snippet<[Omit<MenuItem, 'renderer'>]>;
@@ -26,10 +30,11 @@
   const menuItems: MenuItem[] = $derived([
     { href: urls.current.new, icon: AddIcon, label: '新建', renderer: menuItem },
     {
-      href: window.location.href,
+      href: '#',
       icon: DuplicateIcon,
       isSectionEnd: true,
       label: '复制副本',
+      onClick: () => window.open(window.location.href, '_blank'),
       renderer: menuItem
     },
     {
@@ -57,17 +62,32 @@
 </script>
 
 {#snippet menuItem(options: Omit<MenuItem, 'renderer'>)}
-  <a
-    href={options.href}
-    target="_blank"
-    class={cn(
-      'flex items-center justify-start gap-2 border-b-2 p-2 px-3 hover:bg-muted',
-      options.isSectionEnd && 'border-border-dark',
-      options.class
-    )}>
-    <options.icon class="size-5" />
-    {options.label}
-  </a>
+  {#if options.onClick}
+    <button
+      type="button"
+      class={cn(
+        'flex w-full cursor-pointer items-center justify-start gap-2 border-b-2 p-2 px-3 text-left hover:bg-muted',
+        options.isSectionEnd && 'border-border-dark',
+        options.class
+      )}
+      data-testid="menu-duplicate"
+      onclick={options.onClick}>
+      <options.icon class="size-5" />
+      {options.label}
+    </button>
+  {:else}
+    <a
+      href={options.href}
+      target="_blank"
+      class={cn(
+        'flex items-center justify-start gap-2 border-b-2 p-2 px-3 hover:bg-muted',
+        options.isSectionEnd && 'border-border-dark',
+        options.class
+      )}>
+      <options.icon class="size-5" />
+      {options.label}
+    </a>
+  {/if}
 {/snippet}
 
 {#snippet darkModeMenuItem(options: Omit<MenuItem, 'renderer'>)}
