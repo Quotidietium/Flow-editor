@@ -144,7 +144,9 @@
     </div>
     <ul class="divide-y rounded-lg border">
       {#each graph.nodes as node, ni (node.id)}
-        <li class="flex items-center gap-1.5 px-3 py-1.5" data-operation-id={node.id}>
+        <!-- 移动端换行平铺：行内控件定宽合计 ~500px，390px 下靠横滚可达
+             但挤——sm 以下两行展开（scrollW 462>374 实证） -->
+        <li class="flex flex-wrap items-center gap-1.5 px-3 py-1.5" data-operation-id={node.id}>
           <select
             class="w-20 flex-none rounded border bg-background px-1 py-1 text-xs"
             aria-label="操作类型"

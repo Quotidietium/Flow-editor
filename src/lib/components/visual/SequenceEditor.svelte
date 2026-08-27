@@ -253,7 +253,9 @@
       {/if}
       <ul class="divide-y">
         {#each visibleEdges as edge, ei (edge.id)}
-          <li class="flex items-center gap-1.5 px-3 py-1.5" data-message-id={edge.id}>
+          <!-- 移动端换行平铺：行内控件定宽合计 ~500px，390px 下靠横滚可达
+               但挤——sm 以下两行展开 -->
+          <li class="flex flex-wrap items-center gap-1.5 px-3 py-1.5" data-message-id={edge.id}>
             <select
               class="w-0 min-w-16 flex-1 rounded border bg-background px-1 py-1 text-xs"
               aria-label="消息源"
