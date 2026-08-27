@@ -329,7 +329,12 @@
   });
   let layoutMenuOpen = $state(false);
   let helpOpen = $state(false);
-  let showCode = $state(true);
+  // 代码面板折叠状态跨会话记忆（收起=纯画布工作法），与卡片偏好同款
+  const CODE_PANE_KEY = 'visualCodePane';
+  let showCode = $state(readJSON<boolean>(CODE_PANE_KEY, true));
+  $effect(() => {
+    writeJSON(CODE_PANE_KEY, showCode);
+  });
   let editingDetail = $state(false);
   let detailDraft = $state('');
   let editingMeta = $state(false);
@@ -2361,14 +2366,25 @@
     <div class="flex-none border-t">
       <button
         class="flex w-full items-center justify-between px-2 py-1 text-xs text-muted-foreground"
+        data-testid="visual-code-toggle"
         onclick={() => (showCode = !showCode)}>
         <span>生成的代码（实时同步到预览与编辑器）</span>
-        <span>{showCode ? '▾' : '▸'}</span>
+        <span>▾</span>
       </button>
       <pre
         data-testid={TID.visualCodeOut}
         class="max-h-32 overflow-auto bg-muted/50 p-2 font-mono text-xs whitespace-pre-wrap">{generated}</pre>
     </div>
+  {:else}
+    <!-- 收起后保留一条可重开的头部：此前整块消失，收起即无入口
+         （叠加折叠记忆后被永久锁在收起态） -->
+    <button
+      class="flex w-full flex-none items-center justify-between border-t px-2 py-1 text-xs text-muted-foreground"
+      data-testid="visual-code-toggle"
+      onclick={() => (showCode = !showCode)}>
+      <span>生成的代码（已收起）</span>
+      <span>▸</span>
+    </button>
   {/if}
 
   {#if insertOpen}
