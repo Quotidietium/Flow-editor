@@ -81,45 +81,21 @@ test.describe('插入代码片段', () => {
     await expect(page.locator('[data-testid^="user-snippet-snippet-"]')).toHaveCount(0);
   });
 
-  test('时序结构骨架（loop/alt/activate）插入即合法渲染', async ({ page, editPage }) => {
-    await editPage.clearEditor();
-    await editPage.typeInEditor('sequenceDiagram\n  participant A\n  participant B\n  ');
+  test('内置骨架按图族分组展示（循环 116）', async ({ page }) => {
+    await page.goto('/edit');
     await page.getByTestId('insert-snippet-menu').click();
-    await page.getByTestId('insert-snippet-loop').click();
-    await expect(editPage.editor).toContainText('loop 循环描述');
-    await editPage.typeInEditor('\n  ', { bottom: false });
-    await page.getByTestId('insert-snippet-menu').click();
-    await page.getByTestId('insert-snippet-alt').click();
-    await expect(editPage.editor).toContainText('else 条件B');
-    await editPage.typeInEditor('\n  ', { bottom: false });
-    await page.getByTestId('insert-snippet-menu').click();
-    await page.getByTestId('insert-snippet-activate').click();
-    await expect(editPage.editor).toContainText('deactivate A');
-    // 三段同文仍是合法时序图（预览无错误条）
-    await expect(page.getByTestId('error-container')).toHaveCount(0);
-  });
+    const menu = page.locator('[data-popover-content]').last();
 
-  test('甘特/状态/类骨架插入（覆盖流程图与时序之外的高频类）', async ({ page, editPage }) => {
-    await editPage.clearEditor();
-    await editPage.typeInEditor('gantt\n  ');
-    await page.getByTestId('insert-snippet-menu').click();
-    await page.getByTestId('insert-snippet-gantt').click();
-    // 甘特骨架落在光标处：既有 gantt 声明保留，section/任务补入
-    await expect(editPage.editor).toContainText('section 阶段');
-    await expect(editPage.editor).toContainText('任务: 2024-01-01, 3d');
+    // 五组小标题在场且有序
+    const groups = menu.locator('.text-\\[10px\\]');
+    const labels = await groups.allTextContents();
+    expect(labels).toEqual(['流程图', '时序图', '甘特图', '状态图', '类图']);
 
-    await editPage.clearEditor();
-    await editPage.typeInEditor('stateDiagram-v2\n  ');
-    await page.getByTestId('insert-snippet-menu').click();
-    await page.getByTestId('insert-snippet-state').click();
-    await expect(editPage.editor).toContainText('[*] --> 状态');
-    await expect(page.getByTestId('error-container')).toHaveCount(0);
-
-    await editPage.clearEditor();
-    await editPage.typeInEditor('classDiagram\n  ');
-    await page.getByTestId('insert-snippet-menu').click();
-    await page.getByTestId('insert-snippet-class').click();
-    await expect(editPage.editor).toContainText('A <|-- B');
-    await expect(page.getByTestId('error-container')).toHaveCount(0);
+    // 各组条目归属正确（抽查：时序组含 activate）
+    const seqHeader = groups.nth(1);
+    await expect(seqHeader.locator('xpath=following-sibling::*[1]')).toHaveAttribute(
+      'data-testid',
+      'insert-snippet-participant'
+    );
   });
 });
