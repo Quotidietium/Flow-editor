@@ -169,12 +169,19 @@
             class="w-24 flex-none rounded border bg-background px-1 py-1 text-xs"
             aria-label="所在分支"
             placeholder="main"
+            list="ve-git-branches"
             use:enterCommit
             value={node.roleData ?? 'main'}
             onchange={(e) => {
               const v = e.currentTarget.value;
               commit(() => (node.roleData = v.trim() || 'main'));
             }} />
+          <!-- 分支名建议：已在用的分支免拼错（datalist 原生下拉+自由输入并存） -->
+          <datalist id="ve-git-branches">
+            {#each branches as branch (branch)}
+              <option value={branch}></option>
+            {/each}
+          </datalist>
           {#if node.role === 'merge'}
             <select
               class="w-28 flex-none rounded border bg-background px-1 py-1 text-xs"

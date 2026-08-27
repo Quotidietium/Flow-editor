@@ -90,6 +90,23 @@ test('git editor commits text fields on Enter (branch/id/tag)', async ({ page })
   await expect(codeOut).toContainText('tag: "v2"');
 });
 
+test('branch input offers existing branches via datalist (typo guard)', async ({ page }) => {
+  await openEditor(page);
+  await typeCode(
+    page,
+    'gitGraph\n  branch dev\n  commit id: "d1"\n  checkout main\n  commit id: "m1"'
+  );
+  await enterVisual(page);
+  const editor = page.getByTestId('visual-git');
+
+  // datalist 收录已在用分支（main/dev），自由输入仍可
+  const options = editor.locator('#ve-git-branches option');
+  await expect.poll(async () => options.count()).toBeGreaterThanOrEqual(2);
+  const values = await options.evaluateAll((els) => els.map((el) => el.getAttribute('value')));
+  expect(values).toContain('main');
+  expect(values).toContain('dev');
+});
+
 test('git editor duplicates an operation (fresh row keeps branch, clears id/tag)', async ({
   page
 }) => {
