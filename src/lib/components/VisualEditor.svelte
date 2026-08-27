@@ -127,6 +127,7 @@
     {
       group: '搜索',
       items: [
+        ['Ctrl+F', '聚焦画布搜索框'],
         ['搜索框输入', '命中保持 / 非命中降透明'],
         ['Enter', '居中并选中首个命中'],
         ['Esc', '清空搜索']
@@ -223,6 +224,8 @@
   // 列表类编辑器已有过滤框，画布类同款思路）。命中保持原样、非命中降为
   // 25% 不透明度；Esc 清空；只影响显示不动数据。
   let canvasQuery = $state('');
+  // Ctrl+F 聚焦目标（bind:this）
+  let canvasSearchEl: HTMLInputElement | undefined = $state();
   const canvasQueryLower = $derived(canvasQuery.trim().toLowerCase());
   const canvasHitIds = $derived(
     new Set(
@@ -1537,6 +1540,14 @@
       }
       return;
     }
+    // Ctrl+F 聚焦画布搜索（拦截浏览器原生查找——在可视化模式用户意图
+    // 几乎总是找节点；输入控件聚焦时按 isTypingTarget 早退不劫持）
+    if (ctrl && event.key.toLowerCase() === 'f' && canvasView) {
+      event.preventDefault();
+      canvasSearchEl?.focus();
+      canvasSearchEl?.select();
+      return;
+    }
     if (
       (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) &&
       selected.length > 0
@@ -1728,6 +1739,7 @@
         placeholder="搜索节点…"
         aria-label="搜索节点"
         data-testid="visual-canvas-search"
+        bind:this={canvasSearchEl}
         bind:value={canvasQuery}
         onkeydown={(e) => {
           if (e.key === 'Escape') {
