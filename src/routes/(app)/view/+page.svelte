@@ -2,6 +2,7 @@
   import PanZoomToolbar from '$/components/PanZoomToolbar.svelte';
   import View from '$/components/View.svelte';
   import { Button } from '$/components/ui/button';
+  import * as Popover from '$/components/ui/popover';
   import {
     diagramFileName,
     downloadDataUrl,
@@ -19,6 +20,7 @@
   import EditIcon from '~icons/material-symbols/edit-note-rounded';
   import ImageIcon from '~icons/material-symbols/image-outline-rounded';
   import LinkIcon from '~icons/material-symbols/link-rounded';
+  import MoreIcon from '~icons/material-symbols/more-rounded';
 
   const panZoomState = new PanZoomState();
 
@@ -83,10 +85,43 @@
 <div class="relative h-full">
   <View shouldShowGrid={false} {panZoomState} />
   <div class="absolute top-2 right-2 flex flex-col items-end gap-2">
+    <!-- 移动端收进「更多」菜单：四个显式按钮在 390px 占 288×208（74% 宽、
+         顶部 1/4 高）严重遮图；桌面保留显式按钮（可发现性）。 -->
+    <Popover.Root>
+      <Popover.Trigger
+        class="rounded-md border bg-background/80 p-2 sm:hidden"
+        data-testid="view-actions-menu"
+        title="更多操作"
+        aria-label="更多操作">
+        <MoreIcon class="size-4" />
+      </Popover.Trigger>
+      <Popover.Content align="end" class="flex w-40 flex-col gap-0.5 p-1">
+        <Popover.Close
+          class="rounded px-2 py-1.5 text-left text-sm hover:bg-accent"
+          onclick={() => window.open(editHref, '_blank')}>
+          在编辑器中打开
+        </Popover.Close>
+        <Popover.Close
+          class="rounded px-2 py-1.5 text-left text-sm hover:bg-accent"
+          onclick={onDownloadSvg}>
+          下载 SVG
+        </Popover.Close>
+        <Popover.Close
+          class="rounded px-2 py-1.5 text-left text-sm hover:bg-accent"
+          onclick={() => void onDownloadPng()}>
+          下载 PNG
+        </Popover.Close>
+        <Popover.Close
+          class="rounded px-2 py-1.5 text-left text-sm hover:bg-accent"
+          onclick={() => void onCopyLink()}>
+          复制链接
+        </Popover.Close>
+      </Popover.Content>
+    </Popover.Root>
     <Button
       size="sm"
       variant="outline"
-      class="bg-background/80"
+      class="hidden bg-background/80 sm:inline-flex"
       href={editHref}
       data-testid="view-edit-link"
       title="在编辑器中打开当前图表">
@@ -96,7 +131,7 @@
     <Button
       size="sm"
       variant="outline"
-      class="bg-background/80"
+      class="hidden bg-background/80 sm:inline-flex"
       data-testid="view-download-svg"
       title="下载干净 SVG（不含当前平移/缩放）"
       onclick={onDownloadSvg}>
@@ -106,7 +141,7 @@
     <Button
       size="sm"
       variant="outline"
-      class="bg-background/80"
+      class="hidden bg-background/80 sm:inline-flex"
       data-testid="view-download-png"
       disabled={pngExporting}
       title="下载 PNG 位图（干净图形，长边 1080）"
@@ -117,7 +152,7 @@
     <Button
       size="sm"
       variant="outline"
-      class="bg-background/80"
+      class="hidden bg-background/80 sm:inline-flex"
       data-testid="view-copy-link"
       title="复制当前图表的分享链接"
       onclick={() => void onCopyLink()}>
