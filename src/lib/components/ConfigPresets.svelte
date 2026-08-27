@@ -1,5 +1,6 @@
 <script lang="ts">
   import { buttonVariants } from '$/components/ui/button';
+  import { onMount } from 'svelte';
   import * as Popover from '$/components/ui/popover';
   import { Separator } from '$/components/ui/separator';
   import { TID } from '$/constants';
@@ -70,6 +71,13 @@
   const isActive = (preset: ConfigPreset): boolean => isConfigSubset(currentConfig, preset.config);
 
   let userPresets = $state<UserPreset[]>(loadUserPresets());
+
+  // 资产导入联动：导入直接写 storage，重读本列表（不刷新页面）
+  onMount(() => {
+    const refresh = () => (userPresets = loadUserPresets());
+    window.addEventListener('flow-assets-changed', refresh);
+    return () => window.removeEventListener('flow-assets-changed', refresh);
+  });
   let saveOpen = $state(false);
   let saveName = $state('');
 

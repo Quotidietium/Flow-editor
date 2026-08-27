@@ -1,5 +1,6 @@
 <script lang="ts">
   import Card from '$/components/Card/Card.svelte';
+  import { onMount } from 'svelte';
   import { Button, buttonVariants } from '$/components/ui/button';
   import * as Popover from '$/components/ui/popover';
   import { getSampleDiagrams, type SampleExample } from '$/util/mermaid';
@@ -171,6 +172,13 @@
   let recent = $state<string[]>(loadRecentPresets());
   // 类目 key 只有在目录里有示例时才渲染（目录 chunk 未加载前过滤）。
   const recentAvailable = $derived(recent.filter((key) => samples[key]));
+
+  // 资产导入联动：导入直接写 storage，重读本列表（不刷新页面）
+  onMount(() => {
+    const refresh = () => (userSamples = loadUserSamples());
+    window.addEventListener('flow-assets-changed', refresh);
+    return () => window.removeEventListener('flow-assets-changed', refresh);
+  });
 
   /* ---------------- 我的示例（用户整图模板，localStorage 持久化） ----------------
      与「我的配置模板」（配置）/「我的代码片段」（光标处插入）三足鼎立：

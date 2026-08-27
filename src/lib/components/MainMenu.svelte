@@ -1,8 +1,15 @@
 <script lang="ts">
   import * as Dialog from '$/components/ui/dialog';
   import * as Popover from '$/components/ui/popover';
+  import { Button } from '$/components/ui/button';
   import { Switch } from '$/components/ui/switch';
+  import { clearAssets, exportAssets, importAssets, parseAssetBundle } from '$/util/assetPort';
+  import { downloadTextFile, openTextFile } from '$/util/fileIO';
+  import { loadUserPresets } from '$/util/configPresets';
+  import { notify } from '$/util/notify';
   import { editorFontSize } from '$/util/editorFontSize.svelte';
+  import { loadUserSamples } from '$/util/userSamples';
+  import { loadUserSnippets } from '$/util/userSnippets';
   import { urls } from '$/util/state.svelte';
   import { cn } from '$/utils';
   import { mode, setMode } from 'mode-watcher';
@@ -11,6 +18,7 @@
   import DuplicateIcon from '~icons/material-symbols/content-copy-outline-rounded';
   import ContrastIcon from '~icons/material-symbols/contrast';
   import FontIcon from '~icons/material-symbols/format-size-rounded';
+  import InventoryIcon from '~icons/material-symbols/inventory-2-outline-rounded';
   import KeyboardIcon from '~icons/material-symbols/keyboard-rounded';
   import MenuIcon from '~icons/material-symbols/menu-rounded';
 
@@ -54,11 +62,60 @@
       icon: KeyboardIcon,
       label: '快捷键',
       renderer: shortcutsMenuItem
+    },
+    {
+      href: '#',
+      icon: InventoryIcon,
+      label: '我的资产备份',
+      renderer: assetsMenuItem
     }
   ]);
 
   // 应用级快捷键（可视化编辑器的 24 项在其工具栏帮助里，此处不重复）
   let helpOpen = $state(false);
+
+  // 个人资产备份：三类「我的××」锁死在单浏览器 localStorage——
+  // 导出 JSON 换设备导入。计数在对话框打开时刷新。
+  let assetsOpen = $state(false);
+  let assetCounts = $state({ configPresets: 0, samples: 0, snippets: 0 });
+  const refreshAssetCounts = () => {
+    assetCounts = {
+      configPresets: loadUserPresets().length,
+      samples: loadUserSamples().length,
+      snippets: loadUserSnippets().length
+    };
+  };
+
+  const onExportAssets = () => {
+    downloadTextFile('flow-editor-assets.json', JSON.stringify(exportAssets()), 'application/json');
+    notify('已导出个人资产');
+  };
+
+  const onImportAssets = async () => {
+    const file = await openTextFile('.json');
+    if (!file) {
+      return;
+    }
+    const bundle = parseAssetBundle(file.text);
+    if (!bundle) {
+      notify('资产文件无法识别（需本编辑器导出的 JSON）');
+      return;
+    }
+    const result = importAssets(bundle);
+    refreshAssetCounts();
+    // 通知持有本地 $state 的三处菜单重读 storage——否则导入内容要整页
+    // 刷新才可见（e2e 实证）
+    window.dispatchEvent(new CustomEvent('flow-assets-changed'));
+    notify(`已导入：模板 ${result.configPresets}、示例 ${result.samples}、片段 ${result.snippets}`);
+  };
+
+  const onClearAssets = () => {
+    if (confirm('确定清空本机的模板/示例/片段？（建议先导出备份）')) {
+      clearAssets();
+      refreshAssetCounts();
+      notify('已清空本机个人资产');
+    }
+  };
 </script>
 
 {#snippet menuItem(options: Omit<MenuItem, 'renderer'>)}
@@ -162,6 +219,24 @@
   </button>
 {/snippet}
 
+{#snippet assetsMenuItem(options: Omit<MenuItem, 'renderer'>)}
+  <button
+    type="button"
+    class={cn(
+      'flex w-full cursor-pointer items-center gap-2 border-b-2 px-3 py-2 text-left hover:bg-muted',
+      options.isSectionEnd && 'border-border-dark',
+      options.class
+    )}
+    data-testid="menu-assets"
+    onclick={() => {
+      refreshAssetCounts();
+      assetsOpen = true;
+    }}>
+    <InventoryIcon />
+    {options.label}
+  </button>
+{/snippet}
+
 <Popover.Root>
   <Popover.Trigger class="shrink-0">
     <MenuIcon class="size-6" />
@@ -188,6 +263,55 @@
       {/each}
       <div class="mt-2 text-xs text-muted-foreground">
         可视化编辑器的完整操作（24 项）见其工具栏的「快捷键与操作帮助」按钮。
+      </div>
+    </div>
+  </Dialog.Content>
+</Dialog.Root>
+
+<Dialog.Root bind:open={assetsOpen}>
+  <Dialog.Content class="max-w-md" data-testid="assets-dialog">
+    <Dialog.Header>
+      <Dialog.Title>我的资产备份</Dialog.Title>
+      <Dialog.Description>
+        模板/示例/片段保存在本浏览器——导出 JSON 可带到其他设备或浏览器。
+      </Dialog.Description>
+    </Dialog.Header>
+    <div class="flex flex-col gap-3">
+      <div
+        class="flex items-center justify-around rounded-md border bg-muted/40 p-3 text-center text-sm">
+        <div>
+          <div class="text-lg font-semibold tabular-nums">{assetCounts.configPresets}</div>
+          <div class="text-xs text-muted-foreground">配置模板</div>
+        </div>
+        <div>
+          <div class="text-lg font-semibold tabular-nums">{assetCounts.samples}</div>
+          <div class="text-xs text-muted-foreground">我的示例</div>
+        </div>
+        <div>
+          <div class="text-lg font-semibold tabular-nums">{assetCounts.snippets}</div>
+          <div class="text-xs text-muted-foreground">代码片段</div>
+        </div>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <Button size="sm" data-testid="assets-export" onclick={onExportAssets}>导出到文件</Button>
+        <Button
+          size="sm"
+          variant="outline"
+          data-testid="assets-import"
+          onclick={() => void onImportAssets()}>
+          从文件导入（同名覆盖）
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          class="hover:text-destructive"
+          data-testid="assets-clear"
+          onclick={onClearAssets}>
+          清空本机
+        </Button>
+      </div>
+      <div class="text-xs text-muted-foreground">
+        导入按「同名覆盖」合并到本机现有资产；清空前建议先导出备份。
       </div>
     </div>
   </Dialog.Content>
