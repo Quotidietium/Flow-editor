@@ -65,4 +65,35 @@ test.describe('我的示例', () => {
     await search.press('Escape');
     await expect(page.locator('[data-testid^="user-sample-sample-"]')).toHaveCount(2);
   });
+
+  test('双击重命名（代码保留、同列表表刷新）', async ({ page, editPage }) => {
+    await editPage.toggleSampleDiagrams();
+    await page.getByRole('button', { name: '流程图', exact: true }).waitFor();
+
+    await page.getByTestId('user-sample-save').click();
+    await page.getByTestId('user-sample-save-name').fill('旧名字');
+    await page.getByTestId('user-sample-save-name').press('Enter');
+    await expect(page.getByText('已保存示例「旧名字」')).toBeVisible();
+
+    // 双击重命名（prompt 接受）
+    const button = page.locator('[data-testid^="user-sample-sample-"]');
+    page.once('dialog', (dialog) => void dialog.accept('新名字'));
+    await button.dblclick();
+    await expect(page.getByText('已重命名为「新名字」')).toBeVisible();
+    await expect(
+      page.locator('[data-testid^="user-sample-sample-"]', { hasText: '新名字' })
+    ).toBeVisible();
+    await expect(page.getByText('旧名字')).toHaveCount(0);
+
+    // 代码保留：载入仍是默认图
+    await page.locator('[data-testid^="user-sample-sample-"]').click();
+    await editPage.checkTextInView('圣诞节');
+
+    // 清理
+    const stored = await page.evaluate(() => {
+      const list = JSON.parse(localStorage.getItem('flowUserSamples') ?? '[]') as { id: string }[];
+      return list[0]?.id;
+    });
+    await page.getByTestId(`user-sample-delete-${stored}`).click();
+  });
 });

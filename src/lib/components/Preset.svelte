@@ -217,6 +217,18 @@
     notify(`已删除示例「${sample.label}」`);
   };
 
+  // 双击重命名（历史条目同款交互）：saveUserSample 按新名建条（同名覆盖
+  // 语义），旧条随后删除——代码原样保留。
+  const renameUserSample = (sample: UserSample) => {
+    const next = prompt('重命名示例', sample.label)?.trim();
+    if (!next || next === sample.label) {
+      return;
+    }
+    userSamples = deleteUserSample(sample.id);
+    userSamples = saveUserSample(next, sample.code);
+    notify(`已重命名为「${next}」`);
+  };
+
   const mainDiagrams = [
     'Flowchart',
     'Class',
@@ -301,8 +313,9 @@
             variant="outline"
             class="normal-case"
             data-testid="user-sample-{sample.id}"
-            title="载入示例（整图替换当前文档） · {codePreview(sample.code)}"
-            onclick={() => loadUserSample(sample)}>
+            title="载入示例（整图替换当前文档） · {codePreview(sample.code)}（双击重命名）"
+            onclick={() => loadUserSample(sample)}
+            ondblclick={() => renameUserSample(sample)}>
             {sample.label}
           </Button>
           <button
