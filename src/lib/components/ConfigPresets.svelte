@@ -22,6 +22,7 @@
   import { cn } from '$lib/utils';
   import PresetIcon from '~icons/material-symbols/dashboard-customize-outline-rounded';
   import DeleteIcon from '~icons/material-symbols/delete-outline-rounded';
+  import EditIcon from '~icons/material-symbols/edit-outline-rounded';
 
   // 模板按深合并写入：同名标量覆盖、对象递归、数组替换——用户既有的
   // 其它键全部保留；JSON 无法解析时不做任何写入（手头内容优先）。
@@ -114,6 +115,18 @@
     notify(`已删除模板「${preset.label}」`);
   };
 
+  // 双击重命名（我的示例/片段同款）：按新名建条（同名覆盖）+删旧条，
+  // 配置体原样保留。
+  const renameUserPreset = (preset: UserPreset) => {
+    const next = prompt('重命名模板', preset.label)?.trim();
+    if (!next || next === preset.label) {
+      return;
+    }
+    userPresets = deleteUserPreset(preset.id);
+    userPresets = saveUserPreset(next, preset.config);
+    notify(`已重命名为「${next}」`);
+  };
+
   /* ---------------- 差异预览：悬停/聚焦模板时列出将修改的叶子键 ---------------- */
 
   // 保留「最后悬停」而非离开即清空：菜单内移动时预览不闪烁。
@@ -159,6 +172,19 @@
             applyPreset({ config: preset.config, hint: '', id: preset.id, label: preset.label })}>
           <span class="text-sm">{preset.label}</span>
         </Popover.Close>
+        <!-- 行内重命名钮（历史条目同款）：条目本体是 Popover.Close（点击即
+             应用并关菜单），双击会被首次点击吃掉——重命名走独立小钮 -->
+        <button
+          class="rounded p-1 opacity-40 hover:bg-accent hover:opacity-100"
+          title="重命名模板「{preset.label}」"
+          aria-label="重命名模板{preset.label}"
+          data-testid="config-preset-rename-{preset.id}"
+          onclick={(event) => {
+            event.stopPropagation();
+            renameUserPreset(preset);
+          }}>
+          <EditIcon class="size-3.5" />
+        </button>
         <button
           class="rounded p-1 opacity-40 hover:bg-accent hover:opacity-100"
           title="删除模板「{preset.label}」"

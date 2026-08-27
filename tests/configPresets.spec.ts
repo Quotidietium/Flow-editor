@@ -172,6 +172,50 @@ test.describe('配置模板', () => {
     await expect(page.locator('.monaco-editor')).toContainText('"theme": "dark"');
   });
 
+  test('我的模板行内重命名（配置体保留，循环 119）', async ({ page, editPage }) => {
+    await editPage.setEditorMode('配置');
+    // 造一份可辨识的模板
+    await openPresetMenu(page);
+    await page.getByTestId('config-preset-hand-drawn').click();
+    await openPresetMenu(page);
+    await page.getByTestId('config-preset-save').click();
+    await page.getByTestId('config-preset-save-name').fill('模板旧名');
+    await page.getByTestId('config-preset-save-name').press('Enter');
+    await expect(page.getByText('已保存模板「模板旧名」')).toBeVisible();
+
+    // 行内重命名钮（条目本体点击即应用并关菜单，双击会被首击吃掉）
+    const stored = await page.evaluate(() => {
+      const list = JSON.parse(localStorage.getItem('flowUserConfigPresets') ?? '[]') as {
+        id: string;
+      }[];
+      return list[0]?.id;
+    });
+    await openPresetMenu(page);
+    page.once('dialog', (dialog) => void dialog.accept('模板新名'));
+    await page.getByTestId(`config-preset-rename-${stored}`).click();
+    await expect(page.getByText('已重命名为「模板新名」')).toBeVisible();
+
+    // 配置体保留：重置后应用新名模板仍带 handDrawn
+    await page.locator('[data-testid^="config-preset-user-"]').click(); // 先应用（重置前菜单自动关）
+    await openPresetMenu(page);
+    page.once('dialog', (dialog) => void dialog.accept());
+    await page.getByTestId('config-preset-reset').click();
+    await expect(page.locator('.monaco-editor')).not.toContainText('handDrawn');
+    await openPresetMenu(page);
+    await page.getByText('模板新名', { exact: true }).click();
+    await expect(page.locator('.monaco-editor')).toContainText('handDrawn');
+
+    // 清理（重命名换了新 id——重读 storage）
+    const storedAfter = await page.evaluate(() => {
+      const list = JSON.parse(localStorage.getItem('flowUserConfigPresets') ?? '[]') as {
+        id: string;
+      }[];
+      return list[0]?.id;
+    });
+    await openPresetMenu(page);
+    await page.getByTestId(`config-preset-delete-${storedAfter}`).click();
+  });
+
   test('JSON 损坏时保存我的模板被拒绝', async ({ page, editPage }) => {
     await editPage.setEditorMode('配置');
     await replaceConfig(page, '{ broken');
