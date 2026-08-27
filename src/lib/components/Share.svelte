@@ -68,6 +68,14 @@
           Flow 编辑器
         </h2>
         <CopyInput value={window.location.href} />
+        <div class="mt-1 flex flex-col gap-1">
+          <span class="text-xs text-muted-foreground">只读链接（接收者只能查看与缩放）</span>
+          <!-- 内联求值（每次打开对话框取当下 hash）：脚本顶层常量在页面
+               挂载时求值，hash 未落/编辑后更新都会拿到过期链接 -->
+          <CopyInput
+            testID="share-view-link"
+            value={window.location.origin + base + '/view' + window.location.hash} />
+        </div>
         <Dialog.Description>你创建的图表内容永远不会离开你的浏览器。</Dialog.Description>
       </div>
       <Separator />
