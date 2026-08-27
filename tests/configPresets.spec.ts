@@ -65,6 +65,12 @@ test.describe('配置模板', () => {
     // 内容保持原样，未被破坏
     await expect(page.locator('.monaco-editor')).toContainText('broken');
     await openPresetMenu(page);
+    // 循环 103：菜单重置加确认——取消不动手头内容，确认才覆盖
+    page.once('dialog', (dialog) => void dialog.dismiss());
+    await page.getByTestId('config-preset-reset').click();
+    await expect(page.locator('.monaco-editor')).toContainText('broken');
+    await openPresetMenu(page);
+    page.once('dialog', (dialog) => void dialog.accept());
     await page.getByTestId('config-preset-reset').click();
     const editor = page.locator('.monaco-editor');
     await expect(editor).toContainText('"theme": "default"');
@@ -118,6 +124,7 @@ test.describe('配置模板', () => {
 
     // 重置后从我的模板恢复两键合一
     await openPresetMenu(page);
+    page.once('dialog', (dialog) => void dialog.accept());
     await page.getByTestId('config-preset-reset').click();
     const editor = page.locator('.monaco-editor');
     await expect(editor).not.toContainText('handDrawn');

@@ -45,8 +45,12 @@
   };
 
   const resetDefault = () => {
-    updateConfig(defaultConfigJson());
-    notify('已重置为默认配置');
+    // 菜单路径的重置是对「正在用的配置」的主动覆盖且不可撤销——确认一次
+    // （与清空历史同款交互）；错误横幅的直达钮是损坏后的恢复语义，不设卡。
+    if (confirm('确定重置为默认配置？当前的全部配置项将被覆盖。')) {
+      updateConfig(defaultConfigJson());
+      notify('已重置为默认配置');
+    }
   };
 
   /* ---------------- 我的模板（用户自定义，localStorage 持久化） ---------------- */
