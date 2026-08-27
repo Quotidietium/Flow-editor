@@ -81,6 +81,41 @@ test.describe('插入代码片段', () => {
     await expect(page.locator('[data-testid^="user-snippet-snippet-"]')).toHaveCount(0);
   });
 
+  test('我的片段双击重命名（代码保留，循环 118）', async ({ page, editPage }) => {
+    await editPage.clearEditor();
+    await editPage.typeInEditor('flowchart TD\n  X --> Y');
+    await page.getByTestId('insert-snippet-menu').click();
+    await page.getByTestId('user-snippet-save').click();
+    await page.getByTestId('user-snippet-save-name').fill('片段旧名');
+    await page.getByTestId('user-snippet-save-name').press('Enter');
+    await expect(page.getByText('已保存片段「片段旧名」')).toBeVisible();
+
+    // 重开菜单双击重命名
+    await page.getByTestId('insert-snippet-menu').click();
+    const item = page.locator('[data-testid^="user-snippet-snippet-"]');
+    page.once('dialog', (dialog) => void dialog.accept('片段新名'));
+    await item.dblclick();
+    await expect(page.getByText('已重命名为「片段新名」')).toBeVisible();
+    await expect(
+      page.locator('[data-testid^="user-snippet-snippet-"]', { hasText: '片段新名' })
+    ).toBeVisible();
+
+    // 代码保留：插回仍是保存的内容
+    await page.getByTestId('insert-snippet-menu').click();
+    await page.locator('[data-testid^="user-snippet-snippet-"]').click();
+    await expect(editPage.editor).toContainText('X --> Y');
+
+    // 清理
+    const stored = await page.evaluate(() => {
+      const list = JSON.parse(localStorage.getItem('flowUserSnippets') ?? '[]') as {
+        id: string;
+      }[];
+      return list[0]?.id;
+    });
+    await page.getByTestId('insert-snippet-menu').click();
+    await page.getByTestId(`user-snippet-delete-${stored}`).click();
+  });
+
   test('内置骨架按图族分组展示（循环 116）', async ({ page }) => {
     await page.goto('/edit');
     await page.getByTestId('insert-snippet-menu').click();

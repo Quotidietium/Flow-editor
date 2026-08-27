@@ -153,6 +153,18 @@
     notify(`已删除片段「${snippet.label}」`);
   };
 
+  // 双击重命名（我的示例/历史条目同款）：按新名建条（同名覆盖）+删旧条，
+  // 代码原样保留。
+  const renameUserSnippet = (snippet: UserSnippet) => {
+    const next = prompt('重命名片段', snippet.label)?.trim();
+    if (!next || next === snippet.label) {
+      return;
+    }
+    userSnippets = deleteUserSnippet(snippet.id);
+    userSnippets = saveUserSnippet(next, snippet.code);
+    notify(`已重命名为「${next}」`);
+  };
+
   // 菜单预览行：首行压缩空白后截断，让用户认得出是哪段代码。
   const previewOf = (code: string): string => {
     const firstLine = code.trim().split('\n', 1)[0].replaceAll(/\s+/g, ' ');
@@ -176,8 +188,9 @@
         <Popover.Close
           data-testid="user-snippet-{snippet.id}"
           class="flex w-full flex-col rounded px-2 py-1 text-left hover:bg-accent"
-          title={snippet.code}
-          onclick={() => onInsert(snippet.code)}>
+          title="{snippet.code}（双击重命名）"
+          onclick={() => onInsert(snippet.code)}
+          ondblclick={() => renameUserSnippet(snippet)}>
           <span class="text-sm">{snippet.label}</span>
           <span class="truncate font-mono text-xs text-muted-foreground">
             {previewOf(snippet.code)}
