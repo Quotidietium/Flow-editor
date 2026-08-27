@@ -480,7 +480,14 @@ ${svgString}`);
   let imageSize = $state(1080);
 </script>
 
-<svelte:window onpointerdown={onWindowPointerDown} />
+<svelte:window
+  onkeydown={(event) => {
+    // Esc 关闭导出菜单（bits-ui 弹层原生有，此自制菜单此前只支持点外关闭）
+    if (exportOpen && event.key === 'Escape') {
+      exportOpen = false;
+    }
+  }}
+  onpointerdown={onWindowPointerDown} />
 
 <Card
   title="操作"
@@ -665,12 +672,16 @@ ${svgString}`);
           <div class="px-2 pt-1 pb-0.5 text-[10px] text-muted-foreground">文档与数据</div>
           <button
             class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
-            onclick={onDownloadMarkdown}>
+            onclick={() => {
+              exportOpen = false;
+              onDownloadMarkdown();
+            }}>
             Markdown（代码块）
           </button>
           <button
             class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
             onclick={() => {
+              exportOpen = false;
               onSaveMmd();
             }}>
             Mermaid 源码（.mmd）
@@ -686,7 +697,10 @@ ${svgString}`);
           </button>
           <button
             class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
-            onclick={onDownloadState}>
+            onclick={() => {
+              exportOpen = false;
+              onDownloadState();
+            }}>
             状态文件（.json）
           </button>
           {#if pluginExportFormats().length > 0}
