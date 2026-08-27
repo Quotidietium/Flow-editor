@@ -1,4 +1,5 @@
 <script lang="ts">
+  import * as Dialog from '$/components/ui/dialog';
   import * as Popover from '$/components/ui/popover';
   import { Switch } from '$/components/ui/switch';
   import { editorFontSize } from '$/util/editorFontSize.svelte';
@@ -10,6 +11,7 @@
   import DuplicateIcon from '~icons/material-symbols/content-copy-outline-rounded';
   import ContrastIcon from '~icons/material-symbols/contrast';
   import FontIcon from '~icons/material-symbols/format-size-rounded';
+  import KeyboardIcon from '~icons/material-symbols/keyboard-rounded';
   import MenuIcon from '~icons/material-symbols/menu-rounded';
 
   interface MenuItem {
@@ -41,8 +43,17 @@
       icon: FontIcon,
       label: '编辑器字号',
       renderer: fontSizeMenuItem
+    },
+    {
+      href: '#',
+      icon: KeyboardIcon,
+      label: '快捷键',
+      renderer: shortcutsMenuItem
     }
   ]);
+
+  // 应用级快捷键（可视化编辑器的 24 项在其工具栏帮助里，此处不重复）
+  let helpOpen = $state(false);
 </script>
 
 {#snippet menuItem(options: Omit<MenuItem, 'renderer'>)}
@@ -116,6 +127,21 @@
   </div>
 {/snippet}
 
+{#snippet shortcutsMenuItem(options: Omit<MenuItem, 'renderer'>)}
+  <button
+    type="button"
+    class={cn(
+      'flex w-full cursor-pointer items-center gap-2 border-b-2 px-3 py-2 text-left hover:bg-muted',
+      options.isSectionEnd && 'border-border-dark',
+      options.class
+    )}
+    data-testid="menu-shortcuts"
+    onclick={() => (helpOpen = true)}>
+    <KeyboardIcon />
+    {options.label}
+  </button>
+{/snippet}
+
 <Popover.Root>
   <Popover.Trigger class="shrink-0">
     <MenuIcon class="size-6" />
@@ -126,3 +152,23 @@
     {/each}
   </Popover.Content>
 </Popover.Root>
+
+<Dialog.Root bind:open={helpOpen}>
+  <Dialog.Content class="max-w-md" data-testid="app-shortcuts-dialog">
+    <Dialog.Header>
+      <Dialog.Title>快捷键与操作</Dialog.Title>
+      <Dialog.Description>编辑器的常用键盘与鼠标操作</Dialog.Description>
+    </Dialog.Header>
+    <div class="flex max-h-[60vh] flex-col gap-1 overflow-y-auto pr-1">
+      {#each [['Ctrl+S', '收藏当前图到历史「已保存」'], ['Ctrl+滚轮', '预览区缩放（编辑页）'], ['双指捏合', '预览/可视化画布缩放（触屏）'], ['Enter', '输入框提交（含各编辑器表单）'], ['Ctrl+Enter', '多行文本域保存（编辑内容对话框）'], ['Esc', '清空搜索框 / 关闭菜单与对话框'], ['双击', '历史条目名直接重命名'], ['拖入文件', '把 .mmd/.md/.json 拖到窗口直接打开'], ['Ctrl+A/C/X/V/D', '可视化画布 全选/复制/剪切/粘贴/克隆'], ['Ctrl+Z / Ctrl+Shift+Z', '可视化画布 撤销 / 重做']] as [keys, desc] (keys)}
+        <div class="flex items-center justify-between gap-4 text-sm">
+          <span>{desc}</span>
+          <kbd class="rounded border bg-muted px-1.5 py-0.5 text-xs whitespace-nowrap">{keys}</kbd>
+        </div>
+      {/each}
+      <div class="mt-2 text-xs text-muted-foreground">
+        可视化编辑器的完整操作（24 项）见其工具栏的「快捷键与操作帮助」按钮。
+      </div>
+    </div>
+  </Dialog.Content>
+</Dialog.Root>
