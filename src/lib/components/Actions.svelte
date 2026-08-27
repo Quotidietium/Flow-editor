@@ -351,6 +351,23 @@ ${svgString}`);
 
   let exportOpen = $state(false);
   let exportRef: HTMLDivElement | undefined = $state();
+  // 下方空间不足时（移动端操作卡贴近视口底，工作区定高无可滚祖先）
+  // 菜单改 fixed 门户定位并整体钳入视口；桌面空间充足维持流内原行为。
+  let exportPortal = $state<{ height: number; x: number; y: number } | undefined>();
+
+  // fixed 在移动端滑屏 transform 容器内会相对祖先定位（循环 82 同款坑），
+  // 浮动形态时挂到 body。
+  const portalWhenFloating = (el: HTMLElement): { destroy: () => void } | undefined => {
+    if (!exportPortal) {
+      return undefined;
+    }
+    document.body.append(el);
+    return {
+      destroy: () => {
+        el.remove();
+      }
+    };
+  };
 
   const onWindowPointerDown = (event: PointerEvent): void => {
     if (exportOpen && exportRef && !exportRef.contains(event.target as Node)) {
@@ -550,14 +567,43 @@ ${svgString}`);
         class="w-full"
         disabled={exporting}
         data-testid="export-menu"
-        onclick={() => (exportOpen = !exportOpen)}>
+        onclick={(e) => {
+          exportOpen = !exportOpen;
+          if (exportOpen) {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const below = window.innerHeight - rect.bottom - 12;
+            if (below < 240) {
+              // 钳入视口：高度上限 360，x 留 8px 边距，y 放不下时上移
+              const height = Math.min(360, Math.max(160, window.innerHeight - 24));
+              exportPortal = {
+                height,
+                x: Math.max(8, Math.min(rect.left, window.innerWidth - 192)),
+                y: Math.max(8, Math.min(rect.bottom + 4, window.innerHeight - height - 8))
+              };
+            } else {
+              exportPortal = undefined;
+            }
+          }
+        }}>
         <DownloadIcon />
         导出 ▾
       </Button>
       {#if exportOpen}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
-          class="absolute right-0 z-20 mt-1 min-w-44 rounded-md border bg-popover p-1 text-xs text-popover-foreground shadow-md"
+          class="{exportPortal
+            ? 'fixed z-50'
+            : 'absolute right-0 z-20 mt-1'} min-w-44 rounded-md border bg-popover p-1 text-xs text-popover-foreground shadow-md"
+          style={exportPortal
+            ? 'left: ' +
+              exportPortal.x +
+              'px; max-height: ' +
+              exportPortal.height +
+              'px; overflow-y: auto; top: ' +
+              exportPortal.y +
+              'px;'
+            : ''}
+          use:portalWhenFloating
           data-testid="export-menu-list"
           onpointerdown={(e) => e.stopPropagation()}>
           <div class="px-2 pt-1 pb-0.5 text-[10px] text-muted-foreground">图像</div>
