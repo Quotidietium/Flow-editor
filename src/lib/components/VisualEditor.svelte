@@ -127,7 +127,7 @@
     {
       group: '搜索',
       items: [
-        ['Ctrl+F', '聚焦画布搜索框'],
+        ['Ctrl+F', '聚焦当前视图搜索框（画布/看板/时序/大纲/表格）'],
         ['搜索框输入', '命中保持 / 非命中降透明'],
         ['Enter', '居中并选中首个命中'],
         ['Esc', '清空搜索']
@@ -328,6 +328,8 @@
     );
   });
   let layoutMenuOpen = $state(false);
+  // 组件根元素：Ctrl+F 在列表视图下定位当前视图的搜索输入框
+  let rootEl: HTMLDivElement | undefined = $state();
   let helpOpen = $state(false);
   // 代码面板折叠状态跨会话记忆（收起=纯画布工作法），与卡片偏好同款
   const CODE_PANE_KEY = 'visualCodePane';
@@ -1545,12 +1547,19 @@
       }
       return;
     }
-    // Ctrl+F 聚焦画布搜索（拦截浏览器原生查找——在可视化模式用户意图
-    // 几乎总是找节点；输入控件聚焦时按 isTypingTarget 早退不劫持）
-    if (ctrl && event.key.toLowerCase() === 'f' && canvasView) {
-      event.preventDefault();
-      canvasSearchEl?.focus();
-      canvasSearchEl?.select();
+    // Ctrl+F 聚焦当前视图的搜索框（画布/看板/时序/大纲/表格通用——
+    // 拦截浏览器原生查找，可视化模式下意图几乎总是找节点/条目；
+    // 输入控件聚焦时按 isTypingTarget 早退不劫持）
+    if (ctrl && event.key.toLowerCase() === 'f') {
+      const input = canvasView
+        ? canvasSearchEl
+        : ((rootEl?.querySelector('input[data-testid$="-search"]') as HTMLInputElement | null) ??
+          undefined);
+      if (input) {
+        event.preventDefault();
+        input.focus();
+        input.select();
+      }
       return;
     }
     if (
@@ -1714,7 +1723,7 @@
   {/if}
 {/snippet}
 
-<div class="flex h-full min-h-80 flex-col select-none">
+<div bind:this={rootEl} class="flex h-full min-h-80 flex-col select-none">
   <!-- 移动端单行横滑（390px 实测 13 钮换行要占 ~159px 画布高度）；桌面保持换行平铺 -->
   <div
     class="flex flex-nowrap items-center gap-1.5 overflow-x-auto border-b p-1.5 text-xs sm:flex-wrap sm:overflow-visible [&>*]:shrink-0"
