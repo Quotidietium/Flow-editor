@@ -140,6 +140,8 @@ export interface NodeTypeSpec {
 }
 
 export interface MetaKeySpec {
+  /** 常用取值建议（datalist 原生下拉，自由输入并存）；缺省无建议。 */
+  suggestions?: string[];
   key: string;
   label: string;
 }
@@ -318,7 +320,14 @@ export const KIND_SPECS: Record<DiagramKind, KindSpec> = {
     hasTitle: true,
     label: '甘特图',
     links: [],
-    metaKeys: [{ key: 'dateFormat', label: '日期格式' }],
+    metaKeys: [
+      {
+        // Mermaid 常用 dayjs 记法（建字段防拼错——格式错=日期解析失败）
+        suggestions: ['YYYY-MM-DD', 'DD/MM/YYYY', 'MM/DD/YYYY', 'DD-MM-YYYY', 'YYYY/MM/DD'],
+        key: 'dateFormat',
+        label: '日期格式'
+      }
+    ],
     newNode: '任务',
     nodeTypes: [
       { name: '任务', role: 'task' },

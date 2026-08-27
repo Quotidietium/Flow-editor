@@ -1689,8 +1689,17 @@
         <input
           id="ve-meta-{metaKey.key}"
           class="mb-2 w-full rounded border border-input bg-background p-1 text-xs text-foreground"
+          list={metaKey.suggestions ? `ve-meta-dl-${metaKey.key}` : undefined}
           bind:value={metaDrafts[metaKey.key]}
           onkeydown={onMetaKeydown} />
+        {#if metaKey.suggestions}
+          <!-- 常用取值建议（原生下拉，自由输入并存）——拼错格式=静默解析失败 -->
+          <datalist id="ve-meta-dl-{metaKey.key}">
+            {#each metaKey.suggestions as suggestion (suggestion)}
+              <option value={suggestion}></option>
+            {/each}
+          </datalist>
+        {/if}
       {/each}
       <div class="mt-1 flex justify-end gap-1">
         <Button size="sm" variant="ghost" onclick={() => (editingMeta = false)}>取消</Button>

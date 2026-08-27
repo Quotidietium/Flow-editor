@@ -30,6 +30,15 @@ test.describe('可视化属性对话框键盘路径', () => {
     await page.getByTestId('visual-meta').click();
     const titleInput = page.locator('#ve-meta-title');
     await expect(titleInput).toBeVisible();
+
+    // 甘特 dateFormat 有常用格式建议（datalist，循环 115）
+    const dateFormatInput = page.locator('#ve-meta-dateFormat');
+    await expect(dateFormatInput).toBeVisible();
+    await expect(dateFormatInput).toHaveAttribute('list', 've-meta-dl-dateFormat');
+    const suggestions = page.locator('#ve-meta-dl-dateFormat option');
+    await expect.poll(async () => suggestions.count()).toBeGreaterThanOrEqual(5);
+    await expect(suggestions.first()).toHaveAttribute('value', 'YYYY-MM-DD');
+
     await titleInput.fill('新计划');
     await titleInput.press('Enter');
     await expect(titleInput).toHaveCount(0);
