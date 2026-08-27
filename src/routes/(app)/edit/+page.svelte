@@ -155,9 +155,22 @@
   // Record the Timeline for the whole session, not just while the panel is open.
   onMount(() => startAutoSave());
 
-  // Ctrl+S 把当前状态收藏进历史「已保存」（浏览器默认的保存网页被拦截）。
+  // Ctrl+S 把当前状态收藏进历史「已保存」（浏览器默认的保存网页被拦截）；
+  // Ctrl+E 切换可视化编辑（代码↔画布高频切换免挪鼠标）。
   onMount(() => {
+    // 输入控件聚焦时不劫持（可视化 onWindowKeydown 的 isTypingTarget 同款）
+    const isTypingTarget = (event: KeyboardEvent): boolean => {
+      const target = event.target;
+      return (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        (target instanceof HTMLElement && target.isContentEditable)
+      );
+    };
     const onKeydown = (event: KeyboardEvent) => {
+      if (event.isComposing || event.keyCode === 229) {
+        return;
+      }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
         event.preventDefault();
         if (addManualEntry($state.snapshot(inputState))) {
@@ -165,6 +178,13 @@
         } else {
           notify('该状态已保存过。');
         }
+      } else if (
+        (event.ctrlKey || event.metaKey) &&
+        event.key.toLowerCase() === 'e' &&
+        !isTypingTarget(event)
+      ) {
+        event.preventDefault();
+        visualMode = !visualMode;
       }
     };
     window.addEventListener('keydown', onKeydown);
