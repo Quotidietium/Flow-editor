@@ -12,6 +12,11 @@ test.describe('我的示例', () => {
     await page.getByTestId('user-sample-save-name').fill('节日流程');
     await page.getByTestId('user-sample-save-name').press('Enter');
     await expect(page.getByText('已保存示例「节日流程」')).toBeVisible();
+    // 悬停速览（循环 96）：title 含压缩后的代码开头（与历史条目同款）
+    await expect(page.locator('[data-testid^="user-sample-sample-"]')).toHaveAttribute(
+      'title',
+      /整图替换当前文档） · flowchart TD/
+    );
 
     // 换成时序图后从我的示例载回：整图恢复（updateCode 网关路径）
     await page.getByRole('button', { name: '时序图', exact: true }).click();

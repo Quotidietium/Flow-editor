@@ -4,6 +4,7 @@
   import { notify, prompt } from '$lib/util/notify';
   import { serializeState } from '$lib/util/serde';
   import { inputState, replaceInputState } from '$lib/util/state.svelte';
+  import { codePreview } from '$/util/codePreview';
   import { detectDiagramKind, KIND_SPECS } from '$lib/util/visualEditor/model';
   import dayjs from 'dayjs';
   import dayjsRelativeTime from 'dayjs/plugin/relativeTime';
@@ -164,16 +165,12 @@
     const kind = detectDiagramKind(code);
     return kind ? KIND_SPECS[kind]?.label : undefined;
   };
-  // 悬停速览：自动条目名是随机 slug、手动条目也可能同名——title 里放
-  // 压缩后的代码开头（单空白、限长），悬停即辨认内容。
-  const codePreviewOf = (code: string): string => {
-    const flat = code.replaceAll(/\s+/g, ' ').trim();
-    return flat.length > 120 ? `${flat.slice(0, 120)}…` : flat;
-  };
   const entriesWithUrl = $derived(
     historyState.entries.map((entry) => ({
       ...entry,
-      codePreview: codePreviewOf(entry.state.code),
+      // 悬停速览：自动条目名是随机 slug、手动条目也可能同名——title 里放
+      // 压缩后的代码开头（共享 codePreview，与我的示例按钮同款）
+      codePreview: codePreview(entry.state.code),
       kindLabel: kindLabelOf(entry.state.code),
       openUrl: entryUrl(entry.state)
     }))

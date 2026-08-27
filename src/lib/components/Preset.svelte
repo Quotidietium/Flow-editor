@@ -3,6 +3,7 @@
   import { Button, buttonVariants } from '$/components/ui/button';
   import * as Popover from '$/components/ui/popover';
   import { getSampleDiagrams, type SampleExample } from '$/util/mermaid';
+  import { codePreview } from '$/util/codePreview';
   import { notify } from '$/util/notify';
   import { loadRecentPresets, pushRecentPreset, clearRecentPresets } from '$/util/recentPresets';
   import {
@@ -292,7 +293,7 @@
             variant="outline"
             class="normal-case"
             data-testid="user-sample-{sample.id}"
-            title="载入示例（整图替换当前文档）"
+            title="载入示例（整图替换当前文档） · {codePreview(sample.code)}"
             onclick={() => loadUserSample(sample)}>
             {sample.label}
           </Button>
