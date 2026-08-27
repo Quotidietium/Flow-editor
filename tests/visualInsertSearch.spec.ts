@@ -37,8 +37,11 @@ test.describe('插入图元搜索', () => {
     await search.press('Escape');
     expect(await items.count()).toBe(total);
 
+    // 循环 113：Esc 双段——清词后再按 Esc 关面板
+    await search.press('Escape');
+    await expect(menu).toHaveCount(0);
+
     // 关闭再开：搜索词已重置
-    await page.keyboard.press('Escape');
     await page.getByTestId(TID.visualInsert).click();
     await expect(page.getByTestId('visual-insert-search')).toHaveValue('');
   });

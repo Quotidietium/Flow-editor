@@ -2379,8 +2379,14 @@
         bind:value={insertQuery}
         use:focusEditor
         onkeydown={(e) => {
-          if (e.key === 'Escape') {
-            insertQuery = '';
+          // Esc 双段：有词清词，无词关面板（IME 合成期 Esc 属取消候选词不清）
+          if (e.key === 'Escape' && !e.isComposing && e.keyCode !== 229) {
+            if (insertQuery.trim() !== '') {
+              insertQuery = '';
+            } else {
+              insertOpen = undefined;
+              e.currentTarget.blur();
+            }
           }
           e.stopPropagation();
         }} />
