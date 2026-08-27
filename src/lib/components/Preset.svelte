@@ -254,7 +254,7 @@
 
 <Card
   title="示例图表"
-  isOpen
+  isOpen={window.innerWidth >= 640}
   isStackable
   persistKey="flowCardPreset"
   icon={{ component: ShapesIcon }}>
