@@ -3,7 +3,14 @@
   import MobileEditor from '$/components/MobileEditor.svelte';
   import { TID } from '$/constants';
   import { defaultConfigJson } from '$/util/configPresets';
-  import { updateCode, updateConfig, validatedState } from '$lib/util/state.svelte';
+  import {
+    lastValidCode,
+    loadState,
+    updateCode,
+    updateConfig,
+    validatedState
+  } from '$lib/util/state.svelte';
+  import { shareLinkHash } from '$lib/util/serde';
   import { notify } from '$lib/util/notify';
   import { detectDiagramKind, KIND_SPECS } from '$lib/util/visualEditor/model';
   import { debounce } from 'lodash-es';
@@ -118,6 +125,29 @@
     notify('已重置为默认配置');
   };
 
+  // 代码错误的一键恢复：回到最后一次解析成功的那份代码（粒度=每次有效
+  // 键击，比历史时间线的 60s 快照细）。仅代码错误时提供——配置错误已有
+  // 专属的重置钮；从无有效版本则无钮可给。
+  const restoreLastValid = () => {
+    const code = lastValidCode();
+    if (code === undefined) {
+      return;
+    }
+    updateCode(code);
+    notify('已恢复到最近可用的版本');
+  };
+
+  // 分享链接整串误粘进代码区是高频误操作：横幅识别后一键载入——走与
+  // URL 初始化同一条链路（反序列化 + 配置安全门 + url 源输入管道），
+  // 预览因 code 变化自动重渲染。
+  const loadSharedLink = () => {
+    const hash = shareLinkHash(validatedState.current.code);
+    if (!hash) {
+      return;
+    }
+    void loadState(hash).then(() => notify('已载入链接中的图表'));
+  };
+
   const showErrorDebounced = debounce(() => {
     showError = true;
   }, 3000);
@@ -181,6 +211,22 @@
             data-testid="error-reveal"
             onclick={revealFirstError}>
             定位到错误行
+          </button>
+        {/if}
+        {#if validatedState.current.errorSource === 'code' && lastValidCode() !== undefined}
+          <button
+            class="rounded px-2 py-0.5 text-xs hover:bg-slate-700"
+            data-testid="error-restore-last"
+            onclick={restoreLastValid}>
+            恢复到最近可用版本
+          </button>
+        {/if}
+        {#if validatedState.current.errorSource === 'code' && shareLinkHash(validatedState.current.code)}
+          <button
+            class="rounded px-2 py-0.5 text-xs hover:bg-slate-700"
+            data-testid="error-load-link"
+            onclick={loadSharedLink}>
+            载入链接中的图表
           </button>
         {/if}
         {#if validatedState.current.errorSource === 'config'}

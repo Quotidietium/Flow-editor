@@ -142,6 +142,15 @@ const parseAndCache = async (code: string): Promise<ParseOutcome> => {
   return outcome;
 };
 
+// Newest fully valid code (mermaid parse AND config JSON): the error
+// banner's 恢复到最近可用版本 rolls the code back to it — finer grained
+// than the 60s timeline snapshots. Undefined until the first fully valid
+// publish, so a session that never saw a valid diagram offers no rollback.
+let lastGoodCode: string | undefined;
+
+// Read-only accessor for the banner; mutable only in processState below.
+export const lastValidCode = (): string | undefined => lastGoodCode;
+
 const processState = async (state: State) => {
   const processed = validatedStateOf(state);
   // No changes should be done to fields part of `state`.
@@ -160,6 +169,9 @@ const processState = async (state: State) => {
     processed.error = error as Error;
     processed.errorSource = 'config';
     errorDebug();
+  }
+  if (!processed.error) {
+    lastGoodCode = state.code;
   }
   return processed;
 };

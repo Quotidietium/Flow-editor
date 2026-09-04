@@ -74,3 +74,15 @@ export const deserializeState = (state: string): State => {
   const json = serdes[type].deserialize(serialized);
   return JSON.parse(json) as State;
 };
+
+// A whole share link (or bare serialized state) pasted into the code editor —
+// the error banner offers to load it instead of leaving users to hand-edit a
+// URL. Returns the hash payload (`pako:…` / `base64:…`) for loadState, or
+// undefined when the code is anything else. The serde type is accepted in any
+// case and normalized to lowercase, matching deserializeState's keys.
+const SHARE_LINK_RE = /^(?:https?:\/\/[^\s]*#)?(pako|base64):([A-Za-z0-9+/=_-]+)$/i;
+
+export const shareLinkHash = (code: string): string | undefined => {
+  const match = code.trim().match(SHARE_LINK_RE);
+  return match ? `${match[1].toLowerCase()}:${match[2]}` : undefined;
+};

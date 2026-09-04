@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { serializeState, deserializeState, type SerdeType } from './serde';
+import { serializeState, deserializeState, shareLinkHash, type SerdeType } from './serde';
 import { defaultState } from './state.svelte';
 import type { State } from '$lib/types';
 
@@ -60,5 +60,40 @@ describe('decompression-bomb guard', () => {
   it('keeps round-tripping real states untouched by the cap', () => {
     const big = serializeState({ ...defaultState, code: 'graph TD\n' + 'A-->B\n'.repeat(5_000) });
     expect(deserializeState(big).code).toContain('A-->B');
+  });
+});
+
+describe('shareLinkHash (误粘分享链接识别，循环 123)', () => {
+  const pakoHash = serializeState(defaultState);
+  const base64Hash = serializeState(defaultState, 'base64');
+
+  it('recognizes a full share URL and returns the hash payload', () => {
+    expect(shareLinkHash(`https://example.com/edit#${pakoHash}`)).toBe(pakoHash);
+    expect(shareLinkHash(`http://localhost:3000/edit#${base64Hash}`)).toBe(base64Hash);
+    // 带查询串/路径变体同样识别
+    expect(shareLinkHash(`https://example.com/view?x=1#${pakoHash}`)).toBe(pakoHash);
+  });
+
+  it('recognizes a bare serialized state (hash pasted without the URL)', () => {
+    expect(shareLinkHash(pakoHash)).toBe(pakoHash);
+    expect(shareLinkHash(base64Hash)).toBe(base64Hash);
+  });
+
+  it('tolerates surrounding whitespace and uppercase serde type', () => {
+    expect(shareLinkHash(`  https://example.com/edit#${pakoHash}\n`)).toBe(pakoHash);
+    const upper = pakoHash.replace(/^pako/, 'PAKO');
+    expect(shareLinkHash(upper)).toBe(pakoHash);
+  });
+
+  it('returns undefined for mermaid code and partial links', () => {
+    expect(shareLinkHash('flowchart TD\n    A[Christmas] --> B')).toBeUndefined();
+    expect(shareLinkHash('https://example.com/edit#no-prefix-here')).toBeUndefined();
+    expect(shareLinkHash('https://example.com/edit')).toBeUndefined();
+    expect(shareLinkHash('')).toBeUndefined();
+  });
+
+  it('the returned payload always round-trips through deserializeState', () => {
+    const hash = shareLinkHash(`https://example.com/edit#${pakoHash}`);
+    expect(hash && deserializeState(hash)).toEqual(defaultState);
   });
 });
