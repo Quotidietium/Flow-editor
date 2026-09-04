@@ -3,11 +3,14 @@
   import { Button } from '$/components/ui/button';
   import { Separator } from '$/components/ui/separator';
   import type { PanZoomState } from '$/util/panZoom';
+  import { previewPause } from '$/util/previewPause.svelte';
   import { PREVIEW_BG_LABELS } from '$/util/previewBackground';
   import { previewBackground } from '$/util/previewBackground.svelte';
   import BgIcon from '~icons/material-symbols/format-color-fill-rounded';
   import ExpandIcon from '~icons/material-symbols/open-in-full-rounded';
   import FitIcon from '~icons/material-symbols/fit-screen-rounded';
+  import PauseIcon from '~icons/material-symbols/pause-rounded';
+  import PlayIcon from '~icons/material-symbols/play-arrow-rounded';
   import ArrowsToCircleIcon from '~icons/material-symbols/screenshot-frame-2';
   import MagnifyingGlassPlusIcon from '~icons/material-symbols/zoom-in';
   import MagnifyingGlassMinusIcon from '~icons/material-symbols/zoom-out';
@@ -16,12 +19,15 @@
     /** Embed/narrow frames: keep zoom buttons visible below the `sm` breakpoint. */
     compact = false,
     fullScreenHref,
-    panZoomState
+    panZoomState,
+    /** 编辑页预览才提供「暂停实时预览」——/view 只读页与 store-free embed 无编辑可暂停。 */
+    showPauseToggle = false
   }: {
     compact?: boolean;
     /** When set, shows a "Full Screen" button linking here. Omit for store-free embeds. */
     fullScreenHref?: string;
     panZoomState: PanZoomState;
+    showPauseToggle?: boolean;
   } = $props();
 
   const zoomClass = $derived(compact ? undefined : 'hidden sm:block');
@@ -85,6 +91,24 @@
     onclick={() => previewBackground.cycle()}>
     <BgIcon />
   </Button>
+  {#if showPauseToggle}
+    <!-- 暂停实时预览：大图连改免渲染拖累；会话级开关（不持久化，防被遗忘的
+         暂停造成「改了没反应」），暂停期间改动以陈旧指示 + 立即渲染按钮呈现 -->
+    <Button
+      variant="ghost"
+      size="icon"
+      data-testid="preview-pause"
+      title={previewPause.paused ? '恢复实时预览' : '暂停实时预览（改完点画面角落的「立即渲染」）'}
+      aria-label={previewPause.paused ? '恢复实时预览' : '暂停实时预览'}
+      aria-pressed={previewPause.paused}
+      onclick={() => (previewPause.paused = !previewPause.paused)}>
+      {#if previewPause.paused}
+        <PlayIcon />
+      {:else}
+        <PauseIcon />
+      {/if}
+    </Button>
+  {/if}
   {#if fullScreenHref}
     <Separator orientation="vertical" class={zoomClass} />
     <Button variant="ghost" size="icon" title="全屏" href={fullScreenHref} target="_blank">

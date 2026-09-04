@@ -2,6 +2,7 @@
   import type { State, ValidatedState } from '$/types';
   import { recordRenderTime, shouldRefreshView } from '$/util/autoSync';
   import { PanZoomState } from '$/util/panZoom';
+  import { previewPause } from '$/util/previewPause.svelte';
   import { previewBgClass } from '$/util/previewBackground';
   import { previewBackground } from '$/util/previewBackground.svelte';
   import { renderAndPlaceDiagram } from '$/util/renderView';
@@ -22,6 +23,8 @@
   let rough: boolean;
   let view: HTMLDivElement | undefined = $state();
   let error = $state(false);
+  // 暂停期间有过未渲染的改动（陈旧指示的显示条件）；恢复渲染即清除。
+  let stale = $state(false);
   let panZoom = true;
   let manualUpdate = true;
 
@@ -60,10 +63,18 @@
           return;
         }
 
+        // 实时预览暂停（会话级开关）：持有画面、跳过渲染——大图连改免拖累。
+        // code/config 等仍记着「最后渲染值」，暂停解除后据此照常增量渲染。
+        if (previewPause.paused) {
+          stale = true;
+          return;
+        }
+
         if (!shouldRefreshView()) {
           return;
         }
 
+        stale = false;
         code = state.code;
         config = state.mermaid;
         rough = state.rough;
@@ -129,6 +140,10 @@
   let pendingStateChange = Promise.resolve();
   $effect(() => {
     const state = validatedState.current;
+    // 暂停开关不经过状态网关，在此读取依赖：开关翻转（尤其「恢复」）会
+    // 重跑本 effect，对最新状态补一次 handleStateChange（暂停中的发布
+    // 已各自走空，无副作用）。
+    void previewPause.paused;
     // eslint-disable-next-line @typescript-eslint/no-empty-function
     pendingStateChange = pendingStateChange.then(() => handleStateChange(state).catch(() => {}));
   });
@@ -151,6 +166,23 @@
       class="pointer-events-none absolute right-2 bottom-2 rounded bg-background/80 px-2 py-1 text-[11px] text-muted-foreground shadow"
       data-testid="view-rendering">
       渲染中…
+    </div>
+  {/if}
+  {#if !rendering && stale}
+    <!-- 暂停期间的陈旧指示：画面 ≠ 当前代码。给「立即渲染」直达钮，
+         用户不必回忆工具栏里还有个暂停开关。bottom-14 让开右下角的
+         版本/主题工具栏（h-12），否则它拦截指示牌的点击 -->
+    <div
+      class="absolute right-2 bottom-14 flex items-center gap-1.5 rounded bg-background/90 px-2 py-1 text-[11px] shadow"
+      data-testid="preview-paused">
+      <span class="text-muted-foreground">实时预览已暂停，画面为改动前的版本</span>
+      <button
+        type="button"
+        class="rounded border px-1.5 py-0.5 hover:bg-accent"
+        data-testid="preview-resume"
+        onclick={() => (previewPause.paused = false)}>
+        立即渲染
+      </button>
     </div>
   {/if}
 </div>

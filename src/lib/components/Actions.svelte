@@ -8,6 +8,7 @@
   import { waitForRender } from '$/util/autoSync';
   import { exportCanvasSize } from '$/util/fileIO';
   import { notify } from '$/util/notify';
+  import { previewPause } from '$/util/previewPause.svelte';
   import { readJSON, writeJSON } from '$/util/persist.svelte';
   import {
     diagramFileName,
@@ -168,6 +169,9 @@ ${svgString}`);
     exporter: Exporter,
     allowTransparent = true
   ): Promise<void> => {
+    // 暂停中的预览先恢复：导出的应是当前代码的画面，而非暂停前的陈旧图
+    // （恢复经 View 的 effect 触发补渲染，waitForCleanSvg 会等到它落地）。
+    previewPause.paused = false;
     updateCodeStore({ panZoom: false });
     const svg = await waitForCleanSvg();
     const canvas = document.createElement('canvas');

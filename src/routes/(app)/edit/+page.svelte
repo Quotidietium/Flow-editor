@@ -216,7 +216,8 @@
   {#snippet viewPane()}
     <View {panZoomState} shouldShowGrid={validatedState.current.grid} />
     <div class="absolute top-0 right-0">
-      <PanZoomToolbar {panZoomState} fullScreenHref={urls.current.view} />
+      <!-- 编辑页预览独有「暂停实时预览」开关；/view 只读页不传 -->
+      <PanZoomToolbar {panZoomState} fullScreenHref={urls.current.view} showPauseToggle />
     </div>
     <div class="absolute right-0 bottom-0"><VersionSecurityToolbar /></div>
     <div class="absolute bottom-0 left-0 sm:left-5"><SyncRoughToolbar /></div>
