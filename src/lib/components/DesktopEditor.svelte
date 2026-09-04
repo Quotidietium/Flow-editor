@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { EditorProps, MarkerData } from '$/types';
   import { MERMAID_CONFIG_SCHEMA_URI, mermaidConfigSchema } from '$/util/mermaidConfigSchema';
+  import { notify } from '$/util/notify';
+  import { stripCodeFence } from '$/util/stripCodeFence';
   import { validatedState } from '$/util/state.svelte';
   import { initEditor } from '$lib/util/monacoExtra';
   import { errorDebug } from '$lib/util/util';
@@ -149,6 +151,22 @@
       }
       currentText = newText ?? '';
       onUpdate(currentText);
+    });
+
+    // 粘贴整段 Markdown 围栏（从文档/LLM 对话复制 mermaid 的最高频形态）
+    // 即剥离：onDidPaste 在粘贴落地后给出范围，原位替换为裸代码——替换
+    // 经 onDidChangeModelContent → onUpdate 自动进状态流，可 Ctrl+Z 撤销。
+    editor.onDidPaste(({ range }) => {
+      const model = editor?.getModel();
+      if (!editor || !model) {
+        return;
+      }
+      const stripped = stripCodeFence(model.getValueInRange(range));
+      if (stripped === undefined) {
+        return;
+      }
+      editor.executeEdits('strip-code-fence', [{ range, text: stripped }]);
+      notify('已剥离 Markdown 代码围栏');
     });
 
     // 状态栏：光标行列 + 总行数 + 已选字符数（语法错误的行号对照；

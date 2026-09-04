@@ -1,12 +1,14 @@
 <script lang="ts">
   import type { EditorProps } from '$/types';
+  import { notify } from '$/util/notify';
+  import { stripCodeFence } from '$/util/stripCodeFence';
   import { validatedState } from '$/util/state.svelte';
   import { json, jsonLanguage, jsonParseLinter } from '@codemirror/lang-json';
   import { markdown } from '@codemirror/lang-markdown';
   import { yamlFrontmatter } from '@codemirror/lang-yaml';
   import { language } from '@codemirror/language';
   import { linter } from '@codemirror/lint';
-  import { Compartment, EditorState } from '@codemirror/state';
+  import { Compartment, EditorState, Transaction } from '@codemirror/state';
   import { EditorView } from '@codemirror/view';
   import { vsCodeDark } from '@fsegurai/codemirror-theme-vscode-dark';
   import { vsCodeLight } from '@fsegurai/codemirror-theme-vscode-light';
@@ -109,6 +111,25 @@
               }
               currentText = newText;
               onUpdate(newText);
+              // 粘贴整段 Markdown 围栏即剥离（与桌面 Monaco onDidPaste 同
+              // 语义）：CM6 粘贴事务带 input.paste 标注，原位替换刚插入的
+              // 范围；替换触发的新 update 会再走一遍上面的同步。
+              for (const tr of update.transactions) {
+                if (!(tr.annotation(Transaction.userEvent) ?? '').startsWith('input.paste')) {
+                  continue;
+                }
+                tr.changes.iterChangedRanges((_fromA, _toA, fromB, toB) => {
+                  const inserted = update.state.doc.sliceString(fromB, toB);
+                  const stripped = stripCodeFence(inserted);
+                  if (stripped === undefined || stripped === inserted || !editorView) {
+                    return;
+                  }
+                  editorView.dispatch({
+                    changes: { from: fromB, to: toB, insert: stripped }
+                  });
+                  notify('已剥离 Markdown 代码围栏');
+                });
+              }
             }
           }),
           EditorView.theme({
