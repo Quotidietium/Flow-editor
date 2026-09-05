@@ -99,6 +99,12 @@
   let isMobile = $derived(width < 768);
   let isViewMode = $state(true);
 
+  // 专注模式：收起左栏编辑区，预览/可视化画布占满工作区（演示、检视大图
+  // 免拖分隔条）。会话级开关——被遗忘的专注=「编辑器不见了」的迷惑，
+  // 刷新即回（与预览暂停同先例）；移动端滑屏布局本就整屏切换，不参与。
+  let focusMode = $state(false);
+  const isFocus = $derived(focusMode && !isMobile);
+
   // 拖拽文件进工作区直接打开（与「打开」按钮同走 loadFileIntoEditor：
   // 插件导入钩子优先、输入转换管道、配置安全门）。挂在 window 而非容器
   // div——① 容器是静态元素，元素级 drag 事件触发 a11y 警告而键盘等价路径
@@ -204,7 +210,9 @@
     void loadRegistry().then(() => initHandler());
   });
 
-  let editorPane: Resizable.Pane | undefined;
+  // $state：专注模式会卸载/重挂编辑栏，bind:this 的 undefined 回写须可反应
+  // （mobile resize(50) effect 依赖此引用）。
+  let editorPane: Resizable.Pane | undefined = $state();
   $effect(() => {
     if (isMobile) {
       editorPane?.resize(50);
@@ -216,8 +224,13 @@
   {#snippet viewPane()}
     <View {panZoomState} shouldShowGrid={validatedState.current.grid} />
     <div class="absolute top-0 right-0">
-      <!-- 编辑页预览独有「暂停实时预览」开关；/view 只读页不传 -->
-      <PanZoomToolbar {panZoomState} fullScreenHref={urls.current.view} showPauseToggle />
+      <!-- 编辑页预览独有「暂停实时预览」/「专注模式」开关；/view 只读页不传 -->
+      <PanZoomToolbar
+        {panZoomState}
+        fullScreenHref={urls.current.view}
+        showPauseToggle
+        focusActive={isFocus}
+        onToggleFocus={() => (focusMode = !focusMode)} />
     </div>
     <div class="absolute right-0 bottom-0"><VersionSecurityToolbar /></div>
     <div class="absolute bottom-0 left-0 sm:left-5"><SyncRoughToolbar /></div>
@@ -293,56 +306,63 @@
         direction="horizontal"
         autoSaveId="liveEditor"
         class="gap-4 p-2 pt-0 sm:gap-0 sm:p-6 sm:pt-0">
-        <Resizable.Pane bind:this={editorPane} defaultSize={30} minSize={15}>
-          <div class="flex h-full flex-col gap-4 sm:gap-6">
-            <Card
-              onselect={tabSelectHandler}
-              isOpen
-              tabs={editorTabs}
-              activeTabID={validatedState.current.editorMode}
-              isClosable={false}>
-              {#snippet actions()}
-                <Toggle
-                  bind:pressed={wordWrap}
-                  size="sm"
-                  data-testid="editor-word-wrap"
-                  title="自动换行"
-                  aria-label="自动换行">
-                  <WrapTextIcon />
-                </Toggle>
-                <FontSizeMenu
-                  size={editorFontSize.current}
-                  onSizeChange={(next) => (editorFontSize.current = next)} />
-                <Toggle
-                  bind:pressed={minimap}
-                  size="sm"
-                  class="hidden sm:inline-flex"
-                  data-testid="editor-minimap"
-                  title="小地图（长代码导航）"
-                  aria-label="小地图">
-                  <MinimapIcon />
-                </Toggle>
-                {#if validatedState.current.editorMode === 'config'}
-                  <ConfigPresets />
-                {:else}
-                  <InsertSnippets onInsert={(text) => editorComp?.insertAtCursor?.(text)} />
-                {/if}
-              {/snippet}
-              <Editor
-                {isMobile}
-                {wordWrap}
-                fontSize={editorFontSize.current}
-                {minimap}
-                bind:this={editorComp} />
-            </Card>
+        {#if !isFocus}
+          <Resizable.Pane bind:this={editorPane} defaultSize={30} minSize={15}>
+            <div class="flex h-full flex-col gap-4 sm:gap-6">
+              <Card
+                onselect={tabSelectHandler}
+                isOpen
+                tabs={editorTabs}
+                activeTabID={validatedState.current.editorMode}
+                isClosable={false}>
+                {#snippet actions()}
+                  <Toggle
+                    bind:pressed={wordWrap}
+                    size="sm"
+                    data-testid="editor-word-wrap"
+                    title="自动换行"
+                    aria-label="自动换行">
+                    <WrapTextIcon />
+                  </Toggle>
+                  <FontSizeMenu
+                    size={editorFontSize.current}
+                    onSizeChange={(next) => (editorFontSize.current = next)} />
+                  <Toggle
+                    bind:pressed={minimap}
+                    size="sm"
+                    class="hidden sm:inline-flex"
+                    data-testid="editor-minimap"
+                    title="小地图（长代码导航）"
+                    aria-label="小地图">
+                    <MinimapIcon />
+                  </Toggle>
+                  {#if validatedState.current.editorMode === 'config'}
+                    <ConfigPresets />
+                  {:else}
+                    <InsertSnippets onInsert={(text) => editorComp?.insertAtCursor?.(text)} />
+                  {/if}
+                {/snippet}
+                <Editor
+                  {isMobile}
+                  {wordWrap}
+                  fontSize={editorFontSize.current}
+                  {minimap}
+                  bind:this={editorComp} />
+              </Card>
 
-            <div class="group flex flex-wrap justify-between gap-4 sm:gap-6">
-              <Preset />
-              <Actions />
+              <div class="group flex flex-wrap justify-between gap-4 sm:gap-6">
+                <Preset />
+                <Actions />
+              </div>
             </div>
-          </div>
-        </Resizable.Pane>
-        <Resizable.Handle class="mr-1 hidden opacity-0 sm:block" />
+          </Resizable.Pane>
+          <!-- 分隔条平时隐身：悬停显形可发现拖拽；双击复位编辑栏宽度
+               （autoSaveId 持久的布局被拖乱后免手动归位） -->
+          <Resizable.Handle
+            class="mr-1 opacity-0 transition-opacity hover:opacity-100 sm:block"
+            title="拖拽调整宽度 · 双击复位"
+            ondblclick={() => editorPane?.resize(30)} />
+        {/if}
         <Resizable.Pane minSize={15} class="relative flex h-full flex-1 flex-col overflow-hidden">
           {#if visualMode}
             <div class="flex h-full min-h-0 w-full">

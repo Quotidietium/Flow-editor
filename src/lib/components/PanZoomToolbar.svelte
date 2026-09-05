@@ -7,8 +7,10 @@
   import { PREVIEW_BG_LABELS } from '$/util/previewBackground';
   import { previewBackground } from '$/util/previewBackground.svelte';
   import BgIcon from '~icons/material-symbols/format-color-fill-rounded';
+  import CloseFullscreenIcon from '~icons/material-symbols/close-fullscreen-rounded';
   import ExpandIcon from '~icons/material-symbols/open-in-full-rounded';
   import FitIcon from '~icons/material-symbols/fit-screen-rounded';
+  import FullscreenIcon from '~icons/material-symbols/fullscreen-rounded';
   import PauseIcon from '~icons/material-symbols/pause-rounded';
   import PlayIcon from '~icons/material-symbols/play-arrow-rounded';
   import ArrowsToCircleIcon from '~icons/material-symbols/screenshot-frame-2';
@@ -21,13 +23,18 @@
     fullScreenHref,
     panZoomState,
     /** 编辑页预览才提供「暂停实时预览」——/view 只读页与 store-free embed 无编辑可暂停。 */
-    showPauseToggle = false
+    showPauseToggle = false,
+    /** 编辑页传入即显示「专注模式」开关（收起编辑区，预览占满工作区）。 */
+    focusActive = false,
+    onToggleFocus
   }: {
     compact?: boolean;
     /** When set, shows a "Full Screen" button linking here. Omit for store-free embeds. */
     fullScreenHref?: string;
     panZoomState: PanZoomState;
     showPauseToggle?: boolean;
+    focusActive?: boolean;
+    onToggleFocus?: () => void;
   } = $props();
 
   const zoomClass = $derived(compact ? undefined : 'hidden sm:block');
@@ -106,6 +113,25 @@
         <PlayIcon />
       {:else}
         <PauseIcon />
+      {/if}
+    </Button>
+  {/if}
+  {#if onToggleFocus}
+    <!-- 专注模式：收起编辑区、预览占满工作区（演示/检视大图免拖分隔条）。
+         会话级开关；移动端滑屏布局本就整屏切换，不参与（按钮随 zoom 隐藏） -->
+    <Button
+      variant="ghost"
+      size="icon"
+      class="hidden sm:inline-flex"
+      data-testid="focus-mode"
+      title={focusActive ? '退出专注模式（恢复编辑区）' : '专注模式（预览占满工作区）'}
+      aria-label={focusActive ? '退出专注模式' : '专注模式'}
+      aria-pressed={focusActive}
+      onclick={onToggleFocus}>
+      {#if focusActive}
+        <CloseFullscreenIcon />
+      {:else}
+        <FullscreenIcon />
       {/if}
     </Button>
   {/if}
