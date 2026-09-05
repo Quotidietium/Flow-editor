@@ -1,7 +1,7 @@
 <script lang="ts">
   import Card from '$lib/components/Card/Card.svelte';
   import type { HistoryEntry, HistoryType, State, Tab } from '$lib/types';
-  import { diffLines, type DiffRow } from '$lib/util/lineDiff';
+  import { diffLines } from '$lib/util/lineDiff';
   import { notify, prompt } from '$lib/util/notify';
   import { serializeState } from '$lib/util/serde';
   import { inputState, replaceInputState } from '$lib/util/state.svelte';
@@ -194,18 +194,49 @@
     );
   });
 
-  // 「与当前对比」：行级 LCS 对比选中版本与当前编辑器代码（无依赖
-  // diff，util/lineDiff）。对比的是代码——配置 JSON 不入对比（差异
-  // 预览在配置模板菜单另有其责）。
+  // 「与当前对比」→「版本对比」（循环 128）：行级 LCS 对比（无依赖
+  // diff，util/lineDiff）。left 固定为点按钮的条目，right 默认「当前
+  // 编辑器」、可在对话框内切换为本页签任意版本——两版本互比免恢复
+  // 中转。对比的是代码——配置 JSON 不入对比（差异预览在配置模板
+  // 菜单另有其责）。
   const MAX_DIFF_ROWS = 400;
-  let diffView: { name: string; rows: DiffRow[] } | undefined = $state();
+  interface DiffCandidate {
+    code: string;
+    id: string; // '' = 当前编辑器
+    name: string;
+  }
+  let diffLeft: { code: string; name: string } | undefined = $state();
+  let diffRightId = $state('');
   const openDiff = (state: State, name?: string): void => {
-    diffView = { name: name ?? '该版本', rows: diffLines(state.code, inputState.code) };
+    diffLeft = { code: state.code, name: name ?? '该版本' };
+    diffRightId = '';
   };
+  const closeDiff = (): void => {
+    diffLeft = undefined;
+    diffRightId = '';
+  };
+  const diffCandidates = $derived.by<DiffCandidate[]>(() => {
+    if (!diffLeft) {
+      return [];
+    }
+    return [
+      { code: inputState.code, id: '', name: '当前编辑器' },
+      ...historyState.entries.map((entry) => ({
+        code: entry.state.code,
+        id: entry.id,
+        name: entry.name ?? '该版本'
+      }))
+    ];
+  });
+  // 条目在对话框打开期间被删除时回退到首项（当前编辑器）
+  const diffRight = $derived(
+    diffCandidates.find((candidate) => candidate.id === diffRightId) ?? diffCandidates[0]
+  );
+  const diffRows = $derived(diffLeft && diffRight ? diffLines(diffLeft.code, diffRight.code) : []);
   const diffStats = $derived.by(() => {
     let added = 0;
     let removed = 0;
-    for (const row of diffView?.rows ?? []) {
+    for (const row of diffRows) {
       if (row.type === 'add') {
         added += 1;
       } else if (row.type === 'del') {
@@ -439,24 +470,37 @@
 </Card>
 
 <Dialog.Root
-  open={diffView !== undefined}
+  open={diffLeft !== undefined}
   onOpenChange={(open) => {
     if (!open) {
-      diffView = undefined;
+      closeDiff();
     }
   }}>
   <Dialog.Content class="max-w-xl" data-testid="history-diff-dialog">
     <Dialog.Header>
-      <Dialog.Title>与当前对比：{diffView?.name}</Dialog.Title>
+      <Dialog.Title>版本对比：{diffLeft?.name} → {diffRight?.name}</Dialog.Title>
       <Dialog.Description>
-        行级对比「该版本 → 当前编辑器」：<span class="text-green-600">增 {diffStats.added}</span>
+        行级对比（增 = 右侧新增，删 = 左侧独有）：
+        <span class="text-green-600">增 {diffStats.added}</span>
         · <span class="text-red-600">删 {diffStats.removed}</span>（仅对比图表代码）
       </Dialog.Description>
     </Dialog.Header>
+    <div class="flex items-center gap-2 pb-1 text-xs">
+      <label class="text-muted-foreground" for="history-diff-target">对比对象</label>
+      <select
+        id="history-diff-target"
+        class="h-7 rounded border bg-background px-1"
+        data-testid="history-diff-target"
+        bind:value={diffRightId}>
+        {#each diffCandidates as candidate (candidate.id)}
+          <option value={candidate.id}>{candidate.name}</option>
+        {/each}
+      </select>
+    </div>
     <div
       class="max-h-[55vh] overflow-auto rounded border bg-muted/40 p-2 font-mono text-xs"
       data-testid="history-diff-rows">
-      {#each (diffView?.rows ?? []).slice(0, MAX_DIFF_ROWS) as row, index (index)}
+      {#each diffRows.slice(0, MAX_DIFF_ROWS) as row, index (index)}
         <div class="flex gap-2 whitespace-pre">
           <span
             class="w-3 shrink-0 text-center {row.type === 'add'
@@ -469,7 +513,7 @@
             >{row.text === '' ? ' ' : row.text}</span>
         </div>
       {/each}
-      {#if (diffView?.rows.length ?? 0) > MAX_DIFF_ROWS}
+      {#if diffRows.length > MAX_DIFF_ROWS}
         <div class="pt-1 text-center text-muted-foreground">
           差异过大，仅显示前 {MAX_DIFF_ROWS} 行（统计为全量）
         </div>

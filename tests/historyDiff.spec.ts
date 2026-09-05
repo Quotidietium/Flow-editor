@@ -48,4 +48,34 @@ test.describe('历史版本与当前对比（循环 127）', () => {
     await expect(dialog).toContainText('删 0');
     await expect(dialog).toContainText('圣诞节');
   });
+
+  test('两版本互比：对话框内把对比对象切到另一历史版本（循环 128）', async ({ page, editPage }) => {
+    // 版本 A = 默认图；版本 B = 新图；先后各收藏一条
+    await openHistory(page);
+    await page.getByRole('button', { name: '保存当前状态' }).click();
+    await expect(page.locator('#historyList li')).toHaveCount(1);
+
+    await page.evaluate((c) => navigator.clipboard.writeText(c), 'graph TD\nX[新增节点] --> Y\n');
+    await editPage.editor.click();
+    await page.keyboard.press('Control+KeyA');
+    await page.keyboard.press('Control+V');
+    await expect(editPage.editor).toContainText('新增节点');
+    await page.getByRole('button', { name: '保存当前状态' }).click();
+    await expect(page.locator('#historyList li')).toHaveCount(2);
+
+    // 从最新条目（B）打开对比：默认对比「当前编辑器」＝同为 B，零差异
+    await page.getByRole('button', { name: '与当前对比' }).first().click();
+    const dialog = page.getByTestId('history-diff-dialog');
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText('当前编辑器');
+    await expect(dialog).toContainText('增 0');
+
+    // 切换对比对象为版本 A（下拉第 3 项：当前编辑器 / B / A——名字是
+    // 随机 slug，用位置选）：B → A 方向翻转，增删互换
+    await page.getByTestId('history-diff-target').selectOption({ index: 2 });
+    await expect(dialog).toContainText('圣诞节');
+    await expect(dialog).toContainText('新增节点');
+    await expect(dialog).toContainText('增 7');
+    await expect(dialog).toContainText('删 3');
+  });
 });
