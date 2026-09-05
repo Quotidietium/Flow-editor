@@ -15,6 +15,12 @@ export const loadFileIntoEditor = async (file: {
   name: string;
   text: string;
 }): Promise<boolean> => {
+  // 图片类文件（含 .svg 文本）无法逆向为图表——明确拒绝而非把字节/
+  // 标记当 mermaid 代码载入报语法错误（循环 137）。
+  if (/\.(png|jpe?g|gif|webp|svg|bmp|ico|tiff?)$/i.test(file.name)) {
+    notify('图片文件无法导入（支持 .mmd/.md/.json/.zip 或分享链接）');
+    return false;
+  }
   const handled = await runImportHandler(file.name, file.text, file.bytes);
   const parsed = handled ?? parseOpenedFile(file.name, file.text);
   if (!parsed) {

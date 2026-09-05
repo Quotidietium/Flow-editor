@@ -106,6 +106,9 @@ ${svgString}`);
     a.href = href;
     a.click();
     a.remove();
+    // 导出成功反馈（循环 137）：下载是静默触发的，与复制图像的诚实
+    // 反馈原则对齐——toast 明确告知产物文件名。
+    notify(`已导出 ${download}`);
   };
 
   /**
@@ -255,7 +258,9 @@ ${svgString}`);
           format: [canvas.width, canvas.height]
         });
         pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, canvas.width, canvas.height);
-        pdf.save(getFileName('pdf'));
+        const filename = getFileName('pdf');
+        pdf.save(filename);
+        notify(`已导出 ${filename}`);
       });
     };
   };
@@ -372,24 +377,21 @@ ${svgString}`);
   };
 
   const onSaveMmd = () => {
-    downloadTextFile(
-      buildExportFileName(exportFileNamePref, 'mmd'),
-      validatedState.current.code,
-      'text/plain'
-    );
+    const filename = buildExportFileName(exportFileNamePref, 'mmd');
+    downloadTextFile(filename, validatedState.current.code, 'text/plain');
+    notify(`已导出 ${filename}`);
   };
 
   const onDownloadMarkdown = () => {
-    downloadTextFile(
-      buildExportFileName(exportFileNamePref, 'md'),
-      markdownOf(validatedState.current.code),
-      'text/markdown'
-    );
+    const mdName = buildExportFileName(exportFileNamePref, 'md');
+    downloadTextFile(mdName, markdownOf(validatedState.current.code), 'text/markdown');
+    notify(`已导出 ${mdName}`);
   };
 
   const onDownloadState = () => {
+    const filename = buildExportFileName(exportFileNamePref, 'json');
     downloadTextFile(
-      buildExportFileName(exportFileNamePref, 'json'),
+      filename,
       JSON.stringify(
         stateFileOf(validatedState.current.code, validatedState.current.mermaid),
         null,
@@ -397,6 +399,7 @@ ${svgString}`);
       ),
       'application/json'
     );
+    notify(`已导出 ${filename}`);
   };
 
   // 「打开」按钮与 Ctrl+O 快捷键同走 openFileIntoEditor

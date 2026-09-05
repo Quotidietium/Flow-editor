@@ -10,16 +10,35 @@ test.describe('导出文件名自定义', () => {
     const downloadPng = page.waitForEvent('download');
     await editPage.openExportMenu();
     await page.getByTestId('download-PNG').click();
-    expect((await downloadPng).suggestedFilename()).toMatch(
-      /^my-arch-\d{4}-\d{2}-\d{2}-\d{6}\.png$/
-    );
+    const pngName = (await downloadPng).suggestedFilename();
+    expect(pngName).toMatch(/^my-arch-\d{4}-\d{2}-\d{2}-\d{6}\.png$/);
+    // 导出成功 toast 带产物文件名（诚实反馈，循环 137）
+    await expect(page.getByText(`已导出 ${pngName}`)).toBeVisible();
 
     // 文档类导出同走自定义名
     const downloadMmd = page.waitForEvent('download');
     await page.getByTestId('save-mmd').click();
-    expect((await downloadMmd).suggestedFilename()).toMatch(
-      /^my-arch-\d{4}-\d{2}-\d{2}-\d{6}\.mmd$/
-    );
+    const mmdName = (await downloadMmd).suggestedFilename();
+    expect(mmdName).toMatch(/^my-arch-\d{4}-\d{2}-\d{2}-\d{6}\.mmd$/);
+    await expect(page.getByText(`已导出 ${mmdName}`)).toBeVisible();
+  });
+
+  test('图片文件导入被明确拒绝（循环 137）', async ({ page, editPage }) => {
+    await editPage.ensureActionsOpen();
+    const chooserPromise = page.waitForEvent('filechooser');
+    await page.getByTestId('open-file').click();
+    const chooser = await chooserPromise;
+    await chooser.setFiles({
+      name: 'diagram.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47])
+    });
+
+    await expect(
+      page.getByText('图片文件无法导入（支持 .mmd/.md/.json/.zip 或分享链接）')
+    ).toBeVisible();
+    // 编辑器内容不受影响（默认图仍在）
+    await editPage.checkInEditor('圣诞节');
   });
 
   test('偏好跨刷新保持', async ({ page, editPage }) => {
