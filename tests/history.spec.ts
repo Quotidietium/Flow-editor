@@ -373,4 +373,44 @@ test.describe('History', () => {
     await input.press('Enter');
     await expect(page.locator('#historyList')).toContainText('renamed-via-keys');
   });
+
+  // ↑/↓ 在条目主入口之间移动焦点（循环 141）：几十条的时间线逐按钮
+  // Tab 要上百次——列表级方向键导航一次一格，Enter 仍进重命名。
+  test('↑/↓ 在条目间移动焦点，Enter 进入重命名', async ({ page }) => {
+    await openHistory(page);
+    await page.locator('#saveHistory').click();
+    await expect(page.locator('#historyList li')).toHaveCount(1);
+
+    // 先手工收藏第二条（改代码后状态不同才不会被去重）
+    await editAndSetCode(page, 'graph TD\nB[第二条] --> C');
+    await page.locator('#saveHistory').click();
+    await expect(page.locator('#historyList li')).toHaveCount(2);
+
+    const entries = page.locator('#historyList li [data-history-entry]');
+    await expect(entries).toHaveCount(2);
+
+    // 焦点进第一条 → ↓ 到第二条 → ↑ 回第一条
+    await entries.first().focus();
+    await expect(entries.first()).toBeFocused();
+    await page.keyboard.press('ArrowDown');
+    await expect(entries.nth(1)).toBeFocused();
+    await page.keyboard.press('ArrowUp');
+    await expect(entries.first()).toBeFocused();
+
+    // 焦点在条目上按 Enter = 进入重命名（既有行为经导航路径复用）
+    await page.keyboard.press('Enter');
+    const input = page.getByRole('textbox', { name: '重命名条目' });
+    await expect(input).toBeVisible();
+    await input.press('Escape');
+    await expect(input).toHaveCount(0);
+  });
 });
+
+async function editAndSetCode(page: import('@playwright/test').Page, code: string) {
+  const editor = page.locator('.monaco-editor');
+  await editor.click();
+  await page.evaluate((c) => navigator.clipboard.writeText(c), code);
+  await page.keyboard.press('Control+KeyA');
+  await page.keyboard.press('Control+V');
+  await expect(editor).toContainText(code.split('\n')[1] ?? code);
+}

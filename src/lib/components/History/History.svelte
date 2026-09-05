@@ -195,6 +195,27 @@
   // 搜索过滤：默认名是随机英文 slug，只按名称搜等于没得搜——同时匹配
   // 图表代码内容（中文标签、节点 id），大小写不敏感。
   let searchQuery = $state('');
+
+  // ↑/↓ 在条目间移动焦点（循环 141）：列表动辄几十条、每条 4-6 个
+  // 按钮，纯 Tab 穿越要上百次。焦点落在条目主入口（名称）之间，
+  // Enter/Space 进入重命名、其他按钮仍可 Tab 内聚访问。
+  let listEl: HTMLUListElement | undefined = $state();
+  const onListKeydown = (event: KeyboardEvent): void => {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
+      return;
+    }
+    const rows = Array.from(listEl?.querySelectorAll('[data-history-entry]') ?? []);
+    const current = rows.indexOf(document.activeElement as HTMLElement);
+    if (current === -1) {
+      return;
+    }
+    const next = (event.key === 'ArrowDown' ? rows[current + 1] : rows[current - 1]) as
+      HTMLElement | undefined;
+    if (next) {
+      event.preventDefault();
+      next.focus();
+    }
+  };
   const filteredEntries = $derived.by(() => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) {
@@ -366,7 +387,14 @@
       {/if}
     </div>
   {/if}
-  <ul class="flex h-full flex-col gap-2 overflow-auto p-2" id="historyList">
+  <!-- 键盘委托在 ul 上：a11y 告警豁免——监听的是方向键导航（列表
+       本身非交互目标，焦点仍在条目内），行为等价 listbox 的 roving 模式 -->
+  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+  <ul
+    class="flex h-full flex-col gap-2 overflow-auto p-2"
+    id="historyList"
+    bind:this={listEl}
+    onkeydown={onListKeydown}>
     {#if filteredEntries.length > 0}
       {#each filteredEntries as { id, state, time, name, url, type, kindLabel, openUrl, codePreview } (id)}
         <li class="flex flex-col gap-2">
@@ -383,6 +411,7 @@
                     target="_blank"
                     rel="noopener"
                     title="在新标签页打开修订版本"
+                    data-history-entry
                     class="min-w-0 truncate text-blue-500 hover:underline">{name}</a>
                 {:else if editingId === id}
                   <input
@@ -404,6 +433,7 @@
                     class="min-w-0 cursor-pointer truncate"
                     role="button"
                     tabindex="0"
+                    data-history-entry
                     title="{name} · {codePreview}"
                     ondblclick={() => {
                       editingId = id;
