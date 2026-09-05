@@ -83,63 +83,95 @@
   };
 
   // 快捷键帮助对话框内容（与 onWindowKeydown 实际实现一一对应）。
-  const SHORTCUT_GROUPS: { group: string; items: [keys: string, desc: string][] }[] = [
+  // 循环 136：按当前视图过滤——组/条目可标注 views（缺省 = 全视图）；
+  // 画布视图显示全部，专用视图（看板/表格/大纲/时序/Git）隐藏画布
+  // 专属噪音，只留通用与该视图相关项。
+  type HelpView = 'canvas' | 'board' | 'sheet' | 'outline' | 'sequence' | 'git';
+  interface ShortcutItem {
+    desc: string;
+    keys: string;
+    views?: HelpView[];
+  }
+  interface ShortcutGroup {
+    group: string;
+    items: ShortcutItem[];
+    views?: HelpView[];
+  }
+  const HELP_VIEW_LABELS: Record<HelpView, string> = {
+    board: '看板',
+    canvas: '画布',
+    git: 'Git',
+    outline: '大纲',
+    sequence: '时序',
+    sheet: '表格'
+  };
+  const SHORTCUT_GROUPS: ShortcutGroup[] = [
     {
       group: '画布',
+      views: ['canvas'],
       items: [
-        ['双击空白', '新建节点'],
-        ['双击节点 / 连线（或 F2）', '编辑文字'],
-        ['从锚点拖拽', '创建连线（拖到空白松手 = 新建并连接）'],
-        ['方向箭头', '在该方向快速添加并连接']
+        { desc: '新建节点', keys: '双击空白' },
+        { desc: '编辑文字', keys: '双击节点 / 连线（或 F2）' },
+        { desc: '创建连线（拖到空白松手 = 新建并连接）', keys: '从锚点拖拽' },
+        { desc: '在该方向快速添加并连接', keys: '方向箭头' }
       ]
     },
     {
       group: '选择',
+      views: ['canvas'],
       items: [
-        ['Shift / Ctrl + 点击', '加选'],
-        ['Shift + 拖拽', '框选（Ctrl + 拖拽追加）'],
-        ['Ctrl + A', '全选'],
-        ['Esc', '取消选择 / 连线 / 菜单']
+        { desc: '加选', keys: 'Shift / Ctrl + 点击' },
+        { desc: '框选（Ctrl + 拖拽追加）', keys: 'Shift + 拖拽' },
+        { desc: '全选', keys: 'Ctrl + A' },
+        { desc: '取消选择 / 连线 / 菜单', keys: 'Esc' }
       ]
     },
     {
       group: '编辑',
+      views: ['canvas'],
       items: [
-        ['Delete / Backspace', '删除选中'],
-        ['Ctrl + C / X / V', '复制 / 剪切 / 粘贴'],
-        ['Ctrl + D', '原位复制'],
-        ['Ctrl + 拖拽', '克隆拖放'],
-        ['Alt + Shift + 方向键', '克隆并连接'],
-        ['方向键（Shift 加速）', '微移 1px（10px）'],
-        ['右键 / Shift + F10', '上下文菜单']
+        { desc: '删除选中', keys: 'Delete / Backspace' },
+        { desc: '复制 / 剪切 / 粘贴', keys: 'Ctrl + C / X / V' },
+        { desc: '原位复制', keys: 'Ctrl + D' },
+        { desc: '克隆拖放', keys: 'Ctrl + 拖拽' },
+        { desc: '克隆并连接', keys: 'Alt + Shift + 方向键' },
+        { desc: '微移 1px（10px）', keys: '方向键（Shift 加速）' },
+        { desc: '上下文菜单', keys: '右键 / Shift + F10' }
       ]
     },
     {
-      group: '历史与视图',
+      group: '画布视图',
+      views: ['canvas'],
       items: [
-        ['Ctrl + Z', '撤销'],
-        ['Ctrl + Shift + Z / Ctrl + Y', '重做'],
-        ['空白拖拽 / 空格 + 拖拽', '平移画布'],
-        ['Ctrl + 滚轮 / 双指捏合', '缩放画布'],
-        ['Ctrl + H', '复位视图']
+        { desc: '平移画布', keys: '空白拖拽 / 空格 + 拖拽' },
+        { desc: '缩放画布', keys: 'Ctrl + 滚轮 / 双指捏合' },
+        { desc: '复位视图', keys: 'Ctrl + H' }
+      ]
+    },
+    {
+      group: '通用',
+      items: [
+        { desc: '撤销', keys: 'Ctrl + Z' },
+        { desc: '重做', keys: 'Ctrl + Shift + Z / Ctrl + Y' }
       ]
     },
     {
       group: '搜索',
       items: [
-        ['Ctrl+F', '聚焦当前视图搜索框（画布/看板/时序/大纲/表格）'],
-        ['搜索框输入', '命中保持 / 非命中降透明'],
-        ['Enter', '居中并选中首个命中'],
-        ['Esc', '清空搜索']
+        { desc: '聚焦当前视图搜索框（画布/看板/时序/大纲/表格）', keys: 'Ctrl+F' },
+        { desc: '命中保持 / 非命中降透明', keys: '搜索框输入' },
+        { desc: '居中并选中首个命中', keys: 'Enter' },
+        { desc: '清空搜索', keys: 'Esc' }
       ]
     },
     {
       group: '专用编辑器',
       items: [
-        ['大纲：Enter / Tab / Shift+Tab', '同级 / 缩进 / 反缩进'],
-        ['看板：拖拽卡片', '换列 / 列内排序'],
-        ['时序 / Git：上下移动行', '调整次序'],
-        ['表单输入框 Enter', '直接提交（免挪手点按钮）']
+        { desc: '同级 / 缩进 / 反缩进', keys: '大纲：Enter / Tab / Shift+Tab', views: ['outline'] },
+        { desc: '换列 / 列内排序', keys: '看板：拖拽卡片', views: ['board'] },
+        { desc: '调整次序', keys: '时序：上下移动行', views: ['sequence'] },
+        { desc: '调整次序', keys: 'Git：上下移动行', views: ['git'] },
+        { desc: '直接提交（免挪手点按钮）', keys: '表单输入框 Enter' }
       ]
     }
   ];
@@ -190,6 +222,27 @@
   // the free canvas for kinds whose semantics are not node-link; the canvas
   // toolbar cluster and pan/zoom machinery only apply in canvas mode.
   const canvasView = $derived(kindSpec.view === undefined);
+  // 帮助内容按当前视图过滤（循环 136）：画布视图显示全部，专用视图
+  // 隐藏画布专属噪音、只留通用与该视图相关项。
+  const currentHelpView = $derived<HelpView>(canvasView ? 'canvas' : (kindSpec.view ?? 'canvas'));
+  const visibleShortcutGroups = $derived.by(() => {
+    // 画布视图显示全部（含各专用视图条目——用户随时可能切换图类型）；
+    // 仅专用视图做过滤：先按组标注剔除整组（画布/选择/编辑/画布视图），
+    // 再过滤组内条目（专用编辑器组只留当前视图相关项）
+    if (canvasView) {
+      return SHORTCUT_GROUPS;
+    }
+    return SHORTCUT_GROUPS.filter(
+      (section) => section.views === undefined || section.views.includes(currentHelpView)
+    )
+      .map((section) => ({
+        ...section,
+        items: section.items.filter(
+          (item) => item.views === undefined || item.views.includes(currentHelpView)
+        )
+      }))
+      .filter((section) => section.items.length > 0);
+  });
   // List/series kinds (pie, packet, radar, …) have no edge syntax: the anchor
   // handles and link gestures are hidden so drawn edges cannot silently no-op.
   const canLink = $derived(kindSpec.canLink !== false);
@@ -2732,18 +2785,24 @@
     <Dialog.Content class="max-w-lg" data-testid="visual-help-dialog">
       <Dialog.Header>
         <Dialog.Title>快捷键与操作</Dialog.Title>
-        <Dialog.Description>可视化编辑器的全部键盘与鼠标操作</Dialog.Description>
+        <Dialog.Description>
+          可视化编辑器的键盘与鼠标操作 —— 当前视图：
+          <span
+            class="rounded bg-muted px-1 py-0.5 text-xs font-medium text-foreground"
+            data-testid="visual-help-view">{HELP_VIEW_LABELS[currentHelpView]}</span>
+          {#if !canvasView}（画布专属操作在画布类图表下可见）{/if}
+        </Dialog.Description>
       </Dialog.Header>
       <div class="max-h-[60vh] overflow-y-auto pr-1">
-        {#each SHORTCUT_GROUPS as section (section.group)}
+        {#each visibleShortcutGroups as section (section.group)}
           <div class="mb-3">
             <div class="mb-1 text-xs font-medium text-muted-foreground">{section.group}</div>
             <div class="flex flex-col gap-1">
-              {#each section.items as [keys, desc] (keys)}
+              {#each section.items as item (item.keys)}
                 <div class="flex items-center justify-between gap-4 text-sm">
-                  <span>{desc}</span>
+                  <span>{item.desc}</span>
                   <kbd class="rounded border bg-muted px-1.5 py-0.5 text-xs whitespace-nowrap">
-                    {keys}
+                    {item.keys}
                   </kbd>
                 </div>
               {/each}

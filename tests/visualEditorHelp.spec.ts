@@ -31,4 +31,35 @@ test.describe('可视化编辑器快捷键帮助', () => {
     await page.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
   });
+
+  // 循环 136：帮助内容按当前视图过滤——看板视图隐藏画布专属噪音，
+  // 只留通用与看板相关项；画布视图（上方用例）仍显示全部。
+  test('看板视图过滤画布专属项，显示视图徽章', async ({ page }) => {
+    await page.goto('/edit');
+    const editor = page.locator('.monaco-editor');
+    await editor.click();
+    await page.evaluate(
+      (c) => navigator.clipboard.writeText(c),
+      'kanban\ntodo[待办]\n  t1[甲]\n  t2[乙]\ndone[完成]\n  t3[丙]'
+    );
+    await page.keyboard.press('Control+KeyA');
+    await page.keyboard.press('Control+V');
+    await expect(editor).toContainText('kanban');
+
+    await page.getByTestId('visual-tab').click();
+    await page.getByTestId('visual-help').click();
+
+    const dialog = page.getByTestId('visual-help-dialog');
+    await expect(dialog).toBeVisible();
+    await expect(page.getByTestId('visual-help-view')).toHaveText('看板');
+    await expect(dialog).toContainText('画布专属操作在画布类图表下可见');
+
+    // 通用与看板相关项保留
+    await expect(dialog).toContainText('Ctrl + Z');
+    await expect(dialog).toContainText('拖拽卡片');
+    // 画布专属与他视图条目隐藏
+    await expect(dialog).not.toContainText('框选');
+    await expect(dialog).not.toContainText('克隆并连接');
+    await expect(dialog).not.toContainText('大纲：Enter');
+  });
 });
