@@ -270,6 +270,52 @@
       ? userSamples
       : userSamples.filter((sample) => sample.label.toLowerCase().includes(presetQueryLower))
   );
+
+  // 类目网格方向键导航（循环 142）：卡片几十个按钮，键盘用户逐 Tab
+  // 穿越成本高——←/→ 按 DOM 序前后移动，↑/↓ 按「视觉行」跳（按钮
+  // flex-wrap 后按 offsetTop 分行、保持列位）。焦点不在网格内时不劫持。
+  let presetGridEl: HTMLDivElement | undefined = $state();
+  const onPresetGridKeydown = (event: KeyboardEvent): void => {
+    if (!presetGridEl || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
+      return;
+    }
+    const buttons = Array.from(presetGridEl.querySelectorAll<HTMLButtonElement>('button')).filter(
+      (button) => button.offsetParent !== null
+    );
+    const active = document.activeElement;
+    const current = buttons.indexOf(active as HTMLButtonElement);
+    if (current === -1) {
+      return;
+    }
+    // 按 offsetTop 把按钮分成视觉行
+    const rows: HTMLButtonElement[][] = [];
+    let rowTop: number | undefined;
+    for (const button of buttons) {
+      if (button.offsetTop !== rowTop) {
+        rowTop = button.offsetTop;
+        rows.push([]);
+      }
+      rows[rows.length - 1]?.push(button);
+    }
+    let rowIndex = rows.findIndex((row) => row.includes(active as HTMLButtonElement));
+    let colIndex = rows[rowIndex]?.indexOf(active as HTMLButtonElement) ?? 0;
+    let target: HTMLButtonElement | undefined;
+    if (event.key === 'ArrowLeft') {
+      target = buttons[Math.max(0, current - 1)];
+    } else if (event.key === 'ArrowRight') {
+      target = buttons[Math.min(buttons.length - 1, current + 1)];
+    } else if (event.key === 'ArrowUp') {
+      rowIndex = Math.max(0, rowIndex - 1);
+      target = rows[rowIndex]?.[colIndex] ?? rows[rowIndex]?.[rows[rowIndex].length - 1];
+    } else {
+      rowIndex = Math.min(rows.length - 1, rowIndex + 1);
+      target = rows[rowIndex]?.[colIndex] ?? rows[rowIndex]?.[rows[rowIndex].length - 1];
+    }
+    if (target && target !== active) {
+      event.preventDefault();
+      target.focus();
+    }
+  };
 </script>
 
 <Card
@@ -301,7 +347,15 @@
         }
       }} />
   </div>
-  <div class="flex h-fit max-h-52 flex-wrap gap-2 overflow-y-auto p-2">
+  <!-- 键盘委托在网格容器上：a11y 告警豁免——容器只接收子按钮冒泡的
+       方向键（焦点始终在按钮内，容器非交互目标），等价网格 roving 模式 -->
+  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+  <div
+    class="flex h-fit max-h-52 flex-wrap gap-2 overflow-y-auto p-2"
+    role="group"
+    aria-label="示例图表按钮组（方向键导航）"
+    bind:this={presetGridEl}
+    onkeydown={onPresetGridKeydown}>
     <div
       class="flex w-full flex-wrap items-center gap-2 border-b border-dashed pb-2"
       data-testid="user-samples">
