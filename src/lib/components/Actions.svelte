@@ -10,11 +10,10 @@
   import { notify } from '$/util/notify';
   import { previewPause } from '$/util/previewPause.svelte';
   import { readJSON, writeJSON } from '$/util/persist.svelte';
-  import { diagramFileName, downloadTextFile, markdownOf, stateFileOf } from '$/util/fileIO';
+  import { buildExportFileName, downloadTextFile, markdownOf, stateFileOf } from '$/util/fileIO';
   import { openFileIntoEditor } from '$/util/loadFile';
   import { pluginExportFormats, runPluginExport } from '$/plugins/registry.svelte';
   import { inputState, updateCodeStore, validatedState } from '$lib/util/state.svelte';
-  import dayjs from 'dayjs';
   import { toBase64 } from 'js-base64';
   import DownloadIcon from '~icons/material-symbols/download';
   import WidthIcon from '~icons/material-symbols/width-rounded';
@@ -23,8 +22,7 @@
 
   type Exporter = (context: CanvasRenderingContext2D, image: HTMLImageElement) => () => void;
 
-  const getFileName = (extension: string) =>
-    `mermaid-diagram-${dayjs().format('YYYY-MM-DD-HHmmss')}.${extension}`;
+  const getFileName = (extension: string) => buildExportFileName(exportFileNamePref, extension);
 
   /**
    * Fix text clipping in exported SVG for hand-drawn (rough) mode.
@@ -374,12 +372,16 @@ ${svgString}`);
   };
 
   const onSaveMmd = () => {
-    downloadTextFile(diagramFileName('mmd'), validatedState.current.code, 'text/plain');
+    downloadTextFile(
+      buildExportFileName(exportFileNamePref, 'mmd'),
+      validatedState.current.code,
+      'text/plain'
+    );
   };
 
   const onDownloadMarkdown = () => {
     downloadTextFile(
-      diagramFileName('md'),
+      buildExportFileName(exportFileNamePref, 'md'),
       markdownOf(validatedState.current.code),
       'text/markdown'
     );
@@ -387,7 +389,7 @@ ${svgString}`);
 
   const onDownloadState = () => {
     downloadTextFile(
-      diagramFileName('json'),
+      buildExportFileName(exportFileNamePref, 'json'),
       JSON.stringify(
         stateFileOf(validatedState.current.code, validatedState.current.mermaid),
         null,
@@ -451,6 +453,14 @@ ${svgString}`);
       notify('导出 PDF 失败：当前没有可导出的图形');
     }
   };
+
+  // 导出文件名偏好（循环 134）：非空基础名贯穿图像与文档导出（自动附
+  // 时间戳防同名覆盖、非法字符消毒见 fileIO.buildExportFileName）；
+  // 留空用默认时间戳名。偏好持久化，反复导出同一项目免重输。
+  let exportFileNamePref = $state(readJSON<string>('exportFileName', ''));
+  $effect(() => {
+    writeJSON('exportFileName', exportFileNamePref);
+  });
 
   // 导出尺寸偏好（循环 133）：模式（自动/宽度/高度）与尺寸值跨会话
   // 保持——反复导出同一目标尺寸免每次重设。手改 storage 的非法值在
@@ -552,6 +562,13 @@ ${svgString}`);
         </button>
       {/each}
     </div>
+    <Input
+      class="h-8"
+      data-testid="export-filename"
+      placeholder="导出文件名（留空用默认）"
+      aria-label="导出文件名"
+      title="导出文件名：自动附加时间戳防同名覆盖；非法字符自动替换"
+      bind:value={exportFileNamePref} />
     <div class="flex gap-2">
       <Button
         class="flex-grow"

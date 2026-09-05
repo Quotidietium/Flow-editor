@@ -3,6 +3,7 @@ import {
   IMAGE_SIZE_DEFAULT,
   IMAGE_SIZE_MAX,
   IMAGE_SIZE_MIN,
+  buildExportFileName,
   clampImageSize,
   diagramFileName,
   exportCanvasSize,
@@ -17,6 +18,30 @@ describe('diagramFileName', () => {
   it('builds a timestamped file name with the given extension', () => {
     expect(diagramFileName('mmd')).toMatch(/^mermaid-diagram-\d{4}-\d{2}-\d{2}-\d{6}\.mmd$/);
     expect(diagramFileName('json')).toMatch(/\.json$/);
+  });
+});
+
+describe('buildExportFileName（循环 134：导出文件名自定义）', () => {
+  it('appends a timestamp to a non-empty base name', () => {
+    expect(buildExportFileName('my-arch', 'png')).toMatch(/^my-arch-\d{4}-\d{2}-\d{2}-\d{6}\.png$/);
+  });
+
+  it('sanitizes Windows-illegal characters to dashes', () => {
+    expect(buildExportFileName('a/b:c*?"<>|', 'png')).toMatch(
+      /^a-b-c-+-\d{4}-\d{2}-\d{2}-\d{6}\.png$/
+    );
+    expect(buildExportFileName('a/b:c*?"<>|', 'png')).not.toMatch(/[\\/:*?"<>|]/);
+  });
+
+  it('trims whitespace and trailing dots; empty or fully-illegal input falls back to the default stem', () => {
+    expect(buildExportFileName('  my diagram  ', 'svg')).toMatch(
+      /^my diagram-\d{4}-\d{2}-\d{2}-\d{6}\.svg$/
+    );
+    expect(buildExportFileName('  ..  ', 'png')).toMatch(/^mermaid-diagram-\d{4}/);
+    expect(buildExportFileName('/\\*', 'png')).toMatch(/^mermaid-diagram-\d{4}/);
+    expect(buildExportFileName('', 'png')).toMatch(
+      /^mermaid-diagram-\d{4}-\d{2}-\d{2}-\d{6}\.png$/
+    );
   });
 });
 

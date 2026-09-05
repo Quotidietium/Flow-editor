@@ -10,6 +10,29 @@ import { toBase64 } from 'js-base64';
 export const diagramFileName = (extension: string): string =>
   `mermaid-diagram-${dayjs().format('YYYY-MM-DD-HHmmss')}.${extension}`;
 
+// 自定义导出文件名（循环 134）：非空基础名 → `<基础名>-<时间戳>.<ext>`
+// （时间戳防同名覆盖）。基础名消毒 Windows 非法字符（\\/ : * ? " < > |
+// 与控制符）为 `-`、压平空白、去掉结尾的点/空格；消毒后为空回退默认
+// 时间戳名。dayjs 两次取值在同一毫秒内一致。
+const sanitizeFileNameBase = (base: string): string =>
+  base
+    // 控制字符正是消毒目标（文件名合法化），豁免 no-control-regex
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[.\s]+$/, '');
+
+export const buildExportFileName = (base: string, extension: string): string => {
+  const clean = sanitizeFileNameBase(base);
+  // 全部由非法字符消毒而来的连字符串（如 "/*?" → "---"）无意义，视同空
+  const stem =
+    clean && !/^-+$/.test(clean)
+      ? `${clean}-${dayjs().format('YYYY-MM-DD-HHmmss')}`
+      : `mermaid-diagram-${dayjs().format('YYYY-MM-DD-HHmmss')}`;
+  return `${stem}.${extension}`;
+};
+
 // PNG/raster export sizing bounds, shared by the Actions input (HTML
 // min/max only advise the spinner — typed values pass straight through).
 export const IMAGE_SIZE_MIN = 3;
