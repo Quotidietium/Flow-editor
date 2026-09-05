@@ -1,6 +1,7 @@
 <script lang="ts">
   import Card from '$lib/components/Card/Card.svelte';
   import type { HistoryEntry, HistoryType, State, Tab } from '$lib/types';
+  import { diffLines, type DiffRow } from '$lib/util/lineDiff';
   import { notify, prompt } from '$lib/util/notify';
   import { serializeState } from '$lib/util/serde';
   import { inputState, replaceInputState } from '$lib/util/state.svelte';
@@ -11,6 +12,7 @@
   import BookmarkIcon from '~icons/material-symbols/bookmark-outline-rounded';
   import BookmarkAddIcon from '~icons/material-symbols/bookmark-add-outline-rounded';
   import CloseIcon from '~icons/material-symbols/close-rounded';
+  import DifferenceIcon from '~icons/material-symbols/difference-rounded';
   import TrashAltIcon from '~icons/material-symbols/delete-outline-rounded';
   import DownloadIcon from '~icons/material-symbols/download-rounded';
   import EditIcon from '~icons/material-symbols/edit-outline-rounded';
@@ -21,6 +23,7 @@
   import GitAltIcon from '~icons/mdi/git';
   import OpenInNewIcon from '~icons/material-symbols/open-in-new-rounded';
   import { Button } from '../ui/button';
+  import * as Dialog from '$/components/ui/dialog';
   import { Input } from '../ui/input';
   import { Separator } from '../ui/separator';
   import {
@@ -190,6 +193,27 @@
         entry.state.code.toLowerCase().includes(query)
     );
   });
+
+  // 「与当前对比」：行级 LCS 对比选中版本与当前编辑器代码（无依赖
+  // diff，util/lineDiff）。对比的是代码——配置 JSON 不入对比（差异
+  // 预览在配置模板菜单另有其责）。
+  const MAX_DIFF_ROWS = 400;
+  let diffView: { name: string; rows: DiffRow[] } | undefined = $state();
+  const openDiff = (state: State, name?: string): void => {
+    diffView = { name: name ?? '该版本', rows: diffLines(state.code, inputState.code) };
+  };
+  const diffStats = $derived.by(() => {
+    let added = 0;
+    let removed = 0;
+    for (const row of diffView?.rows ?? []) {
+      if (row.type === 'add') {
+        added += 1;
+      } else if (row.type === 'del') {
+        removed += 1;
+      }
+    }
+    return { added, removed };
+  });
 </script>
 
 <Card onselect={tabSelectHandler} isOpen isClosable={false} {tabs} activeTabID={historyState.mode}>
@@ -344,6 +368,14 @@
               <Button
                 size="icon"
                 variant="ghost"
+                title="与当前对比"
+                aria-label="与当前对比"
+                onclick={() => openDiff(state, name)}>
+                <DifferenceIcon />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
                 title="恢复此版本"
                 onclick={() => restoreHistoryItem(state, name)}>
                 <UndoIcon />
@@ -405,3 +437,43 @@
     </div>
   {/if}
 </Card>
+
+<Dialog.Root
+  open={diffView !== undefined}
+  onOpenChange={(open) => {
+    if (!open) {
+      diffView = undefined;
+    }
+  }}>
+  <Dialog.Content class="max-w-xl" data-testid="history-diff-dialog">
+    <Dialog.Header>
+      <Dialog.Title>与当前对比：{diffView?.name}</Dialog.Title>
+      <Dialog.Description>
+        行级对比「该版本 → 当前编辑器」：<span class="text-green-600">增 {diffStats.added}</span>
+        · <span class="text-red-600">删 {diffStats.removed}</span>（仅对比图表代码）
+      </Dialog.Description>
+    </Dialog.Header>
+    <div
+      class="max-h-[55vh] overflow-auto rounded border bg-muted/40 p-2 font-mono text-xs"
+      data-testid="history-diff-rows">
+      {#each (diffView?.rows ?? []).slice(0, MAX_DIFF_ROWS) as row, index (index)}
+        <div class="flex gap-2 whitespace-pre">
+          <span
+            class="w-3 shrink-0 text-center {row.type === 'add'
+              ? 'text-green-600'
+              : row.type === 'del'
+                ? 'text-red-600'
+                : 'text-transparent'}"
+            >{row.type === 'add' ? '+' : row.type === 'del' ? '−' : ' '}</span>
+          <span class="min-w-0 break-all {row.type === 'same' && 'text-muted-foreground'}"
+            >{row.text === '' ? ' ' : row.text}</span>
+        </div>
+      {/each}
+      {#if (diffView?.rows.length ?? 0) > MAX_DIFF_ROWS}
+        <div class="pt-1 text-center text-muted-foreground">
+          差异过大，仅显示前 {MAX_DIFF_ROWS} 行（统计为全量）
+        </div>
+      {/if}
+    </div>
+  </Dialog.Content>
+</Dialog.Root>
