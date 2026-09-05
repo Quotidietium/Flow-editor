@@ -1,6 +1,6 @@
 {
   "name": "mermaid-live-editor",
-  "version": "2.0.200",
+  "version": "2.0.201",
   "type": "module",
   "license": "Apache-2.0",
   "scripts": {
