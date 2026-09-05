@@ -21,7 +21,11 @@ test.describe('专注模式与分隔条复位（循环 126）', () => {
     await editPage.checkTextInView('圣诞节');
   });
 
-  test('分隔条双击复位：键盘移动分隔条后双击回到初始宽度（悬停可见）', async ({ page }) => {
+  test('分隔条双击复位：键盘移动分隔条后双击回到初始宽度（悬停可见）', async ({ editPage }) => {
+    // ⚠ 必须解构 editPage（本用例全程走 editPage.page）：导航发生在
+    // editPage fixture 的 start() 里——只解构 page 会跑在 about:blank 上
+    // （曾以「分隔条计数 0」的假象连续失败）。
+    const page = editPage.page;
     // paneforge 分隔条（页面里 role=separator 有多处，用它的专有属性定位）
     const handle = page.locator('[data-pane-resizer]');
     await expect(handle).toHaveCount(1);
