@@ -274,6 +274,23 @@
     }
     return { added, removed };
   });
+
+  // 行内复制（循环 135）：对比时「这一版不错，发我」的最短路径——
+  // 免关闭对话框回编辑器手选复制。
+  const copyDiffCode = async (
+    side: '左' | '右',
+    candidate: DiffCandidate | undefined
+  ): Promise<void> => {
+    if (!candidate) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(candidate.code);
+      notify(`已复制${side}版代码`);
+    } catch {
+      notify('复制失败');
+    }
+  };
 </script>
 
 <Card onselect={tabSelectHandler} isOpen isClosable={false} {tabs} activeTabID={historyState.mode}>
@@ -578,6 +595,22 @@
           差异过大，仅显示前 {MAX_DIFF_ROWS} 行（统计为全量）
         </div>
       {/if}
+    </div>
+    <div class="flex items-center justify-end gap-2 pt-2">
+      <Button
+        size="sm"
+        variant="outline"
+        data-testid="history-diff-copy-left"
+        onclick={() => void copyDiffCode('左', diffLeft)}>
+        复制左版代码
+      </Button>
+      <Button
+        size="sm"
+        variant="outline"
+        data-testid="history-diff-copy-right"
+        onclick={() => void copyDiffCode('右', diffRight)}>
+        复制右版代码
+      </Button>
     </div>
   </Dialog.Content>
 </Dialog.Root>

@@ -134,4 +134,33 @@ test.describe('历史版本与当前对比（循环 127）', () => {
     // 历史条目不受影响
     await expect(page.locator('#historyList li')).toHaveCount(2);
   });
+
+  test('对比对话框行内复制左/右版代码（循环 135）', async ({ page, editPage, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    // 收藏 A = 默认图；当前编辑器改为 B = 新图
+    await openHistory(page);
+    await page.getByRole('button', { name: '保存当前状态' }).click();
+    await expect(page.locator('#historyList li')).toHaveCount(1);
+
+    await page.evaluate((c) => navigator.clipboard.writeText(c), 'graph TD\nX[新增节点] --> Y\n');
+    await editPage.editor.click();
+    await page.keyboard.press('Control+KeyA');
+    await page.keyboard.press('Control+V');
+    await expect(editPage.editor).toContainText('新增节点');
+
+    // 打开 A 的对比：left=A、right=当前编辑器（B）
+    await page.getByRole('button', { name: '与当前对比' }).first().click();
+    const dialog = page.getByTestId('history-diff-dialog');
+    await expect(dialog).toBeVisible();
+
+    // 复制左版 = A 的默认图代码
+    await page.getByTestId('history-diff-copy-left').click();
+    await expect(page.getByText('已复制左版代码')).toBeVisible();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toContain('圣诞节');
+
+    // 复制右版 = 当前编辑器的 B 代码
+    await page.getByTestId('history-diff-copy-right').click();
+    await expect(page.getByText('已复制右版代码')).toBeVisible();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toContain('新增节点');
+  });
 });
