@@ -2,7 +2,6 @@
   import * as Dialog from '$/components/ui/dialog';
   import * as Popover from '$/components/ui/popover';
   import { Button } from '$/components/ui/button';
-  import { Switch } from '$/components/ui/switch';
   import { clearAssets, exportAssets, importAssets, parseAssetBundle } from '$/util/assetPort';
   import { downloadTextFile, openTextFile } from '$/util/fileIO';
   import { loadUserPresets } from '$/util/configPresets';
@@ -12,7 +11,7 @@
   import { loadUserSnippets } from '$/util/userSnippets';
   import { urls } from '$/util/state.svelte';
   import { cn } from '$/utils';
-  import { mode, setMode } from 'mode-watcher';
+  import { setMode, userPrefersMode } from 'mode-watcher';
   import type { Component, Snippet } from 'svelte';
   import AddIcon from '~icons/material-symbols/add-2-rounded';
   import DuplicateIcon from '~icons/material-symbols/content-copy-outline-rounded';
@@ -35,6 +34,13 @@
     renderer: Snippet<[Omit<MenuItem, 'renderer'>]>;
   }
 
+  // 外观三段选择（mode-watcher 原生偏好：'light' | 'system' | 'dark'）
+  const APPEARANCE_CHOICES = [
+    { label: '浅色', value: 'light' },
+    { label: '跟随系统', value: 'system' },
+    { label: '深色', value: 'dark' }
+  ] as const;
+
   const menuItems: MenuItem[] = $derived([
     { href: urls.current.new, icon: AddIcon, label: '新建', renderer: menuItem },
     {
@@ -48,8 +54,8 @@
     {
       href: '#',
       icon: ContrastIcon,
-      label: '深色模式',
-      renderer: darkModeMenuItem
+      label: '外观',
+      renderer: appearanceMenuItem
     },
     {
       href: '#',
@@ -147,32 +153,37 @@
   {/if}
 {/snippet}
 
-{#snippet darkModeMenuItem(options: Omit<MenuItem, 'renderer'>)}
+{#snippet appearanceMenuItem(options: Omit<MenuItem, 'renderer'>)}
+  <!-- 外观三态（循环 129）：浅色 / 跟随系统 / 深色——此前两态 Switch 一旦
+       点击就回不到「跟随系统」（mode-watcher 的默认偏好恰是 system）。
+       高亮取 userPrefersMode（原始偏好）；实际生效值（含系统切换的实时
+       联动）由 mode-watcher 派生，toggleDarkTheme 对 mermaid 配置 theme
+       的跟随语义零改动继承。 -->
   <div
     class={cn(
-      'flex cursor-pointer items-center justify-between border-b-2 px-3 py-2 hover:bg-muted',
+      'flex items-center justify-between gap-2 border-b-2 px-3 py-2',
       options.isSectionEnd && 'border-border-dark',
       options.class
     )}>
-    <!-- 行文本自身即切换入口（role=button+键盘全可达——整行 cursor-pointer
-         却只有 Switch 可点的「点击假象」消除；Switch 保留为视觉发现路径） -->
-    <span
-      class="flex items-center gap-2"
-      role="button"
-      tabindex="0"
-      onclick={() => setMode(mode.current === 'dark' ? 'light' : 'dark')}
-      onkeydown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          setMode(mode.current === 'dark' ? 'light' : 'dark');
-        }
-      }}>
+    <span class="flex items-center gap-2">
       <ContrastIcon />
       {options.label}
     </span>
-    <Switch
-      checked={mode.current === 'dark'}
-      onCheckedChange={(dark) => setMode(dark ? 'dark' : 'light')} />
+    <div class="flex items-center gap-0.5 rounded border p-0.5" role="group" aria-label="外观模式">
+      {#each APPEARANCE_CHOICES as choice (choice.value)}
+        <button
+          type="button"
+          class={cn(
+            'rounded px-1.5 py-0.5 text-xs hover:bg-muted',
+            userPrefersMode.current === choice.value && 'bg-accent text-accent-foreground'
+          )}
+          aria-pressed={userPrefersMode.current === choice.value}
+          data-testid="appearance-{choice.value}"
+          onclick={() => setMode(choice.value)}>
+          {choice.label}
+        </button>
+      {/each}
+    </div>
   </div>
 {/snippet}
 
