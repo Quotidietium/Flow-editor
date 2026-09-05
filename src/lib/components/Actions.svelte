@@ -10,14 +10,8 @@
   import { notify } from '$/util/notify';
   import { previewPause } from '$/util/previewPause.svelte';
   import { readJSON, writeJSON } from '$/util/persist.svelte';
-  import {
-    diagramFileName,
-    downloadTextFile,
-    markdownOf,
-    openTextFile,
-    stateFileOf
-  } from '$/util/fileIO';
-  import { loadFileIntoEditor } from '$/util/loadFile';
+  import { diagramFileName, downloadTextFile, markdownOf, stateFileOf } from '$/util/fileIO';
+  import { openFileIntoEditor } from '$/util/loadFile';
   import { pluginExportFormats, runPluginExport } from '$/plugins/registry.svelte';
   import { inputState, updateCodeStore, validatedState } from '$lib/util/state.svelte';
   import dayjs from 'dayjs';
@@ -403,14 +397,9 @@ ${svgString}`);
     );
   };
 
-  const onOpenFile = async () => {
-    const file = await openTextFile('.mmd,.md,.txt,.json,.mermaid,.zip');
-    if (!file) {
-      return;
-    }
-    // 与拖拽放落同走 loadFileIntoEditor（插件导入钩子优先、输入管道、配置安全门）
-    await loadFileIntoEditor(file);
-  };
+  // 「打开」按钮与 Ctrl+O 快捷键同走 openFileIntoEditor
+  // （插件导入钩子优先、输入管道、配置安全门）。
+  const onOpenFile = () => openFileIntoEditor();
 
   // Plugin-registered export formats run fully inside the plugin and hand
   // back a payload we just download (text or blob, private formats welcome).

@@ -8,7 +8,7 @@
 import { runImportHandler, runInputTransforms } from '$/plugins/registry.svelte';
 import { notify } from '$/util/notify';
 import { sanitizeConfig, updateCode, updateCodeStore } from '$/util/state.svelte';
-import { parseOpenedFile } from './fileIO';
+import { openTextFile, parseOpenedFile } from './fileIO';
 
 export const loadFileIntoEditor = async (file: {
   bytes?: Uint8Array;
@@ -29,4 +29,13 @@ export const loadFileIntoEditor = async (file: {
   }
   notify(`已载入「${file.name}」`);
   return true;
+};
+
+// 「打开」按钮与 Ctrl+O 快捷键同走一条路（循环 131 提取共享）。
+export const openFileIntoEditor = async (): Promise<void> => {
+  const file = await openTextFile('.mmd,.md,.txt,.json,.mermaid,.zip');
+  if (!file) {
+    return;
+  }
+  await loadFileIntoEditor(file);
 };

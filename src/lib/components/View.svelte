@@ -23,6 +23,10 @@
   let rough: boolean;
   let view: HTMLDivElement | undefined = $state();
   let error = $state(false);
+  // 空态（循环 131）：从未渲染过任何有效图（code 仍为初始 ''）。单独
+  // 用响应式标志而非直接读 code——code 是刻意的非响应式渲染对照值
+  // （handleStateChange 微任务里读写），模板读它每次都要 svelte-check 警告。
+  let empty = $state(true);
   // 暂停期间有过未渲染的改动（陈旧指示的显示条件）；恢复渲染即清除。
   let stale = $state(false);
   let panZoom = true;
@@ -106,6 +110,9 @@
           view.parentElement.scrollTop = scroll;
         }
         error = false;
+        // 渲染成功才解除空态——放在 try 内置 false 会在「空代码抛错→
+        // error=true」路径上把标志错误清除（探针实证）
+        empty = false;
       } else if (manualUpdate) {
         manualUpdate = false;
       }
@@ -183,6 +190,17 @@
         onclick={() => (previewPause.paused = false)}>
         立即渲染
       </button>
+    </div>
+  {/if}
+  {#if error && empty}
+    <!-- 空态引导（循环 131）：画面上真的什么都没有时（从未渲染过有效
+         图，如清空代码后刷新）给出起点提示。清空但不刷新时旧图仍半透明
+         挂着（error 态、code 记着旧值），此时不提示，避免与上次内容混淆 -->
+    <div
+      class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1 text-center text-muted-foreground"
+      data-testid="view-empty">
+      <span class="text-sm">在左侧输入 Mermaid 代码，图表会实时渲染在这里</span>
+      <span class="text-xs">可从「示例图表」挑一张开始，或按 Ctrl+O 打开本地文件</span>
     </div>
   {/if}
 </div>

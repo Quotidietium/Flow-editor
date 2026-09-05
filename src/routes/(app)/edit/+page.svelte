@@ -26,9 +26,10 @@
   import { TID } from '$/constants';
   import type { EditorMode, Tab } from '$/types';
   import { PanZoomState } from '$/util/panZoom';
+  import { formatConfigJson } from '$/util/configPresets';
   import { readJSON, writeJSON } from '$/util/persist.svelte';
   import { notify } from '$/util/notify';
-  import { formatJSON, initHandler } from '$/util/util';
+  import { initHandler } from '$/util/util';
   import {
     inputState,
     updateCodeStore,
@@ -37,7 +38,7 @@
     validatedState
   } from '$/util/state.svelte';
   import { editorFontSize } from '$/util/editorFontSize.svelte';
-  import { loadFileIntoEditor } from '$/util/loadFile';
+  import { loadFileIntoEditor, openFileIntoEditor } from '$/util/loadFile';
   import { mode, setMode } from 'mode-watcher';
   import { onMount, untrack } from 'svelte';
   import CodeIcon from '~icons/custom/code';
@@ -59,16 +60,18 @@
     updateCodeStore({ editorMode });
   };
 
-  // 配置 JSON 一键格式化（循环 130）：手写的压缩/混乱 JSON 展开为
-  // 2 空格缩进（与分享链接/配置模板同款 formatJSON）。解析失败不改
-  // 动内容——错误横幅已提示语法问题，按钮 toast 引导先修复。
+  // 配置 JSON 一键格式化（循环 130 直达钮；循环 131 勘误：模板菜单里
+  // 本就有「格式化 JSON」——本钮是把该既有能力提到一击直达，与明暗
+  // 直达钮同先例。逻辑/文案统一收敛到共享 util formatConfigJson，
+  // 不再各写一份。
   const formatConfig = () => {
-    try {
-      updateConfig(formatJSON(JSON.parse(validatedState.current.mermaid)));
-      notify('已格式化配置 JSON');
-    } catch {
-      notify('配置 JSON 无法解析，暂不能格式化（先修复语法错误）');
+    const next = formatConfigJson(validatedState.current.mermaid);
+    if (next === undefined) {
+      notify('当前配置 JSON 无法解析，无法格式化');
+      return;
     }
+    updateConfig(next);
+    notify('已格式化配置 JSON');
   };
 
   const editorTabs: Tab[] = [
@@ -181,7 +184,9 @@
   onMount(() => startAutoSave());
 
   // Ctrl+S 把当前状态收藏进历史「已保存」（浏览器默认的保存网页被拦截）；
-  // Ctrl+E 切换可视化编辑（代码↔画布高频切换免挪鼠标）。
+  // Ctrl+E 切换可视化编辑（代码↔画布高频切换免挪鼠标）；
+  // Ctrl+O 打开本地文件（浏览器默认的打开被拦截，接编辑器自己的打开链路
+  // ——与「打开」按钮同走 openFileIntoEditor，输入态不设守卫，同 Ctrl+S）。
   onMount(() => {
     // 输入控件聚焦时不劫持（可视化 onWindowKeydown 的 isTypingTarget 同款）
     const isTypingTarget = (event: KeyboardEvent): boolean => {
@@ -203,6 +208,9 @@
         } else {
           notify('该状态已保存过。');
         }
+      } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'o') {
+        event.preventDefault();
+        void openFileIntoEditor();
       } else if (
         (event.ctrlKey || event.metaKey) &&
         event.key.toLowerCase() === 'e' &&
