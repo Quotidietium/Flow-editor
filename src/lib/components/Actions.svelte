@@ -452,7 +452,23 @@ ${svgString}`);
     }
   };
 
-  let imageSizeMode: 'auto' | 'width' | 'height' = $state('auto');
+  // 导出尺寸偏好（循环 133）：模式（自动/宽度/高度）与尺寸值跨会话
+  // 保持——反复导出同一目标尺寸免每次重设。手改 storage 的非法值在
+  // 读取侧兜底回默认（previewBackground 同款读取侧兜底先例）。
+  const sanitizeSizeMode = (value: unknown): 'auto' | 'width' | 'height' =>
+    value === 'width' || value === 'height' ? value : 'auto';
+  const sanitizeImageSize = (value: unknown): number =>
+    typeof value === 'number' && Number.isFinite(value) && value >= 3 && value <= 10000
+      ? value
+      : 1080;
+  let imageSizeMode: 'auto' | 'width' | 'height' = $state(
+    sanitizeSizeMode(readJSON<unknown>('exportSizeMode', 'auto'))
+  );
+  let imageSize = $state(sanitizeImageSize(readJSON<unknown>('exportImageSize', 1080)));
+  $effect(() => {
+    writeJSON('exportSizeMode', imageSizeMode);
+    writeJSON('exportImageSize', imageSize);
+  });
 
   // 透明背景导出偏好（PNG/WebP 有效；JPEG/PDF 强制不透明），跨会话保持。
   let transparentBg = $state(readJSON<boolean>('pngTransparentBg', false));
@@ -463,14 +479,6 @@ ${svgString}`);
   // 导出倍数（1–4x 清晰位图，仅光栅格式）：会话级状态——持久化一个
   // 被遗忘的 4x 会在下次会话产出意料之外的巨型文件。
   let exportScale = $state(1);
-
-  $effect(() => {
-    if (!imageSizeMode) {
-      imageSizeMode = 'auto';
-    }
-  });
-
-  let imageSize = $state(1080);
 </script>
 
 <svelte:window
