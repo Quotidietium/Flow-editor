@@ -13,6 +13,7 @@
   import BookmarkAddIcon from '~icons/material-symbols/bookmark-add-outline-rounded';
   import CloseIcon from '~icons/material-symbols/close-rounded';
   import DifferenceIcon from '~icons/material-symbols/difference-rounded';
+  import LinkIcon from '~icons/material-symbols/link-rounded';
   import TrashAltIcon from '~icons/material-symbols/delete-outline-rounded';
   import DownloadIcon from '~icons/material-symbols/download-rounded';
   import EditIcon from '~icons/material-symbols/edit-outline-rounded';
@@ -156,6 +157,17 @@
     // 恢复是静默的全量替换：toast 给出明确反馈（尤其对比模式/窄屏下
     // 用户不一定立刻注意到画布已换）
     notify(`已恢复「${name ?? '该版本'}」。`);
+  };
+
+  // 分享某历史版本的最短路径：链接已由 entriesWithUrl 序列化好，
+  // 免「新标签打开 → 复制地址栏」两跳。
+  const copyEntryLink = async (url: string): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(url);
+      notify('已复制该版本的分享链接');
+    } catch {
+      notify('复制失败');
+    }
   };
 
   // Absolute editor URL for an entry, so the link can be opened in a new tab or copied.
@@ -395,6 +407,14 @@
                 variant="ghost"
                 title="在新标签页打开">
                 <OpenInNewIcon />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                title="复制该版本的分享链接"
+                aria-label="复制该版本的分享链接"
+                onclick={() => void copyEntryLink(openUrl)}>
+                <LinkIcon />
               </Button>
               <Button
                 size="icon"

@@ -78,4 +78,20 @@ test.describe('历史版本与当前对比（循环 127）', () => {
     await expect(dialog).toContainText('增 7');
     await expect(dialog).toContainText('删 3');
   });
+
+  test('历史条目一键复制分享链接（循环 130）', async ({ editPage, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    // 全程走 editPage.page（导航在 fixture 的 start() 里——循环 126 教训）
+    const page = editPage.page;
+    await openHistory(page);
+    await page.getByRole('button', { name: '保存当前状态' }).click();
+    await expect(page.locator('#historyList li')).toHaveCount(1);
+
+    await page.getByRole('button', { name: '复制该版本的分享链接' }).first().click();
+    await expect(page.getByText('已复制该版本的分享链接')).toBeVisible();
+    const link = await page.evaluate(() => navigator.clipboard.readText());
+    expect(link).toContain('#pako:');
+    // 链接就是条目的站内分享 URL（当前页同源、同路径）
+    expect(link.startsWith(page.url().split('#')[0])).toBe(true);
+  });
 });

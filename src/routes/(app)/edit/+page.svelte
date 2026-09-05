@@ -28,13 +28,20 @@
   import { PanZoomState } from '$/util/panZoom';
   import { readJSON, writeJSON } from '$/util/persist.svelte';
   import { notify } from '$/util/notify';
-  import { inputState, validatedState, updateCodeStore, urls } from '$/util/state.svelte';
-  import { initHandler } from '$/util/util';
+  import { formatJSON, initHandler } from '$/util/util';
+  import {
+    inputState,
+    updateCodeStore,
+    updateConfig,
+    urls,
+    validatedState
+  } from '$/util/state.svelte';
   import { editorFontSize } from '$/util/editorFontSize.svelte';
   import { loadFileIntoEditor } from '$/util/loadFile';
   import { mode, setMode } from 'mode-watcher';
   import { onMount, untrack } from 'svelte';
   import CodeIcon from '~icons/custom/code';
+  import DataObjectIcon from '~icons/material-symbols/data-object-rounded';
   import HistoryIcon from '~icons/material-symbols/history';
   import BackIcon from '~icons/material-symbols/arrow-back-rounded';
   import DarkModeIcon from '~icons/material-symbols/dark-mode-rounded';
@@ -50,6 +57,18 @@
   const tabSelectHandler = (tab: Tab) => {
     const editorMode: EditorMode = tab.id === 'code' ? 'code' : 'config';
     updateCodeStore({ editorMode });
+  };
+
+  // 配置 JSON 一键格式化（循环 130）：手写的压缩/混乱 JSON 展开为
+  // 2 空格缩进（与分享链接/配置模板同款 formatJSON）。解析失败不改
+  // 动内容——错误横幅已提示语法问题，按钮 toast 引导先修复。
+  const formatConfig = () => {
+    try {
+      updateConfig(formatJSON(JSON.parse(validatedState.current.mermaid)));
+      notify('已格式化配置 JSON');
+    } catch {
+      notify('配置 JSON 无法解析，暂不能格式化（先修复语法错误）');
+    }
   };
 
   const editorTabs: Tab[] = [
@@ -337,6 +356,16 @@
                     <MinimapIcon />
                   </Toggle>
                   {#if validatedState.current.editorMode === 'config'}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      class="px-2"
+                      data-testid="editor-format-config"
+                      title="格式化配置 JSON（2 空格缩进）"
+                      aria-label="格式化配置 JSON"
+                      onclick={formatConfig}>
+                      <DataObjectIcon />
+                    </Button>
                     <ConfigPresets />
                   {:else}
                     <InsertSnippets onInsert={(text) => editorComp?.insertAtCursor?.(text)} />
