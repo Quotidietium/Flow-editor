@@ -120,4 +120,23 @@ test.describe('/view 只读页', () => {
     const clipboard = await page.evaluate(() => navigator.clipboard.readText());
     expect(clipboard).toContain('/view#pako:');
   });
+
+  test('复制图像到剪贴板：PNG blob 直贴文档/聊天（循环 140）', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await page.goto('/edit');
+    await page.waitForURL(/#pako:/);
+    const viewUrl = page.url().replace('/edit', '/view');
+    await page.goto(viewUrl);
+    await expect(page.locator('#container')).toContainText('圣诞节', { timeout: 15_000 });
+
+    // 复制前剪贴板是空的文本（readText 可读空串），复制后是图像——
+    // readText 将抛错，以此反证写入的是图像类型
+    await page.getByTestId('view-copy-image').click();
+    await expect(page.getByText('已复制图像到剪贴板')).toBeVisible();
+    const clipboardTypes = await page.evaluate(async () => {
+      const items = await navigator.clipboard.read();
+      return items.flatMap((item) => item.types);
+    });
+    expect(clipboardTypes).toContain('image/png');
+  });
 });

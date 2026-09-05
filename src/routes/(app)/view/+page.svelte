@@ -22,6 +22,7 @@
   import ImageIcon from '~icons/material-symbols/image-outline-rounded';
   import LinkIcon from '~icons/material-symbols/link-rounded';
   import MoreIcon from '~icons/material-symbols/more-rounded';
+  import CopyImageIcon from '~icons/material-symbols/content-copy-outline-rounded';
 
   const panZoomState = new PanZoomState();
 
@@ -80,6 +81,35 @@
       pngExporting = false;
     }
   };
+
+  // 复制图像到剪贴板（循环 140）：分享接收者把图贴进文档/聊天是最高频
+  // 下游动作，免「下载 PNG → 再从文件插入」两跳。同一份干净 SVG 光栅化；
+  // 浏览器不支持 ClipboardItem 时按钮不渲染。
+  const clipboardImageSupported = $state(
+    typeof window !== 'undefined' && Object.prototype.hasOwnProperty.call(window, 'ClipboardItem')
+  );
+  let imageCopying = $state(false);
+  const onCopyImage = async () => {
+    if (imageCopying) {
+      return;
+    }
+    const markup = svgMarkupOf(document);
+    if (markup === undefined) {
+      notify('当前没有可导出的图形');
+      return;
+    }
+    imageCopying = true;
+    try {
+      const { dataUrl } = await rasterizeSvgMarkup(markup, IMAGE_SIZE_DEFAULT);
+      const blob = await (await fetch(dataUrl)).blob();
+      await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+      notify('已复制图像到剪贴板');
+    } catch {
+      notify('复制图像失败：浏览器拒绝了剪贴板写入');
+    } finally {
+      imageCopying = false;
+    }
+  };
 </script>
 
 <svelte:head>
@@ -115,6 +145,13 @@
           onclick={() => void onDownloadPng()}>
           下载 PNG
         </Popover.Close>
+        {#if clipboardImageSupported}
+          <Popover.Close
+            class="rounded px-2 py-1.5 text-left text-sm hover:bg-accent"
+            onclick={() => void onCopyImage()}>
+            复制图像
+          </Popover.Close>
+        {/if}
         <Popover.Close
           class="rounded px-2 py-1.5 text-left text-sm hover:bg-accent"
           onclick={() => void onCopyLink()}>
@@ -153,6 +190,19 @@
       <ImageIcon />
       {pngExporting ? '导出中…' : '下载 PNG'}
     </Button>
+    {#if clipboardImageSupported}
+      <Button
+        size="sm"
+        variant="outline"
+        class="hidden bg-background/80 sm:inline-flex"
+        data-testid="view-copy-image"
+        disabled={imageCopying}
+        title="复制图像到剪贴板（干净图形，长边 1080）"
+        onclick={() => void onCopyImage()}>
+        <CopyImageIcon />
+        {imageCopying ? '复制中…' : '复制图像'}
+      </Button>
+    {/if}
     <Button
       size="sm"
       variant="outline"
