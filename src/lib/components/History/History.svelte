@@ -14,6 +14,7 @@
   import CloseIcon from '~icons/material-symbols/close-rounded';
   import DifferenceIcon from '~icons/material-symbols/difference-rounded';
   import LinkIcon from '~icons/material-symbols/link-rounded';
+  import SwapIcon from '~icons/material-symbols/swap-horiz-rounded';
   import TrashAltIcon from '~icons/material-symbols/delete-outline-rounded';
   import DownloadIcon from '~icons/material-symbols/download-rounded';
   import EditIcon from '~icons/material-symbols/edit-outline-rounded';
@@ -206,29 +207,35 @@
     );
   });
 
-  // 「与当前对比」→「版本对比」（循环 128）：行级 LCS 对比（无依赖
-  // diff，util/lineDiff）。left 固定为点按钮的条目，right 默认「当前
-  // 编辑器」、可在对话框内切换为本页签任意版本——两版本互比免恢复
-  // 中转。对比的是代码——配置 JSON 不入对比（差异预览在配置模板
-  // 菜单另有其责）。
+  // 「与当前对比」→「版本对比」（循环 128/132）：行级 LCS 对比（无依赖
+  // diff，util/lineDiff）。左右双槽皆可选本页签任意版本（'' = 当前编辑
+  // 器），可对调方向；左侧为历史条目时可在对话框内一键恢复。对比的是
+  // 代码——配置 JSON 不入对比（差异预览在配置模板菜单另有其责）。
   const MAX_DIFF_ROWS = 400;
   interface DiffCandidate {
     code: string;
     id: string; // '' = 当前编辑器
     name: string;
   }
-  let diffLeft: { code: string; name: string } | undefined = $state();
+  let diffOpen = $state(false);
+  let diffLeftId = $state('');
   let diffRightId = $state('');
-  const openDiff = (state: State, name?: string): void => {
-    diffLeft = { code: state.code, name: name ?? '该版本' };
+  const openDiff = (id: string): void => {
+    diffLeftId = id;
     diffRightId = '';
+    diffOpen = true;
   };
   const closeDiff = (): void => {
-    diffLeft = undefined;
+    diffOpen = false;
+    diffLeftId = '';
     diffRightId = '';
   };
+  // 循环 132：反过来看差异（「A → B」改读「B → A」）一键完成
+  const swapDiff = (): void => {
+    [diffLeftId, diffRightId] = [diffRightId, diffLeftId];
+  };
   const diffCandidates = $derived.by<DiffCandidate[]>(() => {
-    if (!diffLeft) {
+    if (!diffOpen) {
       return [];
     }
     return [
@@ -241,10 +248,20 @@
     ];
   });
   // 条目在对话框打开期间被删除时回退到首项（当前编辑器）
-  const diffRight = $derived(
-    diffCandidates.find((candidate) => candidate.id === diffRightId) ?? diffCandidates[0]
-  );
-  const diffRows = $derived(diffLeft && diffRight ? diffLines(diffLeft.code, diffRight.code) : []);
+  const candidateById = (id: string): DiffCandidate | undefined =>
+    diffCandidates.find((candidate) => candidate.id === id) ?? diffCandidates[0];
+  const diffLeft = $derived(candidateById(diffLeftId));
+  const diffRight = $derived(candidateById(diffRightId));
+  const diffRows = $derived(diffLines(diffLeft?.code ?? '', diffRight?.code ?? ''));
+  // 左侧是历史条目时才可直达恢复（当前编辑器无可恢复对象）
+  const diffLeftEntry = $derived(historyState.entries.find((entry) => entry.id === diffLeftId));
+  const restoreDiffLeft = (): void => {
+    if (!diffLeftEntry) {
+      return;
+    }
+    restoreHistoryItem(diffLeftEntry.state, diffLeftEntry.name);
+    closeDiff();
+  };
   const diffStats = $derived.by(() => {
     let added = 0;
     let removed = 0;
@@ -421,7 +438,7 @@
                 variant="ghost"
                 title="与当前对比"
                 aria-label="与当前对比"
-                onclick={() => openDiff(state, name)}>
+                onclick={() => openDiff(id)}>
                 <DifferenceIcon />
               </Button>
               <Button
@@ -490,7 +507,7 @@
 </Card>
 
 <Dialog.Root
-  open={diffLeft !== undefined}
+  open={diffOpen}
   onOpenChange={(open) => {
     if (!open) {
       closeDiff();
@@ -505,7 +522,7 @@
         · <span class="text-red-600">删 {diffStats.removed}</span>（仅对比图表代码）
       </Dialog.Description>
     </Dialog.Header>
-    <div class="flex items-center gap-2 pb-1 text-xs">
+    <div class="flex flex-wrap items-center gap-2 pb-1 text-xs">
       <label class="text-muted-foreground" for="history-diff-target">对比对象</label>
       <select
         id="history-diff-target"
@@ -516,6 +533,29 @@
           <option value={candidate.id}>{candidate.name}</option>
         {/each}
       </select>
+      <Button
+        size="sm"
+        variant="ghost"
+        class="h-7 px-1.5"
+        data-testid="history-diff-swap"
+        title="对调对比方向"
+        onclick={swapDiff}>
+        <SwapIcon class="size-3.5" />
+        对调
+      </Button>
+      {#if diffLeftEntry}
+        <!-- 对比中发现要的就是旧版：免关闭对话框回列表找条目 -->
+        <Button
+          size="sm"
+          variant="outline"
+          class="h-7 px-1.5"
+          data-testid="history-diff-restore"
+          title="恢复左侧版本到编辑器"
+          onclick={restoreDiffLeft}>
+          <UndoIcon class="size-3.5" />
+          恢复左侧版本
+        </Button>
+      {/if}
     </div>
     <div
       class="max-h-[55vh] overflow-auto rounded border bg-muted/40 p-2 font-mono text-xs"
