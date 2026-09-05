@@ -163,4 +163,39 @@ test.describe('历史版本与当前对比（循环 127）', () => {
     await expect(page.getByText('已复制右版代码')).toBeVisible();
     expect(await page.evaluate(() => navigator.clipboard.readText())).toContain('新增节点');
   });
+
+  test('复制差异行：unified 风格片段，无差异时禁用（循环 139）', async ({
+    page,
+    editPage,
+    context
+  }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    // 收藏 A = 默认图；当前编辑器改为 B = 新图
+    await openHistory(page);
+    await page.getByRole('button', { name: '保存当前状态' }).click();
+    await expect(page.locator('#historyList li')).toHaveCount(1);
+
+    await page.evaluate((c) => navigator.clipboard.writeText(c), 'graph TD\nX[新增节点] --> Y\n');
+    await editPage.editor.click();
+    await page.keyboard.press('Control+KeyA');
+    await page.keyboard.press('Control+V');
+    await expect(editPage.editor).toContainText('新增节点');
+
+    await page.getByRole('button', { name: '与当前对比' }).first().click();
+    const dialog = page.getByTestId('history-diff-dialog');
+    await expect(dialog).toBeVisible();
+
+    // 复制差异：- 旧行 / + 新行（unified 风格）
+    await page.getByTestId('history-diff-copy-diff').click();
+    await expect(page.getByText('已复制差异行')).toBeVisible();
+    const diff = await page.evaluate(() => navigator.clipboard.readText());
+    expect(diff).toContain('- flowchart TD');
+    expect(diff).toContain('+ graph TD');
+    expect(diff).toContain('-     A[圣诞节] -->|拿到压岁钱| B(去购物)');
+
+    // 无差异版本：按钮禁用
+    await page.getByTestId('history-diff-target').selectOption({ index: 1 });
+    await expect(dialog).toContainText('增 0');
+    await expect(page.getByTestId('history-diff-copy-diff')).toBeDisabled();
+  });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { diffLines } from './lineDiff';
+import { diffLines, diffToText } from './lineDiff';
 
 const types = (rows: ReturnType<typeof diffLines>) => rows.map((r) => r.type).join(',');
 const textsOf = (rows: ReturnType<typeof diffLines>, type: 'add' | 'del' | 'same') =>
@@ -49,5 +49,21 @@ describe('diffLines（循环 127：历史与当前对比）', () => {
     const rows = diffLines('old', big);
     expect(textsOf(rows, 'del')).toEqual(['old']);
     expect(textsOf(rows, 'add')).toHaveLength(2100);
+  });
+});
+
+describe('diffToText（循环 139：差异行复制）', () => {
+  it('renders only changed lines with unified prefixes', () => {
+    const text = diffToText(diffLines('a\nold\nb', 'a\nnew\nb'));
+    expect(text).toBe('- old\n+ new');
+  });
+
+  it('keeps diff order and skips context rows', () => {
+    const text = diffToText(diffLines('x\nA', 'x\nB\nC'));
+    expect(text).toBe('- A\n+ B\n+ C');
+  });
+
+  it('returns an empty string for identical inputs', () => {
+    expect(diffToText(diffLines('a\nb', 'a\nb'))).toBe('');
   });
 });

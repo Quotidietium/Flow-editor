@@ -1,7 +1,7 @@
 <script lang="ts">
   import Card from '$lib/components/Card/Card.svelte';
   import type { HistoryEntry, HistoryType, State, Tab } from '$lib/types';
-  import { diffLines } from '$lib/util/lineDiff';
+  import { diffLines, diffToText } from '$lib/util/lineDiff';
   import { notify, prompt } from '$lib/util/notify';
   import { serializeState } from '$lib/util/serde';
   import { inputState, replaceInputState } from '$lib/util/state.svelte';
@@ -287,6 +287,17 @@
     try {
       await navigator.clipboard.writeText(candidate.code);
       notify(`已复制${side}版代码`);
+    } catch {
+      notify('复制失败');
+    }
+  };
+
+  // 复制差异行（unified 风格片段，diffToText）——贴进 issue / 聊天
+  // 说明「改了什么」；无差异时按钮禁用。
+  const copyDiffText = async (): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(diffToText(diffRows));
+      notify('已复制差异行');
     } catch {
       notify('复制失败');
     }
@@ -601,6 +612,15 @@
       {/if}
     </div>
     <div class="flex items-center justify-end gap-2 pt-2">
+      <Button
+        size="sm"
+        variant="outline"
+        data-testid="history-diff-copy-diff"
+        disabled={diffStats.added + diffStats.removed === 0}
+        title="复制差异行（unified 风格：- 旧行 / + 新行）"
+        onclick={() => void copyDiffText()}>
+        复制差异
+      </Button>
       <Button
         size="sm"
         variant="outline"

@@ -58,3 +58,11 @@ export const diffLines = (before: string, after: string): DiffRow[] => {
   }
   return rows;
 };
+
+// 差异行转 unified 风格纯文本（`- 旧行` / `+ 新行`，不含上下文）——
+// 便于直接贴进 issue / 聊天说明「改了什么」。
+export const diffToText = (rows: DiffRow[]): string =>
+  rows
+    .filter((row) => row.type !== 'same')
+    .map((row) => `${row.type === 'add' ? '+' : '-'} ${row.text}`)
+    .join('\n');
