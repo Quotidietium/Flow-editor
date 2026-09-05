@@ -359,7 +359,11 @@
     {#if filteredEntries.length > 0}
       {#each filteredEntries as { id, state, time, name, url, type, kindLabel, openUrl, codePreview } (id)}
         <li class="flex flex-col gap-2">
-          <div class="flex items-center justify-between">
+          <!-- 循环 138：小屏（<sm）名称块与按钮组分两行——6 个图标按钮
+               加 nowrap 时间戳在 390px 内互相挤压（按钮组被列表裁剪）；
+               sm 及以上保持原单行。 -->
+          <div
+            class="flex items-center justify-between max-sm:flex-col max-sm:items-stretch max-sm:gap-2">
             <div class="flex min-w-0 flex-1 flex-col">
               <div class="flex min-w-0 items-center gap-1 overflow-hidden">
                 {#if url}
@@ -429,7 +433,7 @@
               </span>
             </div>
 
-            <div class="flex items-center gap-2">
+            <div class="flex items-center justify-end gap-1 sm:gap-2">
               <span class="text-sm whitespace-nowrap text-primary-foreground/50">
                 {dayjs(time).fromNow()}
               </span>
