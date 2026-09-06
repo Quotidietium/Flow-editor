@@ -404,6 +404,28 @@ test('keyboard +/-/0 zoom the canvas; typing targets untouched', async ({ page }
   await expect(search).toHaveValue('+');
 });
 
+// 画布选中计数（循环 158）：框选/加选准备批量删除、对齐时没有任何数量
+// 反馈——状态行补「已选 N 项」（代码侧状态栏「已选 N 字符」的画布同款）。
+test('selection count appears in the status row and clears with Esc', async ({ page }) => {
+  await openEditor(page);
+  await enterVisual(page);
+  const count = page.getByTestId('visual-selected-count');
+  // 未选中时不占位
+  await expect(count).toHaveCount(0);
+
+  // 单选 A → 已选 1 项；Ctrl+点击加选 B → 已选 2 项
+  await page.locator('[data-node-id="A"]').click();
+  await expect(count).toHaveText('已选 1 项');
+  await page.keyboard.down('Control');
+  await page.locator('[data-node-id="B"]').click();
+  await page.keyboard.up('Control');
+  await expect(count).toHaveText('已选 2 项');
+
+  // Esc 取消选择 → 计数消失
+  await page.keyboard.press('Escape');
+  await expect(count).toHaveCount(0);
+});
+
 test('space+drag pans the canvas', async ({ page }) => {
   await openEditor(page);
   await enterVisual(page);

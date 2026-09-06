@@ -2022,6 +2022,10 @@
     </Button>
     <span class="ml-auto whitespace-nowrap text-muted-foreground">
       {kindSpec.label} · {graph.nodes.length} 节点 · {graph.edges.length} 连线
+      {#if selected.length > 0}
+        <!-- 多选准备批量删除/对齐时的数量反馈（代码侧「已选 N 字符」同款） -->
+        · <span data-testid="visual-selected-count">已选 {selected.length} 项</span>
+      {/if}
       {#if canvasView}
         · <button
           type="button"
