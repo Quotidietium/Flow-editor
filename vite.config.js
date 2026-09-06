@@ -31,8 +31,9 @@ export default defineConfig({
     devtoolsJson()
   ],
   envPrefix: 'MERMAID_',
-  server: { port: 3000, host: true },
-  preview: { port: 3000, host: true },
+  // DEV_PORT：Windows 动态保留端口范围漂移时本机绕开（默认 3000）
+  server: { port: Number(process.env.DEV_PORT) || 3000, host: true },
+  preview: { port: Number(process.env.DEV_PORT) || 3000, host: true },
   // Vitest otherwise resolves Svelte's server build, where $effect is a no-op.
   resolve: process.env.VITEST ? { conditions: ['browser'] } : undefined,
   test: {

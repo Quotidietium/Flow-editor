@@ -637,7 +637,16 @@
            第几行」；add 行无旧号、del 行无新号，留空。 -->
       {#each diffRows.slice(0, MAX_DIFF_ROWS) as row, index (index)}
         <div
-          class="group flex gap-2 whitespace-pre"
+          class="group flex gap-2 whitespace-pre rounded focus-visible:bg-accent/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          tabindex="0"
+          role="button"
+          aria-label="复制此差异行"
+          onkeydown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              void copyDiffRow(row);
+            }
+          }}
           title="{row.oldLine === undefined ? '' : `旧行 ${row.oldLine}`}{row.oldLine !==
             undefined && row.newLine !== undefined
             ? ' · '

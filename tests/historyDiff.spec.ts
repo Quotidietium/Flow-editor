@@ -191,6 +191,14 @@ test.describe('历史版本与当前对比（循环 127）', () => {
     const firstNew = page.getByTestId('history-diff-new-line').first();
     await expect(firstNew).toBeVisible();
 
+    // 差异行键盘可达（循环 146）：聚焦首行按 Enter 复制该行
+    const firstRow = page.locator('[data-testid="history-diff-rows"] > div').first();
+    await firstRow.focus();
+    await page.keyboard.press('Enter');
+    // 同用例稍后还有一次单行复制——两个同名 toast 并存，断言取 first
+    await expect(page.getByText('已复制该行').first()).toBeVisible();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toContain('flowchart TD');
+
     // 复制差异：- 旧行 / + 新行（unified 风格）
     await page.getByTestId('history-diff-copy-diff').click();
     await expect(page.getByText('已复制差异行')).toBeVisible();
@@ -208,7 +216,7 @@ test.describe('历史版本与当前对比（循环 127）', () => {
       .first();
     await targetRow.hover();
     await targetRow.getByTestId('history-diff-copy-row').click();
-    await expect(page.getByText('已复制该行')).toBeVisible();
+    await expect(page.getByText('已复制该行').first()).toBeVisible();
     expect(await page.evaluate(() => navigator.clipboard.readText())).toContain('新增节点');
 
     // 无差异版本：按钮禁用
