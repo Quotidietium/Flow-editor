@@ -2,6 +2,7 @@
   import Card from '$lib/components/Card/Card.svelte';
   import type { HistoryEntry, HistoryType, State, Tab } from '$lib/types';
   import {
+    attachInlineDiff,
     collapseContext,
     diffLines,
     diffToText,
@@ -287,7 +288,11 @@
     diffCandidates.find((candidate) => candidate.id === id) ?? diffCandidates[0];
   const diffLeft = $derived(candidateById(diffLeftId));
   const diffRight = $derived(candidateById(diffRightId));
-  const diffRows = $derived(diffLines(diffLeft?.code ?? '', diffRight?.code ?? ''));
+  // 行内字符级分段（循环 150）随 diffRows 一并派生：segments 仅作展示，
+  // 下游统计/折叠/跳转/复制均只读 type 与 text，不受影响。
+  const diffRows = $derived(
+    attachInlineDiff(diffLines(diffLeft?.code ?? '', diffRight?.code ?? ''))
+  );
   // 上下文折叠（循环 147，GitHub 式）：长段未变行收拢为「已折叠 N 行」
   // 分隔条，点击展开；在 MAX_DIFF_ROWS 截断之后折叠，截断提示语义不变。
   // expandedFolds 记录被点开的 fold 块 key，换对比对象/方向/重开对话框时重置。
@@ -768,8 +773,22 @@
                     ? 'text-red-600'
                     : 'text-transparent'}"
                 >{row.type === 'add' ? '+' : row.type === 'del' ? '−' : ' '}</span>
-              <span class="min-w-0 break-all {row.type === 'same' && 'text-muted-foreground'}"
-                >{row.text === '' ? ' ' : row.text}</span>
+              <span class="min-w-0 break-all {row.type === 'same' && 'text-muted-foreground'}">
+                {#if row.segments}
+                  <!-- 行内字符级高亮（循环 150）：公共前缀/后缀原色，实际
+                       改动的中段按增/删上底色 -->
+                  {#each row.segments as seg, segIndex (segIndex)}
+                    {#if seg.changed}<span
+                        class="rounded-sm {row.type === 'add'
+                          ? 'bg-green-500/25'
+                          : 'bg-red-500/25'}"
+                        data-testid="history-diff-inline-changed">{seg.text}</span
+                      >{:else}{seg.text}{/if}
+                  {/each}
+                {:else}
+                  {row.text === '' ? ' ' : row.text}
+                {/if}
+              </span>
               <!-- 悬停显形的单行复制（循环 145）：same 行同样可复制（「把这行抄走」） -->
               <button
                 type="button"

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { collapseContext, diffLines, diffToText } from './lineDiff';
+import { attachInlineDiff, collapseContext, diffLines, diffToText } from './lineDiff';
 
 const types = (rows: ReturnType<typeof diffLines>) => rows.map((r) => r.type).join(',');
 const textsOf = (rows: ReturnType<typeof diffLines>, type: 'add' | 'del' | 'same') =>
@@ -146,5 +146,60 @@ describe('collapseContext（循环 147：上下文折叠）', () => {
     expect(fold).toBeDefined();
     expect(fold?.rows).toHaveLength(fold?.foldedCount ?? -1);
     expect(fold?.rows.every((r) => r.type === 'same')).toBe(true);
+  });
+});
+
+describe('attachInlineDiff（循环 150：行内字符级差异）', () => {
+  it('pairs a single-line change and splits common prefix/suffix', () => {
+    const rows = attachInlineDiff(diffLines('  N0[节点0]', '  N0[起点改]'));
+    const del = rows.find((r) => r.type === 'del');
+    const add = rows.find((r) => r.type === 'add');
+    expect(del?.segments).toEqual([
+      { changed: false, text: '  N0[' },
+      { changed: true, text: '节点0' },
+      { changed: false, text: ']' }
+    ]);
+    expect(add?.segments).toEqual([
+      { changed: false, text: '  N0[' },
+      { changed: true, text: '起点改' },
+      { changed: false, text: ']' }
+    ]);
+  });
+
+  it('pairs i-th del with i-th add inside a run; unpaired rows stay segmentless', () => {
+    // 2 del + 3 add：前两对配对，第 3 个 add 无配对 → 无 segments。
+    // 「a1→b1」公共后缀是 '1'，变化中段是首字符 a→b。
+    const rows = attachInlineDiff(diffLines('a1\na2', 'b1\nb2\nb3'));
+    const dels = rows.filter((r) => r.type === 'del');
+    const adds = rows.filter((r) => r.type === 'add');
+    expect(dels[0].segments).toEqual([
+      { changed: true, text: 'a' },
+      { changed: false, text: '1' }
+    ]);
+    expect(adds[0].segments).toEqual([
+      { changed: true, text: 'b' },
+      { changed: false, text: '1' }
+    ]);
+    expect(dels[1].segments?.find((s) => s.changed)?.text).toBe('a');
+    expect(adds[1].segments?.find((s) => s.changed)?.text).toBe('b');
+    expect(adds[2].segments).toBeUndefined();
+  });
+
+  it('marks the whole line changed when nothing is common', () => {
+    const rows = attachInlineDiff(diffLines('graph TD', 'sequenceDiagram'));
+    const del = rows.find((r) => r.type === 'del');
+    expect(del?.segments).toEqual([{ changed: true, text: 'graph TD' }]);
+  });
+
+  it('leaves same rows and pure insertions without segments', () => {
+    const rows = attachInlineDiff(diffLines('a\nb', 'a\nX\nb'));
+    expect(rows.find((r) => r.type === 'same')?.segments).toBeUndefined();
+    expect(rows.find((r) => r.type === 'add')?.segments).toBeUndefined();
+  });
+
+  it('does not mutate the input rows', () => {
+    const rows = diffLines('a1', 'b1');
+    attachInlineDiff(rows);
+    expect(rows.every((r) => r.segments === undefined)).toBe(true);
   });
 });

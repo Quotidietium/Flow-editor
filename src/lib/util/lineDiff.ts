@@ -11,6 +11,14 @@ export interface DiffRow {
   oldLine?: number;
   /** 新文件 1-based 行号（del 行无——新文不存在该行） */
   newLine?: number;
+  /** 行内字符级分段（循环 150，仅配对成功的 del/add 行携带） */
+  segments?: DiffSegment[];
+}
+
+/** 行内分段：changed=true 的两行实际不同的中段（公共前缀/后缀为 false）。 */
+export interface DiffSegment {
+  changed: boolean;
+  text: string;
 }
 
 // 2000×2000 = 4M 格，一次性对话框渲染可接受的上限
@@ -70,6 +78,69 @@ export const diffToText = (rows: DiffRow[]): string =>
     .filter((row) => row.type !== 'same')
     .map((row) => `${row.type === 'add' ? '+' : '-'} ${row.text}`)
     .join('\n');
+
+// ===== 行内字符级差异（循环 150）=====
+
+// 两行的公共前缀/后缀剥离：中段即实际改动。前后缀不重叠（p + s 不超过
+// 较短行长度）。中段为空则不产出分段（纯插入/纯删除一侧无中段）。
+const inlinePair = (a: string, b: string): { addSegs: DiffSegment[]; delSegs: DiffSegment[] } => {
+  let p = 0;
+  const maxP = Math.min(a.length, b.length);
+  while (p < maxP && a[p] === b[p]) {
+    p += 1;
+  }
+  let s = 0;
+  while (s < maxP - p && a[a.length - 1 - s] === b[b.length - 1 - s]) {
+    s += 1;
+  }
+  const segs = (text: string): DiffSegment[] => {
+    const out: DiffSegment[] = [];
+    if (p > 0) {
+      out.push({ changed: false, text: text.slice(0, p) });
+    }
+    const mid = text.slice(p, text.length - s);
+    if (mid !== '') {
+      out.push({ changed: true, text: mid });
+    }
+    if (s > 0) {
+      out.push({ changed: false, text: text.slice(text.length - s) });
+    }
+    return out;
+  };
+  return { addSegs: segs(b), delSegs: segs(a) };
+};
+
+/**
+ * 给「del 段紧接 add 段」的配对行附加行内分段（GitHub 式行内高亮）。
+ * 位置配对（第 i 个 del 配第 i 个 add），多余未配对行不附 segments
+ * （整行保留原底色语义）。返回新数组，原 rows 不变。
+ */
+export const attachInlineDiff = (rows: DiffRow[]): DiffRow[] => {
+  const out = rows.map((row) => ({ ...row }));
+  let i = 0;
+  while (i < out.length) {
+    if (out[i].type !== 'del') {
+      i += 1;
+      continue;
+    }
+    let j = i;
+    while (j < out.length && out[j].type === 'del') {
+      j += 1;
+    }
+    let k = j;
+    while (k < out.length && out[k].type === 'add') {
+      k += 1;
+    }
+    const pairs = Math.min(j - i, k - j);
+    for (let t = 0; t < pairs; t += 1) {
+      const { addSegs, delSegs } = inlinePair(out[i + t].text, out[j + t].text);
+      out[i + t].segments = delSegs;
+      out[j + t].segments = addSegs;
+    }
+    i = k;
+  }
+  return out;
+};
 
 // ===== 上下文折叠（循环 147）=====
 

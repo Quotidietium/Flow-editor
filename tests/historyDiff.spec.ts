@@ -335,4 +335,39 @@ test.describe('历史版本与当前对比（循环 127）', () => {
     await expect(pos).toHaveText('2/2');
     await expect.poll(() => container.evaluate((el) => el.scrollTop)).toBeGreaterThan(100);
   });
+
+  test('行内字符级高亮：配对 del/add 行的改动中段上底色（循环 150）', async ({
+    page,
+    editPage
+  }) => {
+    const replaceCode = async (code: string) => {
+      await page.evaluate((c) => navigator.clipboard.writeText(c), code);
+      await editPage.editor.click();
+      await page.keyboard.press('Control+KeyA');
+      await page.keyboard.press('Control+V');
+    };
+    await replaceCode('graph TD\n  N0[节点0]\n  N1[节点1]');
+    await expect(editPage.editor).toContainText('节点0');
+
+    await openHistory(page);
+    await page.getByRole('button', { name: '保存当前状态' }).click();
+    await expect(page.locator('#historyList li')).toHaveCount(1);
+
+    await replaceCode('graph TD\n  N0[起点改]\n  N1[节点1]');
+    await expect(editPage.editor).toContainText('起点改');
+
+    await page.getByRole('button', { name: '与当前对比' }).first().click();
+    const dialog = page.getByTestId('history-diff-dialog');
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText('增 1');
+    await expect(dialog).toContainText('删 1');
+
+    // 行内分段：del 行中段「节点0」、add 行中段「起点改」上底色；
+    // 公共前缀「  N0[」原样保留在段外
+    const changed = page.getByTestId('history-diff-inline-changed');
+    await expect(changed).toHaveCount(2);
+    await expect(changed.nth(0)).toHaveText('节点0');
+    await expect(changed.nth(1)).toHaveText('起点改');
+    await expect(dialog).toContainText('N0[');
+  });
 });
