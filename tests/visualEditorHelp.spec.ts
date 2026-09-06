@@ -18,7 +18,9 @@ test.describe('可视化编辑器快捷键帮助', () => {
     await expect(dialog).toContainText('Ctrl + 滚轮');
     // 循环 84/64/87 补的捏合/搜索/表单 Enter 已同步进帮助（防漂移）
     await expect(dialog).toContainText('双指捏合');
-    await expect(dialog).toContainText('居中并选中首个命中');
+    // 循环 153：Enter 循环命中 + Shift+Enter 上一个
+    await expect(dialog).toContainText('居中并选中命中（重复按循环下一个）');
+    await expect(dialog).toContainText('上一个命中');
     await expect(dialog).toContainText('直接提交');
 
     // 关闭按钮收起对话框

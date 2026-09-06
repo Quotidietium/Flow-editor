@@ -34,6 +34,54 @@ test.describe('画布节点搜索', () => {
     expect(await page.locator('[data-node-id][opacity="0.25"]').count()).toBe(0);
   });
 
+  // 循环 153：Enter 不再只定位首个命中——重复按循环前进、Shift+Enter 后退，
+  // 两端回卷；读数显示「当前/总数」；查询变化即复位位置。
+  test('Enter/Shift+Enter 循环命中并显示位置读数', async ({ page }) => {
+    await page.goto('/edit');
+    // 默认图各标签无公共子串——自定义三命中图（Monaco 隐藏时不接受
+    // 剪贴板粘贴，进可视化之前先改码）
+    const editor = page.locator('.monaco-editor');
+    await editor.click();
+    await page.evaluate(
+      (c) => navigator.clipboard.writeText(c),
+      'flowchart TD\n  A[苹果一] --> B[苹果二]\n  B --> C[苹果三]'
+    );
+    await page.keyboard.press('Control+KeyA');
+    await page.keyboard.press('Control+KeyV');
+    await expect(editor).toContainText('苹果一');
+    await page.getByTestId('visual-tab').click();
+    await expect(page.getByTestId('visual-canvas')).toBeVisible();
+
+    const search = page.getByTestId('visual-canvas-search');
+    const count = page.getByTestId('visual-canvas-search-count');
+    await search.fill('苹果');
+    await expect(count).toHaveText('3 匹配');
+
+    // 选中态 = 节点描边加粗（stroke-width 2.5），随循环逐节点迁移
+    const selectedStroke = (id: string) =>
+      page.locator(`[data-node-id="${id}"] [stroke-width="2.5"]`);
+    await search.press('Enter');
+    await expect(count).toHaveText('1/3 匹配');
+    await expect(selectedStroke('A')).toHaveCount(1);
+    await search.press('Enter');
+    await expect(count).toHaveText('2/3 匹配');
+    await expect(selectedStroke('B')).toHaveCount(1);
+    await search.press('Enter');
+    await expect(count).toHaveText('3/3 匹配');
+    await expect(selectedStroke('C')).toHaveCount(1);
+    // 到底回卷到首个
+    await search.press('Enter');
+    await expect(count).toHaveText('1/3 匹配');
+    await expect(selectedStroke('A')).toHaveCount(1);
+    // Shift+Enter 后退（从 1 回卷到 3）
+    await search.press('Shift+Enter');
+    await expect(count).toHaveText('3/3 匹配');
+    await expect(selectedStroke('C')).toHaveCount(1);
+    // 查询变化复位位置读数
+    await search.fill('苹果三');
+    await expect(count).toHaveText('1 匹配');
+  });
+
   test('Enter 滚动居中并选中首个命中（节点操作即刻可用）', async ({ page }) => {
     await page.goto('/edit');
     await page.getByTestId('visual-tab').click();

@@ -160,7 +160,8 @@
       items: [
         { desc: '聚焦当前视图搜索框（画布/看板/时序/大纲/表格）', keys: 'Ctrl+F' },
         { desc: '命中保持 / 非命中降透明', keys: '搜索框输入' },
-        { desc: '居中并选中首个命中', keys: 'Enter' },
+        { desc: '居中并选中命中（重复按循环下一个）', keys: 'Enter' },
+        { desc: '上一个命中', keys: 'Shift + Enter' },
         { desc: '清空搜索', keys: 'Esc' }
       ]
     },
@@ -294,6 +295,11 @@
     )
   );
   const canvasHitCount = $derived(canvasQueryLower === '' ? 0 : canvasHitIds.size);
+  // Enter 循环命中（循环 153）：命中列表按节点顺序排列，光标 -1 = 未定位，
+  // 首个 Enter 落第一个命中（保持循环 65 语义），继续按前进、Shift+Enter
+  // 后退，两端回卷；输入变化即复位（见搜索框 oninput）。
+  const canvasHitList = $derived(graph.nodes.filter((n) => canvasHitIds.has(n.id)));
+  let searchCursor = $state(-1);
 
   // 搜索 Enter：滚动居中首个命中并选中（定位 = 看见 + 到达），
   // 选中后形状/类型/属性等节点操作即刻可用。
@@ -1817,13 +1823,23 @@
         data-testid="visual-canvas-search"
         bind:this={canvasSearchEl}
         bind:value={canvasQuery}
+        oninput={() => (searchCursor = -1)}
         onkeydown={(e) => {
+          // 输入法组词中的 Enter/Esc 是候选确认/取消，不触发定位与清空
+          if (e.isComposing || e.keyCode === 229) {
+            return;
+          }
           if (e.key === 'Escape') {
             canvasQuery = '';
           } else if (e.key === 'Enter') {
-            const first = graph.nodes.find((n) => canvasHitIds.has(n.id));
-            if (first) {
-              centerOnNode(first);
+            const hits = canvasHitList;
+            if (hits.length > 0) {
+              const delta = e.shiftKey ? -1 : 1;
+              searchCursor = (searchCursor + delta + hits.length) % hits.length;
+              const next = hits[searchCursor];
+              if (next) {
+                centerOnNode(next);
+              }
             }
           }
         }} />
@@ -1834,7 +1850,7 @@
           {#if canvasHitCount === 0}
             无匹配（Esc 清除）
           {:else}
-            {canvasHitCount} 匹配
+            {searchCursor >= 0 ? `${searchCursor + 1}/` : ''}{canvasHitCount} 匹配
           {/if}
         </span>
       {/if}
