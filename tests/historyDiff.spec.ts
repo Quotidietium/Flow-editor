@@ -199,6 +199,18 @@ test.describe('历史版本与当前对比（循环 127）', () => {
     expect(diff).toContain('+ graph TD');
     expect(diff).toContain('-     A[圣诞节] -->|拿到压岁钱| B(去购物)');
 
+    // 悬停单行复制（循环 145）：行原样进剪贴板（不带 +/- 前缀）——
+    // 复制钮 hover 显形，先悬停所在行再点（选含「新增节点」的 add 行，
+    // 末行是空行——粘贴串以换行结尾会产生空行行）
+    const targetRow = page
+      .locator('[data-testid="history-diff-rows"] > div')
+      .filter({ hasText: '新增节点' })
+      .first();
+    await targetRow.hover();
+    await targetRow.getByTestId('history-diff-copy-row').click();
+    await expect(page.getByText('已复制该行')).toBeVisible();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toContain('新增节点');
+
     // 无差异版本：按钮禁用
     await page.getByTestId('history-diff-target').selectOption({ index: 1 });
     await expect(dialog).toContainText('增 0');

@@ -1,7 +1,7 @@
 <script lang="ts">
   import Card from '$lib/components/Card/Card.svelte';
   import type { HistoryEntry, HistoryType, State, Tab } from '$lib/types';
-  import { diffLines, diffToText } from '$lib/util/lineDiff';
+  import { diffLines, diffToText, type DiffRow } from '$lib/util/lineDiff';
   import { notify, prompt } from '$lib/util/notify';
   import { serializeState } from '$lib/util/serde';
   import { inputState, replaceInputState } from '$lib/util/state.svelte';
@@ -12,6 +12,7 @@
   import BookmarkIcon from '~icons/material-symbols/bookmark-outline-rounded';
   import BookmarkAddIcon from '~icons/material-symbols/bookmark-add-outline-rounded';
   import CloseIcon from '~icons/material-symbols/close-rounded';
+  import CopyIcon from '~icons/material-symbols/content-copy-outline-rounded';
   import DifferenceIcon from '~icons/material-symbols/difference-rounded';
   import LinkIcon from '~icons/material-symbols/link-rounded';
   import SwapIcon from '~icons/material-symbols/swap-horiz-rounded';
@@ -323,6 +324,16 @@
       notify('复制失败');
     }
   };
+
+  // 单行复制（循环 145）：悬停显形——把某一行配置/节点原样抄走。
+  const copyDiffRow = async (row: DiffRow): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(row.text);
+      notify('已复制该行');
+    } catch {
+      notify('复制失败');
+    }
+  };
 </script>
 
 <Card onselect={tabSelectHandler} isOpen isClosable={false} {tabs} activeTabID={historyState.mode}>
@@ -626,7 +637,7 @@
            第几行」；add 行无旧号、del 行无新号，留空。 -->
       {#each diffRows.slice(0, MAX_DIFF_ROWS) as row, index (index)}
         <div
-          class="flex gap-2 whitespace-pre"
+          class="group flex gap-2 whitespace-pre"
           title="{row.oldLine === undefined ? '' : `旧行 ${row.oldLine}`}{row.oldLine !==
             undefined && row.newLine !== undefined
             ? ' · '
@@ -646,6 +657,16 @@
             >{row.type === 'add' ? '+' : row.type === 'del' ? '−' : ' '}</span>
           <span class="min-w-0 break-all {row.type === 'same' && 'text-muted-foreground'}"
             >{row.text === '' ? ' ' : row.text}</span>
+          <!-- 悬停显形的单行复制（循环 145）：same 行同样可复制（「把这行抄走」） -->
+          <button
+            type="button"
+            class="shrink-0 rounded p-0.5 opacity-0 transition-opacity hover:bg-accent hover:opacity-100 focus-visible:opacity-100 group-hover:opacity-100"
+            title="复制此行"
+            aria-label="复制此行"
+            data-testid="history-diff-copy-row"
+            onclick={() => void copyDiffRow(row)}>
+            <CopyIcon class="size-3" />
+          </button>
         </div>
       {/each}
       {#if diffRows.length > MAX_DIFF_ROWS}

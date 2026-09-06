@@ -140,3 +140,27 @@ test.describe('/view 只读页', () => {
     expect(clipboardTypes).toContain('image/png');
   });
 });
+
+test.describe('/view 只读页·移动端（循环 145）', () => {
+  test.use({ viewport: { height: 844, width: 390 } });
+
+  test('更多菜单里的复制图像项可用', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await page.goto('/edit');
+    await page.waitForURL(/#pako:/);
+    const viewUrl = page.url().replace('/edit', '/view');
+    await page.goto(viewUrl);
+    await expect(page.locator('#container')).toContainText('圣诞节', { timeout: 15_000 });
+
+    // 桌面显式钮不渲染（sm:inline-flex 隐藏），经「更多」菜单触发
+    await expect(page.getByTestId('view-copy-image')).not.toBeVisible();
+    await page.getByTestId('view-actions-menu').click();
+    await page.getByRole('button', { name: '复制图像' }).click();
+    await expect(page.getByText('已复制图像到剪贴板')).toBeVisible();
+    const clipboardTypes = await page.evaluate(async () => {
+      const items = await navigator.clipboard.read();
+      return items.flatMap((item) => item.types);
+    });
+    expect(clipboardTypes).toContain('image/png');
+  });
+});
