@@ -472,6 +472,45 @@ test('creating a link opens its label editor immediately (Enter commits, Esc ski
   await expect(codeOut).toContainText('N2 --> N1');
 });
 
+test('linking over a valid target highlights it as drop affordance', async ({ page }) => {
+  await openEditor(page);
+  const codeOut = await enterVisual(page);
+  await page.getByTestId('visual-clear').click();
+
+  const box = await canvasBox(page);
+  await addNode(page, box.x + 200, box.y + 200, 'Src');
+  await addNode(page, box.x + 560, box.y + 200, 'Dst');
+
+  const s = await page.locator('[data-node-id="N1"]').boundingBox();
+  const d = await page.locator('[data-node-id="N2"]').boundingBox();
+  if (!s || !d) {
+    throw new Error('nodes missing');
+  }
+  await page.mouse.click(s.x + 20, s.y + 10);
+  await page.mouse.move(s.x + s.width, s.y + s.height / 2); // 右侧连线圆点
+  await page.mouse.down();
+
+  // 悬停空白：无落点高亮
+  await page.mouse.move(box.x + 380, box.y + 200, { steps: 4 });
+  await expect(page.getByTestId('visual-link-hover')).toHaveCount(0);
+
+  // 悬停目标节点：高亮圈出现
+  await page.mouse.move(d.x + d.width / 2, d.y + d.height / 2, { steps: 4 });
+  await expect(page.getByTestId('visual-link-hover')).toBeVisible();
+
+  // 悬停回源节点：自身不是合法目标，高亮消失
+  await page.mouse.move(s.x + s.width / 2, s.y + s.height / 2, { steps: 4 });
+  await expect(page.getByTestId('visual-link-hover')).toHaveCount(0);
+
+  // 拖到目标松手：连线落地（循环 159 的标签框随之弹出，Esc 收掉）
+  await page.mouse.move(d.x + d.width / 2, d.y + d.height / 2, { steps: 4 });
+  await expect(page.getByTestId('visual-link-hover')).toBeVisible();
+  await page.mouse.up();
+  await expect(codeOut).toContainText('N1 --> N2');
+  await expect(page.getByTestId('visual-link-hover')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+});
+
 test('space+drag pans the canvas', async ({ page }) => {
   await openEditor(page);
   await enterVisual(page);

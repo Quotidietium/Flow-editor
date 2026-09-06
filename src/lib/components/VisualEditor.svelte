@@ -1721,6 +1721,18 @@
     };
   });
 
+  // 连线拖拽的落点反馈：悬停合法目标节点时给高亮圈——此前能否连上
+  // 全看出线后松手的结果。合法性口径与落点判定一致（排除自身与
+  // stateDiagram 伪节点禁连）。
+  const linkHoverId = $derived.by(() => {
+    if (!linking) return undefined;
+    const target = nodeAt(linking.cursor);
+    if (!target || target.id === linking.source || isBlockedStateLink(linking.source, target)) {
+      return undefined;
+    }
+    return target.id;
+  });
+
   const marqueeRect = $derived.by(() => {
     if (!marquee) return undefined;
     return {
@@ -2366,6 +2378,21 @@
                   {/if}
                 {/if}
               </g>
+              {#if linkHoverId === node.id}
+                {@const hoverSize = nodeSize(node)}
+                <rect
+                  data-testid="visual-link-hover"
+                  x={node.x - 4}
+                  y={node.y - 4}
+                  width={hoverSize.w + 8}
+                  height={hoverSize.h + 8}
+                  rx="10"
+                  fill="none"
+                  stroke="var(--primary)"
+                  stroke-width="2"
+                  stroke-dasharray="5 3"
+                  style="pointer-events: none;" />
+              {/if}
               {#if isSelected && canLink && selectedNodeIds.size === 1}
                 {#each handles(node) as handle (handle.key)}
                   <circle
