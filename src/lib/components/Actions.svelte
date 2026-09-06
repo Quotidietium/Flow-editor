@@ -353,6 +353,16 @@ ${svgString}`);
 
   let exportOpen = $state(false);
   let exportRef: HTMLDivElement | undefined = $state();
+  // 再次导出（循环 154）：菜单顶部钉住本会话最近一次导出，一键重复——
+  // 迭代调图连出多张同格式时免翻菜单。会话级（同导出倍数先例）：刷新
+  // 即消失，不替用户跨会话「记住意图」。event 形参在导出链路中从未被
+  // 使用（逐行核实），重放时原样透传本次点击事件即可。
+  let lastExport = $state<{ label: string; run: (event: Event) => void } | undefined>();
+  const trackExport = (label: string, run: (event: Event) => void) => (event: Event) => {
+    exportOpen = false;
+    lastExport = { label, run };
+    run(event);
+  };
   // 下方空间不足时（移动端操作卡贴近视口底，工作区定高无可滚祖先）
   // 菜单改 fixed 门户定位并整体钳入视口；桌面空间充足维持流内原行为。
   let exportPortal = $state<{ height: number; x: number; y: number } | undefined>();
@@ -655,23 +665,30 @@ ${svgString}`);
           use:portalWhenFloating
           data-testid="export-menu-list"
           onpointerdown={(e) => e.stopPropagation()}>
+          {#if lastExport}
+            <button
+              class="flex w-full items-center rounded px-2 py-1 text-left font-medium hover:bg-accent"
+              data-testid="export-again"
+              title="重复上一次导出（本会话内有效）"
+              onclick={(e) => {
+                exportOpen = false;
+                lastExport?.run(e);
+              }}>
+              再次导出：{lastExport.label}
+            </button>
+            <div class="my-1 border-t"></div>
+          {/if}
           <div class="px-2 pt-1 pb-0.5 text-[10px] text-muted-foreground">图像</div>
           <button
             class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
             data-testid="download-PNG"
-            onclick={(e) => {
-              exportOpen = false;
-              void onDownloadPNG(e);
-            }}>
+            onclick={trackExport('PNG 图像', (e) => void onDownloadPNG(e))}>
             PNG 图像
           </button>
           <button
             class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
             data-testid="download-SVG"
-            onclick={() => {
-              exportOpen = false;
-              onDownloadSVG();
-            }}>
+            onclick={trackExport('SVG 矢量图', () => onDownloadSVG())}>
             SVG 矢量图
           </button>
           <button
@@ -686,46 +703,31 @@ ${svgString}`);
           <button
             class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
             data-testid="download-webp"
-            onclick={(e) => {
-              exportOpen = false;
-              void onDownloadWebP(e);
-            }}>
+            onclick={trackExport('WebP 图像', (e) => void onDownloadWebP(e))}>
             WebP 图像
           </button>
           <button
             class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
             data-testid="download-jpeg"
-            onclick={(e) => {
-              exportOpen = false;
-              void onDownloadJPEG(e);
-            }}>
+            onclick={trackExport('JPEG 图像', (e) => void onDownloadJPEG(e))}>
             JPEG 图像
           </button>
           <button
             class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
             data-testid="download-pdf"
-            onclick={(e) => {
-              exportOpen = false;
-              void onDownloadPDF(e);
-            }}>
+            onclick={trackExport('PDF 文档', (e) => void onDownloadPDF(e))}>
             PDF 文档
           </button>
           <div class="my-1 border-t"></div>
           <div class="px-2 pt-1 pb-0.5 text-[10px] text-muted-foreground">文档与数据</div>
           <button
             class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
-            onclick={() => {
-              exportOpen = false;
-              onDownloadMarkdown();
-            }}>
+            onclick={trackExport('Markdown（代码块）', () => onDownloadMarkdown())}>
             Markdown（代码块）
           </button>
           <button
             class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
-            onclick={() => {
-              exportOpen = false;
-              onSaveMmd();
-            }}>
+            onclick={trackExport('Mermaid 源码（.mmd）', () => onSaveMmd())}>
             Mermaid 源码（.mmd）
           </button>
           <button
@@ -739,10 +741,7 @@ ${svgString}`);
           </button>
           <button
             class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
-            onclick={() => {
-              exportOpen = false;
-              onDownloadState();
-            }}>
+            onclick={trackExport('状态文件（.json）', () => onDownloadState())}>
             状态文件（.json）
           </button>
           {#if pluginExportFormats().length > 0}
@@ -753,7 +752,10 @@ ${svgString}`);
             <button
               class="flex w-full items-center rounded px-2 py-1 text-left hover:bg-accent"
               data-testid="plugin-export-{format.id}"
-              onclick={() => runPluginFormat(format.id)}>
+              onclick={() => {
+                lastExport = { label: format.label, run: () => void runPluginFormat(format.id) };
+                void runPluginFormat(format.id);
+              }}>
               {format.label}
             </button>
           {/each}
