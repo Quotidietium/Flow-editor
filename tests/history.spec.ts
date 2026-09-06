@@ -57,7 +57,6 @@ test.describe('History', () => {
     await expect(page.locator('#view')).toContainText('Halloween');
     // 恢复操作给出 toast 反馈（循环 29）
     await expect(page.getByText('已恢复「hollow-art」。')).toBeVisible();
-
     // Switching to the Timeline tab shows the auto entries only.
     await page.getByRole('tab', { name: '时间线' }).click();
     await expect(page.locator('#historyList li')).toHaveCount(2);
@@ -69,6 +68,38 @@ test.describe('History', () => {
 
     await page.getByRole('button', { name: '恢复此版本' }).first().click();
     await expect(page.locator('#view')).toContainText('NewYear');
+  });
+
+  test('相对时间中文化：显示「3 分钟前」而非英文 ago（循环 164）', async ({ page }) => {
+    // dayjs fromNow 走 new Date() 真实时钟（beforeEach 只冻了 Date.now）——
+    // 条目时间按真实当下回拨 3 分钟。
+    const threeMinutesAgo = Date.now() - 3 * 60_000;
+    const recent = [
+      {
+        id: `m-${threeMinutesAgo}`,
+        name: 'recent-fork',
+        type: 'manual',
+        time: threeMinutesAgo,
+        state: {
+          code: 'flowchart TD\n  A[Recent]',
+          mermaid: config,
+          autoSync: true,
+          updateDiagram: false
+        }
+      }
+    ];
+    await page.evaluate(
+      (manual) => localStorage.setItem('manualHistoryStore', manual),
+      JSON.stringify(recent)
+    );
+    await page.reload();
+    await openHistory(page);
+
+    const list = page.locator('#historyList');
+    await expect(list).toContainText('3 分钟前');
+    await expect(list).not.toContainText('ago');
+    // 完整绝对时间仍在悬停 title 上可查
+    await expect(list.locator('span[title]', { hasText: '3 分钟前' })).toHaveCount(1);
   });
 
   test('each entry has a copyable link that opens it in a new tab', async ({ page }) => {

@@ -16,6 +16,7 @@
   import { codePreview } from '$/util/codePreview';
   import { detectDiagramKind, KIND_SPECS } from '$lib/util/visualEditor/model';
   import dayjs from 'dayjs';
+  import 'dayjs/locale/zh-cn';
   import dayjsRelativeTime from 'dayjs/plugin/relativeTime';
   import BookmarkIcon from '~icons/material-symbols/bookmark-outline-rounded';
   import BookmarkAddIcon from '~icons/material-symbols/bookmark-add-outline-rounded';
@@ -52,6 +53,8 @@
   import { SvelteSet } from 'svelte/reactivity';
 
   dayjs.extend(dayjsRelativeTime);
+  // fromNow 默认英文——「3 minutes ago」混入全中文 UI；装上 zh-cn 才出「3 分钟前」。
+  dayjs.locale('zh-cn');
 
   const baseTabs: Tab[] = $derived([
     { id: 'manual', title: `已保存 (${historyCounts.manual})`, icon: BookmarkIcon },
@@ -551,7 +554,9 @@
             </div>
 
             <div class="flex items-center justify-end gap-1 sm:gap-2">
-              <span class="text-sm whitespace-nowrap text-primary-foreground/50">
+              <span
+                class="text-sm whitespace-nowrap text-primary-foreground/50"
+                title={new Date(time).toLocaleString()}>
                 {dayjs(time).fromNow()}
               </span>
               <Button
