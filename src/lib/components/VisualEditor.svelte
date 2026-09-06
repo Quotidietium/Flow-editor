@@ -144,8 +144,8 @@
       views: ['canvas'],
       items: [
         { desc: '平移画布', keys: '空白拖拽 / 空格 + 拖拽' },
-        { desc: '缩放画布', keys: 'Ctrl + 滚轮 / 双指捏合' },
-        { desc: '复位视图', keys: 'Ctrl + H / 点击缩放读数' }
+        { desc: '缩放画布', keys: '+ / -（Ctrl + 滚轮 / 双指捏合）' },
+        { desc: '复位视图', keys: '0 / Ctrl + H / 点击缩放读数' }
       ]
     },
     {
@@ -505,6 +505,16 @@
       canvasEl.scrollLeft = 0;
       canvasEl.scrollTop = 0;
     }
+  };
+
+  // 键盘缩放（循环 156）锚定视口中心——无指针位置可取时的自然锚点，
+  // 步进与 Ctrl+滚轮一致（1.1）。
+  const zoomAtCenter = (factor: number): void => {
+    if (!canvasEl) {
+      return;
+    }
+    const box = canvasEl.getBoundingClientRect();
+    zoomAt(box.left + box.width / 2, box.top + box.height / 2, factor);
   };
 
   const onCanvasWheel = (event: WheelEvent): void => {
@@ -1621,6 +1631,27 @@
       }
       return;
     }
+    // 画布键盘缩放（循环 156）：预览区 +/-/0 同款（循环 148）——纯键盘
+    // 用户此前无法缩放画布（滚轮要 Ctrl、捏合要触屏）。仅画布视图；锚定
+    // 视口中心；0 = 复位（Ctrl+H 的顺手别名）。置于 isTypingTarget 守卫
+    // 之后：输入框里敲 +/- 照常是文本。
+    if (canvasView && !ctrl && !event.altKey) {
+      if (event.key === '+' || event.key === '=') {
+        event.preventDefault();
+        zoomAtCenter(1.1);
+        return;
+      }
+      if (event.key === '-' || event.key === '_') {
+        event.preventDefault();
+        zoomAtCenter(1 / 1.1);
+        return;
+      }
+      if (event.key === '0') {
+        event.preventDefault();
+        resetView();
+        return;
+      }
+    }
     if (
       (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) &&
       selected.length > 0
@@ -1996,7 +2027,7 @@
           type="button"
           class="rounded px-0.5 tabular-nums hover:bg-accent hover:text-foreground"
           data-testid="visual-zoom-reset"
-          title="复位视图缩放（Ctrl+H）"
+          title="复位视图缩放（0 / Ctrl+H）"
           aria-label="复位视图缩放"
           onclick={resetView}>{Math.round(view.k * 100)}%</button>
       {/if}

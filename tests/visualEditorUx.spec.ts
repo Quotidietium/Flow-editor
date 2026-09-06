@@ -378,6 +378,32 @@ test('clicking the canvas zoom readout resets the view', async ({ page }) => {
   await expect(readout).toHaveText('100%');
 });
 
+// 画布键盘缩放（循环 156）：+/- 锚定视口中心缩放（与 Ctrl+滚轮同 1.1
+// 步进）、0 复位（Ctrl+H 别名）；输入框聚焦时守卫不劫持——预览区
+// +/-/0（循环 148）的画布同款。
+test('keyboard +/-/0 zoom the canvas; typing targets untouched', async ({ page }) => {
+  await openEditor(page);
+  await enterVisual(page);
+  const readout = page.getByTestId('visual-zoom-reset');
+  await expect(readout).toHaveText('100%');
+
+  await page.keyboard.press('+');
+  await expect(readout).toHaveText('110%');
+  await page.keyboard.press('-');
+  await expect(readout).toHaveText('100%');
+  await page.keyboard.press('-');
+  await expect(readout).toHaveText('91%');
+  await page.keyboard.press('0');
+  await expect(readout).toHaveText('100%');
+
+  // 输入态守卫：搜索框里敲 + 是文本不是缩放
+  const search = page.getByTestId('visual-canvas-search');
+  await search.click();
+  await search.press('+');
+  await expect(readout).toHaveText('100%');
+  await expect(search).toHaveValue('+');
+});
+
 test('space+drag pans the canvas', async ({ page }) => {
   await openEditor(page);
   await enterVisual(page);
