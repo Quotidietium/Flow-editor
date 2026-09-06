@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { EditorProps, MarkerData } from '$/types';
+  import { editorFontSize } from '$/util/editorFontSize.svelte';
   import { MERMAID_CONFIG_SCHEMA_URI, mermaidConfigSchema } from '$/util/mermaidConfigSchema';
   import { notify } from '$/util/notify';
   import { stripCodeFence } from '$/util/stripCodeFence';
@@ -200,7 +201,22 @@
       resizeObserver.observe(divElement);
     }
 
+    // Ctrl+滚轮调字号（VS Code 肌肉记忆）：写回共享偏好单例，字号菜单读数、
+    // 持久化与 12–20 夹取自动跟随。capture + preventDefault 抢在 Monaco 滚动
+    // 与浏览器整页缩放之前；无 Ctrl 的滚轮照常滚动编辑器。
+    // host 局部常量：bind:this 的 let 在清理闭包里丢失 undefined 收窄。
+    const host = divElement;
+    const onWheelZoom = (event: WheelEvent): void => {
+      if (!event.ctrlKey && !event.metaKey) {
+        return;
+      }
+      event.preventDefault();
+      editorFontSize.step(event.deltaY < 0 ? 1 : -1);
+    };
+    host.addEventListener('wheel', onWheelZoom, { capture: true, passive: false });
+
     return () => {
+      host.removeEventListener('wheel', onWheelZoom, { capture: true });
       resizeObserver.disconnect();
       jsonModel.dispose();
       mermaidModel.dispose();
