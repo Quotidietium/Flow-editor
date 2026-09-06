@@ -7,6 +7,10 @@
 export interface DiffRow {
   text: string;
   type: 'add' | 'del' | 'same';
+  /** 旧文件 1-based 行号（add 行无——旧文不存在该行） */
+  oldLine?: number;
+  /** 新文件 1-based 行号（del 行无——新文不存在该行） */
+  newLine?: number;
 }
 
 // 2000×2000 = 4M 格，一次性对话框渲染可接受的上限
@@ -18,8 +22,8 @@ export const diffLines = (before: string, after: string): DiffRow[] => {
   const b = after === '' ? [] : after.split('\n');
   if (a.length > MAX_LINES || b.length > MAX_LINES) {
     return [
-      ...a.map((text): DiffRow => ({ type: 'del', text })),
-      ...b.map((text): DiffRow => ({ type: 'add', text }))
+      ...a.map((text, index): DiffRow => ({ type: 'del', text, oldLine: index + 1 })),
+      ...b.map((text, index): DiffRow => ({ type: 'add', text, newLine: index + 1 }))
     ];
   }
   const m = a.length;
@@ -37,23 +41,23 @@ export const diffLines = (before: string, after: string): DiffRow[] => {
   let j = 0;
   while (i < m && j < n) {
     if (a[i] === b[j]) {
-      rows.push({ type: 'same', text: a[i] });
+      rows.push({ type: 'same', text: a[i], oldLine: i + 1, newLine: j + 1 });
       i += 1;
       j += 1;
     } else if (lcs[i + 1][j] >= lcs[i][j + 1]) {
-      rows.push({ type: 'del', text: a[i] });
+      rows.push({ type: 'del', text: a[i], oldLine: i + 1 });
       i += 1;
     } else {
-      rows.push({ type: 'add', text: b[j] });
+      rows.push({ type: 'add', text: b[j], newLine: j + 1 });
       j += 1;
     }
   }
   while (i < m) {
-    rows.push({ type: 'del', text: a[i] });
+    rows.push({ type: 'del', text: a[i], oldLine: i + 1 });
     i += 1;
   }
   while (j < n) {
-    rows.push({ type: 'add', text: b[j] });
+    rows.push({ type: 'add', text: b[j], newLine: j + 1 });
     j += 1;
   }
   return rows;

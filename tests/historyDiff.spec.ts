@@ -185,6 +185,12 @@ test.describe('历史版本与当前对比（循环 127）', () => {
     const dialog = page.getByTestId('history-diff-dialog');
     await expect(dialog).toBeVisible();
 
+    // 双行号列（循环 144）：del 行有旧号无新号、add 行有新号无旧号
+    const firstOld = page.getByTestId('history-diff-old-line').first();
+    await expect(firstOld).toHaveText('1');
+    const firstNew = page.getByTestId('history-diff-new-line').first();
+    await expect(firstNew).toBeVisible();
+
     // 复制差异：- 旧行 / + 新行（unified 风格）
     await page.getByTestId('history-diff-copy-diff').click();
     await expect(page.getByText('已复制差异行')).toBeVisible();

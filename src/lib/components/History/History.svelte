@@ -622,8 +622,21 @@
     <div
       class="max-h-[55vh] overflow-auto rounded border bg-muted/40 p-2 font-mono text-xs"
       data-testid="history-diff-rows">
+      <!-- 双行号列（循环 144）：旧文件 | 新文件 1-based 行号，定位「改了
+           第几行」；add 行无旧号、del 行无新号，留空。 -->
       {#each diffRows.slice(0, MAX_DIFF_ROWS) as row, index (index)}
-        <div class="flex gap-2 whitespace-pre">
+        <div
+          class="flex gap-2 whitespace-pre"
+          title="{row.oldLine === undefined ? '' : `旧行 ${row.oldLine}`}{row.oldLine !==
+            undefined && row.newLine !== undefined
+            ? ' · '
+            : ''}{row.newLine === undefined ? '' : `新行 ${row.newLine}`}">
+          <span
+            class="w-9 shrink-0 text-right text-muted-foreground/50 tabular-nums"
+            data-testid="history-diff-old-line">{row.oldLine ?? ''}</span>
+          <span
+            class="w-9 shrink-0 text-right text-muted-foreground/50 tabular-nums"
+            data-testid="history-diff-new-line">{row.newLine ?? ''}</span>
           <span
             class="w-3 shrink-0 text-center {row.type === 'add'
               ? 'text-green-600'

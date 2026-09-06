@@ -44,6 +44,24 @@ describe('diffLines（循环 127：历史与当前对比）', () => {
     expect(textsOf(rows, 'add')).toEqual(['x', 'y']);
   });
 
+  it('annotates 1-based old/new line numbers（循环 144）', () => {
+    const rows = diffLines('a\nold\nb', 'a\nnew1\nnew2\nb');
+    expect(rows[0]).toMatchObject({ type: 'same', oldLine: 1, newLine: 1 });
+    expect(rows[1]).toMatchObject({ type: 'del', oldLine: 2 });
+    expect(rows[1]?.newLine).toBeUndefined();
+    expect(rows[2]).toMatchObject({ type: 'add', newLine: 2 });
+    expect(rows[2]?.oldLine).toBeUndefined();
+    expect(rows[3]).toMatchObject({ type: 'add', newLine: 3 });
+    expect(rows[4]).toMatchObject({ type: 'same', oldLine: 3, newLine: 4 });
+  });
+
+  it('numbers the cap-fallback path too', () => {
+    const rows = diffLines('old', `${'x\n'.repeat(2100)}`);
+    expect(rows[0]?.oldLine).toBe(1);
+    expect(rows[1]?.newLine).toBe(1);
+    expect(rows[2100]?.newLine).toBe(2100);
+  });
+
   it('falls back to whole-block replace over the line cap', () => {
     const big = Array.from({ length: 2100 }, (_, i) => `L${i}`).join('\n');
     const rows = diffLines('old', big);
