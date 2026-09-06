@@ -86,8 +86,8 @@ export interface DiffDisplayBlock {
 
 // 未变行保留为上下文的数量（折叠段每侧各留 N 行）；折叠块少于
 // FOLD_MIN 行时直接显示（太碎的折叠反而干扰）。
-const FOLD_CONTEXT = 3;
-const FOLD_MIN = 4;
+export const FOLD_CONTEXT = 3;
+export const FOLD_MIN = 4;
 
 /**
  * GitHub 式上下文折叠：非差异行两侧各保留 context 行上下文，其余

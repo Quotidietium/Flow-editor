@@ -279,4 +279,60 @@ test.describe('历史版本与当前对比（循环 127）', () => {
     await expect(page.getByTestId('history-diff-fold')).toContainText('已折叠 7 行');
     await expect(dialog).not.toContainText('N4[节点4]');
   });
+
+  test('差异跳转：上一处/下一处循环定位 + 计数（循环 149）', async ({ page, editPage }) => {
+    // 版本 A：graph TD + 40 个节点行；版本 B 把 N0..N9 改 X、N30..N39 改 Y
+    // → 两簇差异，中间 20 行相同折叠（已折叠 14 行），内容远超视口可滚动。
+    const versionA = [
+      'graph TD',
+      ...Array.from({ length: 40 }, (_, i) => `  N${i}[节点${i}]`)
+    ].join('\n');
+    const versionB = versionA
+      .replaceAll(/ {2}N(\d)\[节点\d\]/g, '  X$1[改$1]')
+      .replaceAll(/ {2}N3(\d)\[节点3\d\]/g, '  Y3$1[改3$1]');
+    const replaceCode = async (code: string) => {
+      await page.evaluate((c) => navigator.clipboard.writeText(c), code);
+      await editPage.editor.click();
+      await page.keyboard.press('Control+KeyA');
+      await page.keyboard.press('Control+V');
+    };
+    await replaceCode(versionA);
+    await expect(editPage.editor).toContainText('节点39');
+
+    await openHistory(page);
+    await page.getByRole('button', { name: '保存当前状态' }).click();
+    await expect(page.locator('#historyList li')).toHaveCount(1);
+
+    await replaceCode(versionB);
+    await expect(editPage.editor).toContainText('改39');
+
+    await page.getByRole('button', { name: '与当前对比' }).first().click();
+    const dialog = page.getByTestId('history-diff-dialog');
+    await expect(dialog).toBeVisible();
+    // 两簇差异 + 中段折叠并存
+    await expect(page.getByTestId('history-diff-fold')).toContainText('已折叠 14 行');
+    const pos = page.getByTestId('history-diff-hunk-pos');
+    await expect(pos).toHaveText('0/2');
+    const container = page.getByTestId('history-diff-rows');
+
+    // 下一处 → 第一簇（顶部，容器不滚动）
+    await page.getByTestId('history-diff-next-hunk').click();
+    await expect(pos).toHaveText('1/2');
+    expect(await container.evaluate((el) => el.scrollTop)).toBeLessThan(60);
+
+    // 再下一处 → 第二簇（远在下部，容器滚动居中）
+    await page.getByTestId('history-diff-next-hunk').click();
+    await expect(pos).toHaveText('2/2');
+    await expect.poll(() => container.evaluate((el) => el.scrollTop)).toBeGreaterThan(100);
+
+    // 循环回第一簇（滚动回顶）
+    await page.getByTestId('history-diff-next-hunk').click();
+    await expect(pos).toHaveText('1/2');
+    await expect.poll(() => container.evaluate((el) => el.scrollTop)).toBeLessThan(60);
+
+    // 上一处从第一簇环绕到末簇
+    await page.getByTestId('history-diff-prev-hunk').click();
+    await expect(pos).toHaveText('2/2');
+    await expect.poll(() => container.evaluate((el) => el.scrollTop)).toBeGreaterThan(100);
+  });
 });

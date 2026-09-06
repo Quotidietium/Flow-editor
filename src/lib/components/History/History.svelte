@@ -1,7 +1,14 @@
 <script lang="ts">
   import Card from '$lib/components/Card/Card.svelte';
   import type { HistoryEntry, HistoryType, State, Tab } from '$lib/types';
-  import { collapseContext, diffLines, diffToText, type DiffRow } from '$lib/util/lineDiff';
+  import {
+    collapseContext,
+    diffLines,
+    diffToText,
+    FOLD_CONTEXT,
+    FOLD_MIN,
+    type DiffRow
+  } from '$lib/util/lineDiff';
   import { notify, prompt } from '$lib/util/notify';
   import { serializeState } from '$lib/util/serde';
   import { inputState, replaceInputState } from '$lib/util/state.svelte';
@@ -14,6 +21,8 @@
   import CloseIcon from '~icons/material-symbols/close-rounded';
   import CopyIcon from '~icons/material-symbols/content-copy-outline-rounded';
   import DifferenceIcon from '~icons/material-symbols/difference-rounded';
+  import ChevronUpIcon from '~icons/material-symbols/keyboard-arrow-up-rounded';
+  import ChevronDownIcon from '~icons/material-symbols/keyboard-arrow-down-rounded';
   import LinkIcon from '~icons/material-symbols/link-rounded';
   import SwapIcon from '~icons/material-symbols/swap-horiz-rounded';
   import TrashAltIcon from '~icons/material-symbols/delete-outline-rounded';
@@ -247,18 +256,18 @@
     diffLeftId = id;
     diffRightId = '';
     diffOpen = true;
-    resetFolds();
+    resetDiffView();
   };
   const closeDiff = (): void => {
     diffOpen = false;
     diffLeftId = '';
     diffRightId = '';
-    resetFolds();
+    resetDiffView();
   };
   // 循环 132：反过来看差异（「A → B」改读「B → A」）一键完成
   const swapDiff = (): void => {
     [diffLeftId, diffRightId] = [diffRightId, diffLeftId];
-    resetFolds();
+    resetDiffView();
   };
   const diffCandidates = $derived.by<DiffCandidate[]>(() => {
     if (!diffOpen) {
@@ -291,8 +300,40 @@
       expandedFolds.add(key);
     }
   };
-  const resetFolds = (): void => {
+  // 差异跳转（循环 149）：差异簇锚点——diff 行之间隔着 ≥HUNK_GAP 行
+  // 相同行才算两「处」（与折叠阈值同源：小于该间隙的簇在展示上本就
+  // 相邻、无折叠分隔）。上一处/下一处循环跳转并居中——折叠后差异簇在
+  // 长文里相距甚远，滚动寻找费时。游标初始 -1：首个「下一处」落在第一处。
+  const HUNK_GAP = 2 * FOLD_CONTEXT + FOLD_MIN;
+  const diffHunkAnchors = $derived.by(() => {
+    const anchors: number[] = [];
+    let lastDiff = -HUNK_GAP;
+    diffRows.slice(0, MAX_DIFF_ROWS).forEach((row, index) => {
+      if (row.type === 'same') {
+        return;
+      }
+      if (index - lastDiff >= HUNK_GAP) {
+        anchors.push(index);
+      }
+      lastDiff = index;
+    });
+    return anchors;
+  });
+  let diffHunkCursor = $state(-1);
+  let diffRowsEl: HTMLDivElement | undefined = $state();
+  const jumpDiffHunk = (direction: 1 | -1): void => {
+    const anchors = diffHunkAnchors;
+    if (anchors.length === 0) {
+      return;
+    }
+    diffHunkCursor = (diffHunkCursor + direction + anchors.length) % anchors.length;
+    diffRowsEl
+      ?.querySelector(`[data-diff-row="${anchors[diffHunkCursor]}"]`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+  const resetDiffView = (): void => {
     expandedFolds.clear();
+    diffHunkCursor = -1;
   };
   // 左侧是历史条目时才可直达恢复（当前编辑器无可恢复对象）
   const diffLeftEntry = $derived(historyState.entries.find((entry) => entry.id === diffLeftId));
@@ -621,7 +662,7 @@
         class="h-7 rounded border bg-background px-1"
         data-testid="history-diff-target"
         bind:value={diffRightId}
-        onchange={resetFolds}>
+        onchange={resetDiffView}>
         {#each diffCandidates as candidate (candidate.id)}
           <option value={candidate.id}>{candidate.name}</option>
         {/each}
@@ -649,10 +690,39 @@
           恢复左侧版本
         </Button>
       {/if}
+      {#if diffHunkAnchors.length > 0}
+        <!-- 差异跳转（循环 149）：折叠后差异簇相距甚远，循环跳转居中 -->
+        <span class="ml-auto flex items-center gap-0.5">
+          <Button
+            size="sm"
+            variant="ghost"
+            class="h-7 px-1.5"
+            data-testid="history-diff-prev-hunk"
+            title="上一处差异"
+            aria-label="上一处差异"
+            onclick={() => jumpDiffHunk(-1)}>
+            <ChevronUpIcon class="size-3.5" />
+          </Button>
+          <span
+            class="min-w-9 text-center text-muted-foreground tabular-nums"
+            data-testid="history-diff-hunk-pos">{diffHunkCursor + 1}/{diffHunkAnchors.length}</span>
+          <Button
+            size="sm"
+            variant="ghost"
+            class="h-7 px-1.5"
+            data-testid="history-diff-next-hunk"
+            title="下一处差异"
+            aria-label="下一处差异"
+            onclick={() => jumpDiffHunk(1)}>
+            <ChevronDownIcon class="size-3.5" />
+          </Button>
+        </span>
+      {/if}
     </div>
     <div
       class="max-h-[55vh] overflow-auto rounded border bg-muted/40 p-2 font-mono text-xs"
-      data-testid="history-diff-rows">
+      data-testid="history-diff-rows"
+      bind:this={diffRowsEl}>
       <!-- 双行号列（循环 144）：旧文件 | 新文件 1-based 行号，定位「改了
            第几行」；add 行无旧号、del 行无新号，留空。
            循环 147：按 collapseContext 块渲染——长段未变行收拢为折叠
@@ -671,6 +741,7 @@
           {#each block.rows as row, rowIndex (block.key + rowIndex)}
             <div
               class="group flex gap-2 whitespace-pre rounded focus-visible:bg-accent/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              data-diff-row={block.key + rowIndex}
               tabindex="0"
               role="button"
               aria-label="复制此差异行"
