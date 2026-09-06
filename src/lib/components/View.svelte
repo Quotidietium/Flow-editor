@@ -3,6 +3,7 @@
   import { recordRenderTime, shouldRefreshView } from '$/util/autoSync';
   import { PanZoomState } from '$/util/panZoom';
   import { previewPause } from '$/util/previewPause.svelte';
+  import { renderedContentSize } from '$/util/renderedSize.svelte';
   import { previewBgClass } from '$/util/previewBackground';
   import { previewBackground } from '$/util/previewBackground.svelte';
   import { renderAndPlaceDiagram } from '$/util/renderView';
@@ -102,6 +103,16 @@
         }
         if (disposed) {
           return;
+        }
+        // 导出尺寸预估（循环 152）读这里：记录最近成功渲染的内容尺寸。
+        // 必须在 handlePanZoom 之前读——svg-pan-zoom 初始化会摘掉 viewBox
+        // 属性（探针实证 panZoom 后 baseVal 变 0×0），渲染刚落地时它还在。
+        // 渲染失败不写——画面挂着旧图，预估针对的正是它。
+        if (graphDiv) {
+          const vb = graphDiv.viewBox?.baseVal;
+          renderedContentSize.set(
+            vb && vb.width > 0 && vb.height > 0 ? { height: vb.height, width: vb.width } : undefined
+          );
         }
         if (graphDiv && state.panZoom) {
           handlePanZoom(state, graphDiv);

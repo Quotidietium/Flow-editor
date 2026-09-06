@@ -9,6 +9,7 @@
   import { exportCanvasSize } from '$/util/fileIO';
   import { notify } from '$/util/notify';
   import { previewPause } from '$/util/previewPause.svelte';
+  import { renderedContentSize } from '$/util/renderedSize.svelte';
   import { readJSON, writeJSON } from '$/util/persist.svelte';
   import { buildExportFileName, downloadTextFile, markdownOf, stateFileOf } from '$/util/fileIO';
   import { openFileIntoEditor } from '$/util/loadFile';
@@ -492,6 +493,18 @@ ${svgString}`);
   // 导出倍数（1–4x 清晰位图，仅光栅格式）：会话级状态——持久化一个
   // 被遗忘的 4x 会在下次会话产出意料之外的巨型文件。
   let exportScale = $state(1);
+
+  // 位图尺寸预估（循环 152）：与导出同走 exportCanvasSize（含钳取与
+  // 倍数），内容尺寸取预览最近成功渲染的 viewBox——「导出前就知道
+  // 像素」，设宽度档不再盲猜另一边。渲染失败时预估随旧图保留（与
+  // 实际可导出的画面一致）；从未渲染过则不显示。
+  const exportEstimate = $derived.by(() => {
+    const content = renderedContentSize.current;
+    if (!content) {
+      return undefined;
+    }
+    return exportCanvasSize(imageSizeMode, imageSize, content.width, content.height, exportScale);
+  });
 </script>
 
 <svelte:window
@@ -564,6 +577,14 @@ ${svgString}`);
           {scale}x
         </button>
       {/each}
+      {#if exportEstimate}
+        <!-- 位图输出预估（PNG/WebP/JPG 同一画布；PDF 亦按此嵌图） -->
+        <span
+          class="ml-auto text-xs text-muted-foreground tabular-nums"
+          data-testid="export-size-estimate"
+          title="按当前档位与倍数预估的输出像素（同实际导出算法）"
+          >输出约 {exportEstimate.width} × {exportEstimate.height} px</span>
+      {/if}
     </div>
     <Input
       class="h-8"
