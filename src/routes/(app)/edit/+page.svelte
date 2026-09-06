@@ -43,6 +43,8 @@
   import { onMount, untrack } from 'svelte';
   import CodeIcon from '~icons/custom/code';
   import DataObjectIcon from '~icons/material-symbols/data-object-rounded';
+  import EyeIcon from '~icons/material-symbols/visibility-rounded';
+  import EyeOffIcon from '~icons/material-symbols/visibility-off-rounded';
   import HistoryIcon from '~icons/material-symbols/history';
   import BackIcon from '~icons/material-symbols/arrow-back-rounded';
   import DarkModeIcon from '~icons/material-symbols/dark-mode-rounded';
@@ -125,7 +127,13 @@
   // 免拖分隔条）。会话级开关——被遗忘的专注=「编辑器不见了」的迷惑，
   // 刷新即回（与预览暂停同先例）；移动端滑屏布局本就整屏切换，不参与。
   let focusMode = $state(false);
+  // 代码专注（循环 143，与预览专注对称）：收起右栏预览区，编辑区占满
+  // 工作区沉浸写代码。两态互斥（同时收起只剩工具栏无意义）——互斥在
+  // 两处切换回调里互清（本态翻转由 Toggle 的 bind/onPressedChange 完成，
+  // 不能再用 onclick 叠加翻转：双翻转回原值）。
+  let codeFocus = $state(false);
   const isFocus = $derived(focusMode && !isMobile);
+  const isCodeFocus = $derived(codeFocus && !isMobile);
 
   // 拖拽文件进工作区直接打开（与「打开」按钮同走 loadFileIntoEditor：
   // 插件导入钩子优先、输入转换管道、配置安全门）。挂在 window 而非容器
@@ -257,7 +265,14 @@
         fullScreenHref={urls.current.view}
         showPauseToggle
         focusActive={isFocus}
-        onToggleFocus={() => (focusMode = !focusMode)} />
+        onToggleFocus={() => {
+          focusMode = !focusMode;
+          // 两态互斥：预览专注（收编辑栏）与代码专注（收预览栏）同时
+          // 开启只剩工具栏区，无意义——开一态时清另一态。
+          if (focusMode) {
+            codeFocus = false;
+          }
+        }} />
     </div>
     <div class="absolute right-0 bottom-0"><VersionSecurityToolbar /></div>
     <div class="absolute bottom-0 left-0 sm:left-5"><SyncRoughToolbar /></div>
@@ -363,6 +378,30 @@
                     aria-label="小地图">
                     <MinimapIcon />
                   </Toggle>
+                  <!-- 代码专注（循环 143）：收起右栏预览区，编辑区占满——与
+                       预览专注对称补全沉浸双向。会话级；两态互斥（此钮开启
+                       时自动退预览专注）。注意：pressed 走 bind 双向，互斥
+                       逻辑放 onPressedChange——再叠 onclick 翻转会双翻转
+                       回原值（间歇性「点了没反应」实证）。 -->
+                  <Toggle
+                    bind:pressed={codeFocus}
+                    size="sm"
+                    data-testid="code-focus"
+                    title={codeFocus ? '显示预览' : '专注编辑（收起预览区）'}
+                    aria-label={codeFocus ? '显示预览' : '专注编辑'}
+                    aria-pressed={codeFocus}
+                    class="hidden sm:inline-flex"
+                    onPressedChange={(pressed) => {
+                      if (pressed) {
+                        focusMode = false;
+                      }
+                    }}>
+                    {#if codeFocus}
+                      <EyeOffIcon />
+                    {:else}
+                      <EyeIcon />
+                    {/if}
+                  </Toggle>
                   {#if validatedState.current.editorMode === 'config'}
                     <Button
                       size="sm"
@@ -400,32 +439,34 @@
             title="拖拽调整宽度 · 双击复位"
             ondblclick={() => editorPane?.resize(30)} />
         {/if}
-        <Resizable.Pane minSize={15} class="relative flex h-full flex-1 flex-col overflow-hidden">
-          {#if visualMode}
-            <div class="flex h-full min-h-0 w-full">
-              <div class="min-h-0 min-w-0 flex-1">
-                <VisualEditor
-                  active={visualMode}
-                  compareOpen={visualCompare}
-                  onToggleCompare={() => (visualCompare = !visualCompare)} />
-              </div>
-              {#if visualCompare}
-                <div
-                  class="relative hidden min-h-0 min-w-0 flex-1 flex-col border-l sm:flex"
-                  data-testid={TID.visualPreview}>
-                  <div class="flex-none border-b px-2 py-1 text-xs text-muted-foreground">
-                    预览（Mermaid 渲染）
-                  </div>
-                  <div class="relative min-h-0 flex-1 overflow-hidden">
-                    {@render viewPane()}
-                  </div>
+        {#if !isCodeFocus}
+          <Resizable.Pane minSize={15} class="relative flex h-full flex-1 flex-col overflow-hidden">
+            {#if visualMode}
+              <div class="flex h-full min-h-0 w-full">
+                <div class="min-h-0 min-w-0 flex-1">
+                  <VisualEditor
+                    active={visualMode}
+                    compareOpen={visualCompare}
+                    onToggleCompare={() => (visualCompare = !visualCompare)} />
                 </div>
-              {/if}
-            </div>
-          {:else}
-            {@render viewPane()}
-          {/if}
-        </Resizable.Pane>
+                {#if visualCompare}
+                  <div
+                    class="relative hidden min-h-0 min-w-0 flex-1 flex-col border-l sm:flex"
+                    data-testid={TID.visualPreview}>
+                    <div class="flex-none border-b px-2 py-1 text-xs text-muted-foreground">
+                      预览（Mermaid 渲染）
+                    </div>
+                    <div class="relative min-h-0 flex-1 overflow-hidden">
+                      {@render viewPane()}
+                    </div>
+                  </div>
+                {/if}
+              </div>
+            {:else}
+              {@render viewPane()}
+            {/if}
+          </Resizable.Pane>
+        {/if}
         {#if isHistoryOpen && !isMobile}
           <Resizable.Handle class="ml-1 hidden opacity-0 sm:block" />
           <Resizable.Pane minSize={15} defaultSize={30} class="hidden h-full grow flex-col sm:flex">
