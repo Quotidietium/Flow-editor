@@ -249,10 +249,14 @@
 {/snippet}
 
 <Popover.Root>
-  <Popover.Trigger class="shrink-0">
+  <Popover.Trigger class="shrink-0" aria-label="主菜单" title="主菜单">
     <MenuIcon class="size-6" />
   </Popover.Trigger>
-  <Popover.Content align="start" class="flex flex-col overflow-hidden border-2 p-0" sideOffset={16}>
+  <Popover.Content
+    align="start"
+    class="flex flex-col overflow-hidden border-2 p-0"
+    data-testid="main-menu-content"
+    sideOffset={16}>
     {#each menuItems as { renderer, ...item } (item.label)}
       {@render renderer(item)}
     {/each}

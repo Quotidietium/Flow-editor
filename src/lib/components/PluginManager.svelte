@@ -182,7 +182,14 @@
   <Dialog.Content
     class="max-h-[90vh] overflow-y-auto sm:max-w-2xl"
     data-testid={TID.pluginManager}
-    onkeydown={(e) => e.stopPropagation()}>
+    onkeydown={(e) => {
+      // Escape 必须冒泡给 bits-ui 的图层栈——就地拦截会让对话框 Esc
+      // 关不掉（循环 155 探针实证）。其余键照常拦截，防穿透到应用级
+      // 窗口快捷键（Ctrl+O 等故意无输入框守卫的全局键）。
+      if (e.key !== 'Escape') {
+        e.stopPropagation();
+      }
+    }}>
     <Dialog.Header>
       <Dialog.Title class="flex items-center gap-2 text-xl">
         <AddIcon class="size-5" /> 插件管理
