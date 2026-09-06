@@ -134,6 +134,30 @@ test.describe('Error display tests', () => {
     await expect(page.getByTestId('error-reset-config')).toHaveCount(0);
   });
 
+  test('配置错误横幅提供「转到配置页」直达钮（仅代码页在前时）', async ({ page, editPage }) => {
+    // 破坏配置 JSON（剪贴板粘贴防 Monaco 自动闭括号）
+    await editPage.setEditorMode('配置');
+    await editPage.editor.click();
+    await page.evaluate((c) => navigator.clipboard.writeText(c), '{ broken');
+    await page.keyboard.press('Control+KeyA');
+    await page.keyboard.press('Control+V');
+    await editPage.checkError('配置 JSON 错误');
+
+    // 已在配置页：波浪线就在眼前，直达钮不必出现
+    await expect(page.getByTestId('error-goto-config')).toHaveCount(0);
+
+    // 切回代码页：横幅仍在（错误源是配置），直达钮出现
+    await editPage.setEditorMode('代码');
+    await editPage.checkError('配置 JSON 错误');
+    const gotoButton = page.getByTestId('error-goto-config');
+    await expect(gotoButton).toBeVisible();
+
+    // 一键回到配置页：按钮消失，编辑器里就是待修的 JSON
+    await gotoButton.click();
+    await expect(page.getByTestId('error-goto-config')).toHaveCount(0);
+    await expect(editPage.editor).toContainText('broken');
+  });
+
   test('复制错误内容到剪贴板', async ({ page, context, editPage }) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await editPage.clearEditor();

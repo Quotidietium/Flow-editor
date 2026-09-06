@@ -7,6 +7,7 @@
     lastValidCode,
     loadState,
     updateCode,
+    updateCodeStore,
     updateConfig,
     validatedState
   } from '$lib/util/state.svelte';
@@ -125,6 +126,12 @@
     notify('已重置为默认配置');
   };
 
+  // 配置错误的下一步几乎都是打开配置页改 JSON——横幅给直达（循环 157）。
+  // 双端同走 state 的 editorMode；Monaco json 校验的波浪线就在配置页。
+  const gotoConfig = () => {
+    updateCodeStore({ editorMode: 'config' });
+  };
+
   // 代码错误的一键恢复：回到最后一次解析成功的那份代码（粒度=每次有效
   // 键击，比历史时间线的 60s 快照细）。仅代码错误时提供——配置错误已有
   // 专属的重置钮；从无有效版本则无钮可给。
@@ -230,6 +237,15 @@
           </button>
         {/if}
         {#if validatedState.current.errorSource === 'config'}
+          <!-- 配置页已在眼前时直达钮无意义（波浪线就在眼前） -->
+          {#if validatedState.current.editorMode !== 'config'}
+            <button
+              class="rounded px-2 py-0.5 text-xs hover:bg-slate-700"
+              data-testid="error-goto-config"
+              onclick={gotoConfig}>
+              转到配置页
+            </button>
+          {/if}
           <button
             class="rounded px-2 py-0.5 text-xs hover:bg-slate-700"
             data-testid="error-reset-config"
