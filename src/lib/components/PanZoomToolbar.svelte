@@ -39,6 +39,35 @@
 
   const zoomClass = $derived(compact ? undefined : 'hidden sm:block');
 
+  // 键盘缩放（循环 148）：+ 放大、- 缩小、0 重置、F 适应窗口——预览/
+  // 只读页/embed 三处挂载点同享。纯字符键必须让路：输入控件聚焦
+  // （编辑器/搜索框/表单）与修饰键组合（Ctrl++ 是浏览器页面缩放）不拦。
+  const onWindowKeydown = (event: KeyboardEvent): void => {
+    if (event.isComposing || event.keyCode === 229) {
+      return;
+    }
+    if (event.ctrlKey || event.metaKey || event.altKey) {
+      return;
+    }
+    const target = event.target;
+    if (
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLTextAreaElement ||
+      (target instanceof HTMLElement && target.isContentEditable)
+    ) {
+      return;
+    }
+    if (event.key === '+' || event.key === '=') {
+      panZoomState.zoomIn();
+    } else if (event.key === '-' || event.key === '_') {
+      panZoomState.zoomOut();
+    } else if (event.key === '0') {
+      panZoomState.reset();
+    } else if (event.key === 'f' || event.key === 'F') {
+      panZoomState.fitAndCenter();
+    }
+  };
+
   // 缩放百分比读数：种子值取实例当前缩放，之后经回调随缩放交互更新。
   let zoomLevel = $state(1);
   $effect(() => {
@@ -52,8 +81,10 @@
   });
 </script>
 
+<svelte:window onkeydown={onWindowKeydown} />
+
 <FloatingToolbar>
-  <Button variant="ghost" size="icon" title="重置视图" onclick={() => panZoomState.reset()}>
+  <Button variant="ghost" size="icon" title="重置视图（0）" onclick={() => panZoomState.reset()}>
     <ArrowsToCircleIcon />
   </Button>
   <!-- 适应窗口：全图缩放到视口内并居中（大图找不到全貌时一键归位） -->
@@ -61,7 +92,7 @@
     variant="ghost"
     size="icon"
     data-testid="zoom-fit"
-    title="适应窗口"
+    title="适应窗口（F）"
     onclick={() => panZoomState.fitAndCenter()}>
     <FitIcon />
   </Button>
@@ -70,7 +101,7 @@
     variant="ghost"
     size="icon"
     class={zoomClass}
-    title="缩小"
+    title="缩小（-）"
     onclick={() => panZoomState.zoomOut()}>
     <MagnifyingGlassMinusIcon />
   </Button>
@@ -83,7 +114,7 @@
     variant="ghost"
     size="icon"
     class={zoomClass}
-    title="放大"
+    title="放大（+）"
     onclick={() => panZoomState.zoomIn()}>
     <MagnifyingGlassPlusIcon />
   </Button>
