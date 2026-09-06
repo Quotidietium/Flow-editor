@@ -167,7 +167,17 @@
       previewBgClass(previewBackground.current, mode.current),
     error && 'opacity-50'
   ]}>
-  <div id="container" bind:this={container} class="h-full overflow-auto"></div>
+  <!-- 双击复位缩放（循环 151）：draw.io 式捷径，与工具栏「重置视图」/
+       键盘 0 同一语义（0.875 基准）。预览 svg 无其他双击占用（可视化
+       画布的双击加节点在另一组件）。纯冗余鼠标捷径（按钮/键盘均可达），
+       故不为它设交互 role。 -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    id="container"
+    bind:this={container}
+    class="h-full overflow-auto"
+    ondblclick={() => panZoomState.reset()}>
+  </div>
   {#if rendering}
     <div
       class="pointer-events-none absolute right-2 bottom-2 rounded bg-background/80 px-2 py-1 text-[11px] text-muted-foreground shadow"

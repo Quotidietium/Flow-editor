@@ -145,7 +145,7 @@
       items: [
         { desc: '平移画布', keys: '空白拖拽 / 空格 + 拖拽' },
         { desc: '缩放画布', keys: 'Ctrl + 滚轮 / 双指捏合' },
-        { desc: '复位视图', keys: 'Ctrl + H' }
+        { desc: '复位视图', keys: 'Ctrl + H / 点击缩放读数' }
       ]
     },
     {
@@ -1975,7 +1975,15 @@
     </Button>
     <span class="ml-auto whitespace-nowrap text-muted-foreground">
       {kindSpec.label} · {graph.nodes.length} 节点 · {graph.edges.length} 连线
-      {#if canvasView}· {Math.round(view.k * 100)}%{/if}
+      {#if canvasView}
+        · <button
+          type="button"
+          class="rounded px-0.5 tabular-nums hover:bg-accent hover:text-foreground"
+          data-testid="visual-zoom-reset"
+          title="复位视图缩放（Ctrl+H）"
+          aria-label="复位视图缩放"
+          onclick={resetView}>{Math.round(view.k * 100)}%</button>
+      {/if}
     </span>
   </div>
 

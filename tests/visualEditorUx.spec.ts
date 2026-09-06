@@ -359,6 +359,25 @@ test('ctrl+wheel zooms the canvas and Ctrl+H resets it', async ({ page }) => {
   expect(Math.abs((reset?.width ?? 0) - before.width)).toBeLessThanOrEqual(2);
 });
 
+// 缩放读数点击复位（循环 151）：工具栏 % 读数即按钮，与 Ctrl+H 同语义
+test('clicking the canvas zoom readout resets the view', async ({ page }) => {
+  await openEditor(page);
+  await enterVisual(page);
+
+  const readout = page.getByTestId('visual-zoom-reset');
+  await expect(readout).toHaveText('100%');
+
+  const box = await canvasBox(page);
+  await page.mouse.move(box.x + 300, box.y + 200);
+  await page.keyboard.down('Control');
+  await page.mouse.wheel(0, -120);
+  await page.keyboard.up('Control');
+  await expect(readout).not.toHaveText('100%');
+
+  await readout.click();
+  await expect(readout).toHaveText('100%');
+});
+
 test('space+drag pans the canvas', async ({ page }) => {
   await openEditor(page);
   await enterVisual(page);

@@ -44,4 +44,16 @@ test.describe('缩放百分比读数', () => {
     expect(fitted).toBeLessThan(zoomed);
     expect(fitted).toBeGreaterThan(0);
   });
+
+  test('双击预览区复位缩放（循环 151）', async ({ page }) => {
+    await page.goto('/edit');
+    const readout = page.getByTestId('zoom-level');
+    await expect(readout).toHaveText('88%');
+
+    // 放大后双击预览画布（draw.io 式捷径，同 0 键/重置钮语义）
+    await page.getByRole('button', { name: '放大' }).click();
+    await expect(readout).not.toHaveText('88%');
+    await page.locator('#container svg').dblclick();
+    await expect(readout).toHaveText('88%');
+  });
 });
