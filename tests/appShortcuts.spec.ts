@@ -20,4 +20,28 @@ test.describe('应用级快捷键帮助', () => {
     await page.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
   });
+
+  test('按 ? 直达帮助；编辑器输入态不劫持', async ({ page }) => {
+    await page.goto('/edit');
+
+    // 非输入态按 ? 直接打开帮助（GitHub/VS Code 同款自助入口）
+    await page.locator('#view').waitFor({ state: 'visible' });
+    await page.keyboard.press('?');
+    const dialog = page.getByTestId('app-shortcuts-dialog');
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText('打开本快捷键帮助');
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+
+    // Monaco 聚焦时 ? 是正常文本输入，不弹帮助——键击真实落到文档
+    const editor = page.locator('.monaco-editor');
+    await editor.click();
+    await page.keyboard.press('?');
+    await expect(dialog).toHaveCount(0);
+    await expect
+      .poll(async () =>
+        page.evaluate(() => JSON.parse(localStorage.getItem('codeStore') ?? '{}').code ?? '')
+      )
+      .toContain('?');
+  });
 });

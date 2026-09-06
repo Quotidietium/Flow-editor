@@ -202,7 +202,10 @@
       return (
         target instanceof HTMLInputElement ||
         target instanceof HTMLTextAreaElement ||
-        (target instanceof HTMLElement && target.isContentEditable)
+        (target instanceof HTMLElement && target.isContentEditable) ||
+        // 新版 Monaco 用原生 EditContext（div.native-edit-context）而非隐藏
+        // textarea——以上三条全漏，按容器归属兜底。
+        (target instanceof HTMLElement && target.closest('.monaco-editor') !== null)
       );
     };
     const onKeydown = (event: KeyboardEvent) => {
@@ -226,6 +229,15 @@
       ) {
         event.preventDefault();
         visualMode = !visualMode;
+      } else if (
+        event.key === '?' &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey &&
+        !isTypingTarget(event)
+      ) {
+        // GitHub/VS Code 风格的自助入口：帮助不必藏在主菜单二级。
+        window.dispatchEvent(new CustomEvent('flow-open-shortcuts'));
       }
     };
     window.addEventListener('keydown', onKeydown);

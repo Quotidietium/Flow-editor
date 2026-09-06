@@ -12,7 +12,7 @@
   import { urls } from '$/util/state.svelte';
   import { cn } from '$/utils';
   import { setMode, userPrefersMode } from 'mode-watcher';
-  import type { Component, Snippet } from 'svelte';
+  import { onMount, type Component, type Snippet } from 'svelte';
   import AddIcon from '~icons/material-symbols/add-2-rounded';
   import DuplicateIcon from '~icons/material-symbols/content-copy-outline-rounded';
   import ContrastIcon from '~icons/material-symbols/contrast';
@@ -79,6 +79,13 @@
 
   // 应用级快捷键（可视化编辑器的 24 项在其工具栏帮助里，此处不重复）
   let helpOpen = $state(false);
+
+  // 「?」直达（编辑页 window 键位派发）：GitHub/VS Code 同款自助入口。
+  onMount(() => {
+    const open = () => (helpOpen = true);
+    window.addEventListener('flow-open-shortcuts', open);
+    return () => window.removeEventListener('flow-open-shortcuts', open);
+  });
 
   // 个人资产备份：三类「我的××」锁死在单浏览器 localStorage——
   // 导出 JSON 换设备导入。计数在对话框打开时刷新。
@@ -270,7 +277,7 @@
       <Dialog.Description>编辑器的常用键盘与鼠标操作</Dialog.Description>
     </Dialog.Header>
     <div class="flex max-h-[60vh] flex-col gap-1 overflow-y-auto pr-1">
-      {#each [['Ctrl+S', '收藏当前图到历史「已保存」'], ['Ctrl+O', '打开本地文件（.mmd/.md/.json/.zip）'], ['Ctrl+E', '切换可视化编辑（代码 ↔ 画布）'], ['Ctrl+滚轮', '预览区缩放 / 代码区调编辑器字号'], ['+ / - / 0 / F', '预览与只读页 放大 / 缩小 / 重置 / 适应窗口'], ['双指捏合', '预览/可视化画布缩放（触屏）'], ['Enter', '输入框提交（含各编辑器表单）'], ['Ctrl+Enter', '多行文本域保存（编辑内容对话框）'], ['Esc', '清空搜索框 / 关闭菜单与对话框'], ['双击', '历史条目名直接重命名'], ['双击预览', '复位预览缩放（同 0 键 / 重置钮）'], ['拖入文件', '把 .mmd/.md/.json 拖到窗口直接打开'], ['Ctrl+A/C/X/V/D', '可视化画布 全选/复制/剪切/粘贴/克隆'], ['Ctrl+Z / Ctrl+Shift+Z', '可视化画布 撤销 / 重做']] as [keys, desc] (keys)}
+      {#each [['Ctrl+S', '收藏当前图到历史「已保存」'], ['Ctrl+O', '打开本地文件（.mmd/.md/.json/.zip）'], ['Ctrl+E', '切换可视化编辑（代码 ↔ 画布）'], ['Ctrl+滚轮', '预览区缩放 / 代码区调编辑器字号'], ['+ / - / 0 / F', '预览与只读页 放大 / 缩小 / 重置 / 适应窗口'], ['双指捏合', '预览/可视化画布缩放（触屏）'], ['Enter', '输入框提交（含各编辑器表单）'], ['Ctrl+Enter', '多行文本域保存（编辑内容对话框）'], ['Esc', '清空搜索框 / 关闭菜单与对话框'], ['?', '打开本快捷键帮助（非输入态）'], ['双击', '历史条目名直接重命名'], ['双击预览', '复位预览缩放（同 0 键 / 重置钮）'], ['拖入文件', '把 .mmd/.md/.json 拖到窗口直接打开'], ['Ctrl+A/C/X/V/D', '可视化画布 全选/复制/剪切/粘贴/克隆'], ['Ctrl+Z / Ctrl+Shift+Z', '可视化画布 撤销 / 重做']] as [keys, desc] (keys)}
         <div class="flex items-center justify-between gap-4 text-sm">
           <span>{desc}</span>
           <kbd class="rounded border bg-muted px-1.5 py-0.5 text-xs whitespace-nowrap">{keys}</kbd>
