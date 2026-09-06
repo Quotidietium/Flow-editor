@@ -70,6 +70,8 @@ test('visual editor generates flowchart code from canvas interactions', async ({
     await page.mouse.down();
     await page.mouse.move(p2.x, p2.y, { steps: 8 });
     await page.mouse.up();
+    // 连线落定会自动打开标签输入（循环 159）——本用例不标注，Esc 收掉。
+    await page.keyboard.press('Escape');
   };
   await connect();
 

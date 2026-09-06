@@ -22,6 +22,8 @@ test.describe('可视化编辑器快捷键帮助', () => {
     await expect(dialog).toContainText('居中并选中命中（重复按循环下一个）');
     await expect(dialog).toContainText('上一个命中');
     await expect(dialog).toContainText('直接提交');
+    // 循环 159：连线落定即开标签输入（与新建节点同款）
+    await expect(dialog).toContainText('新建节点/连线后立即输入标签');
 
     // 关闭按钮收起对话框
     await dialog.getByRole('button', { name: '关闭' }).click();

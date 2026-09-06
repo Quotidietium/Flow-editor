@@ -426,6 +426,52 @@ test('selection count appears in the status row and clears with Esc', async ({ p
   await expect(count).toHaveCount(0);
 });
 
+test('creating a link opens its label editor immediately (Enter commits, Esc skips)', async ({
+  page
+}) => {
+  await openEditor(page);
+  const codeOut = await enterVisual(page);
+  await page.getByTestId('visual-clear').click();
+
+  const box = await canvasBox(page);
+  await addNode(page, box.x + 200, box.y + 200, 'From');
+  await addNode(page, box.x + 560, box.y + 200, 'To');
+
+  const labelEditor = page.locator('input[type="text"].absolute');
+  await expect(labelEditor).toHaveCount(0);
+
+  // 选中 From 露出连线圆点，从右侧圆点拖到 To 节点。
+  const from = await page.locator('[data-node-id="N1"]').boundingBox();
+  const to = await page.locator('[data-node-id="N2"]').boundingBox();
+  if (!from || !to) {
+    throw new Error('nodes missing');
+  }
+  await page.mouse.click(from.x + 20, from.y + 10);
+  await page.mouse.move(from.x + from.width, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 6 });
+  await page.mouse.up();
+
+  // 连线落定即开标签输入并聚焦（与新建节点同款）：直接键入回车提交。
+  await expect(labelEditor).toBeVisible();
+  await expect(labelEditor).toBeFocused();
+  await labelEditor.fill('是');
+  await page.keyboard.press('Enter');
+  await expect(codeOut).toContainText('是');
+  await expect(labelEditor).toHaveCount(0);
+
+  // 反向再连一条，Esc 跳过——连线在、无标签。
+  await page.mouse.click(to.x + 20, to.y + 10);
+  await page.mouse.move(to.x, to.y + to.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2, { steps: 6 });
+  await page.mouse.up();
+  await expect(labelEditor).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(labelEditor).toHaveCount(0);
+  await expect(codeOut).toContainText('N2 --> N1');
+});
+
 test('space+drag pans the canvas', async ({ page }) => {
   await openEditor(page);
   await enterVisual(page);

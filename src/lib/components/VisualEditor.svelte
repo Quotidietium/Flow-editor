@@ -131,6 +131,7 @@
       views: ['canvas'],
       items: [
         { desc: '删除选中', keys: 'Delete / Backspace' },
+        { desc: '新建节点/连线后立即输入标签', keys: 'Enter 提交 / Esc 跳过' },
         { desc: '复制 / 剪切 / 粘贴', keys: 'Ctrl + C / X / V' },
         { desc: '原位复制', keys: 'Ctrl + D' },
         { desc: '克隆拖放', keys: 'Ctrl + 拖拽' },
@@ -1479,6 +1480,9 @@
         graph.edges.push(edge);
         selected = [{ id: edge.id, kind: 'edge' }];
         syncCode();
+        // 与新建节点同款（addNodeAt/insertNode）：连线落定即开标签输入，
+        // 是/否分支标注免二次双击；不需要时 Esc 或点空跳过。
+        startEdit(edge);
       }
       linking = undefined;
     }
