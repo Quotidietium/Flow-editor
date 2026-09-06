@@ -1,7 +1,7 @@
 <script lang="ts">
   import Card from '$lib/components/Card/Card.svelte';
   import type { HistoryEntry, HistoryType, State, Tab } from '$lib/types';
-  import { diffLines, diffToText, type DiffRow } from '$lib/util/lineDiff';
+  import { collapseContext, diffLines, diffToText, type DiffRow } from '$lib/util/lineDiff';
   import { notify, prompt } from '$lib/util/notify';
   import { serializeState } from '$lib/util/serde';
   import { inputState, replaceInputState } from '$lib/util/state.svelte';
@@ -39,6 +39,7 @@
     restoreEntries,
     setMode
   } from './historyState.svelte';
+  import { SvelteSet } from 'svelte/reactivity';
 
   dayjs.extend(dayjsRelativeTime);
 
@@ -246,15 +247,18 @@
     diffLeftId = id;
     diffRightId = '';
     diffOpen = true;
+    resetFolds();
   };
   const closeDiff = (): void => {
     diffOpen = false;
     diffLeftId = '';
     diffRightId = '';
+    resetFolds();
   };
   // 循环 132：反过来看差异（「A → B」改读「B → A」）一键完成
   const swapDiff = (): void => {
     [diffLeftId, diffRightId] = [diffRightId, diffLeftId];
+    resetFolds();
   };
   const diffCandidates = $derived.by<DiffCandidate[]>(() => {
     if (!diffOpen) {
@@ -275,6 +279,21 @@
   const diffLeft = $derived(candidateById(diffLeftId));
   const diffRight = $derived(candidateById(diffRightId));
   const diffRows = $derived(diffLines(diffLeft?.code ?? '', diffRight?.code ?? ''));
+  // 上下文折叠（循环 147，GitHub 式）：长段未变行收拢为「已折叠 N 行」
+  // 分隔条，点击展开；在 MAX_DIFF_ROWS 截断之后折叠，截断提示语义不变。
+  // expandedFolds 记录被点开的 fold 块 key，换对比对象/方向/重开对话框时重置。
+  const diffBlocks = $derived(collapseContext(diffRows.slice(0, MAX_DIFF_ROWS)));
+  const expandedFolds = new SvelteSet<number>();
+  const toggleFold = (key: number): void => {
+    if (expandedFolds.has(key)) {
+      expandedFolds.delete(key);
+    } else {
+      expandedFolds.add(key);
+    }
+  };
+  const resetFolds = (): void => {
+    expandedFolds.clear();
+  };
   // 左侧是历史条目时才可直达恢复（当前编辑器无可恢复对象）
   const diffLeftEntry = $derived(historyState.entries.find((entry) => entry.id === diffLeftId));
   const restoreDiffLeft = (): void => {
@@ -601,7 +620,8 @@
         id="history-diff-target"
         class="h-7 rounded border bg-background px-1"
         data-testid="history-diff-target"
-        bind:value={diffRightId}>
+        bind:value={diffRightId}
+        onchange={resetFolds}>
         {#each diffCandidates as candidate (candidate.id)}
           <option value={candidate.id}>{candidate.name}</option>
         {/each}
@@ -634,49 +654,64 @@
       class="max-h-[55vh] overflow-auto rounded border bg-muted/40 p-2 font-mono text-xs"
       data-testid="history-diff-rows">
       <!-- 双行号列（循环 144）：旧文件 | 新文件 1-based 行号，定位「改了
-           第几行」；add 行无旧号、del 行无新号，留空。 -->
-      {#each diffRows.slice(0, MAX_DIFF_ROWS) as row, index (index)}
-        <div
-          class="group flex gap-2 whitespace-pre rounded focus-visible:bg-accent/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          tabindex="0"
-          role="button"
-          aria-label="复制此差异行"
-          onkeydown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault();
-              void copyDiffRow(row);
-            }
-          }}
-          title="{row.oldLine === undefined ? '' : `旧行 ${row.oldLine}`}{row.oldLine !==
-            undefined && row.newLine !== undefined
-            ? ' · '
-            : ''}{row.newLine === undefined ? '' : `新行 ${row.newLine}`}">
-          <span
-            class="w-9 shrink-0 text-right text-muted-foreground/50 tabular-nums"
-            data-testid="history-diff-old-line">{row.oldLine ?? ''}</span>
-          <span
-            class="w-9 shrink-0 text-right text-muted-foreground/50 tabular-nums"
-            data-testid="history-diff-new-line">{row.newLine ?? ''}</span>
-          <span
-            class="w-3 shrink-0 text-center {row.type === 'add'
-              ? 'text-green-600'
-              : row.type === 'del'
-                ? 'text-red-600'
-                : 'text-transparent'}"
-            >{row.type === 'add' ? '+' : row.type === 'del' ? '−' : ' '}</span>
-          <span class="min-w-0 break-all {row.type === 'same' && 'text-muted-foreground'}"
-            >{row.text === '' ? ' ' : row.text}</span>
-          <!-- 悬停显形的单行复制（循环 145）：same 行同样可复制（「把这行抄走」） -->
+           第几行」；add 行无旧号、del 行无新号，留空。
+           循环 147：按 collapseContext 块渲染——长段未变行收拢为折叠
+           分隔条，点击展开为普通行。 -->
+      {#each diffBlocks as block (block.key)}
+        {#if block.kind === 'fold' && !expandedFolds.has(block.key)}
           <button
             type="button"
-            class="shrink-0 rounded p-0.5 opacity-0 transition-opacity hover:bg-accent hover:opacity-100 focus-visible:opacity-100 group-hover:opacity-100"
-            title="复制此行"
-            aria-label="复制此行"
-            data-testid="history-diff-copy-row"
-            onclick={() => void copyDiffRow(row)}>
-            <CopyIcon class="size-3" />
+            class="my-0.5 flex w-full items-center justify-center rounded border border-dashed py-1 text-muted-foreground hover:bg-accent/50"
+            data-testid="history-diff-fold"
+            title="展开被折叠的相同行"
+            onclick={() => toggleFold(block.key)}>
+            ··· 已折叠 {block.foldedCount} 行相同内容 · 点击展开 ···
           </button>
-        </div>
+        {:else}
+          {#each block.rows as row, rowIndex (block.key + rowIndex)}
+            <div
+              class="group flex gap-2 whitespace-pre rounded focus-visible:bg-accent/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              tabindex="0"
+              role="button"
+              aria-label="复制此差异行"
+              onkeydown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  void copyDiffRow(row);
+                }
+              }}
+              title="{row.oldLine === undefined ? '' : `旧行 ${row.oldLine}`}{row.oldLine !==
+                undefined && row.newLine !== undefined
+                ? ' · '
+                : ''}{row.newLine === undefined ? '' : `新行 ${row.newLine}`}">
+              <span
+                class="w-9 shrink-0 text-right text-muted-foreground/50 tabular-nums"
+                data-testid="history-diff-old-line">{row.oldLine ?? ''}</span>
+              <span
+                class="w-9 shrink-0 text-right text-muted-foreground/50 tabular-nums"
+                data-testid="history-diff-new-line">{row.newLine ?? ''}</span>
+              <span
+                class="w-3 shrink-0 text-center {row.type === 'add'
+                  ? 'text-green-600'
+                  : row.type === 'del'
+                    ? 'text-red-600'
+                    : 'text-transparent'}"
+                >{row.type === 'add' ? '+' : row.type === 'del' ? '−' : ' '}</span>
+              <span class="min-w-0 break-all {row.type === 'same' && 'text-muted-foreground'}"
+                >{row.text === '' ? ' ' : row.text}</span>
+              <!-- 悬停显形的单行复制（循环 145）：same 行同样可复制（「把这行抄走」） -->
+              <button
+                type="button"
+                class="shrink-0 rounded p-0.5 opacity-0 transition-opacity hover:bg-accent hover:opacity-100 focus-visible:opacity-100 group-hover:opacity-100"
+                title="复制此行"
+                aria-label="复制此行"
+                data-testid="history-diff-copy-row"
+                onclick={() => void copyDiffRow(row)}>
+                <CopyIcon class="size-3" />
+              </button>
+            </div>
+          {/each}
+        {/if}
       {/each}
       {#if diffRows.length > MAX_DIFF_ROWS}
         <div class="pt-1 text-center text-muted-foreground">

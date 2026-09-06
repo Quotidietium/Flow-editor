@@ -71,13 +71,15 @@ base.describe('Embed page', () => {
     );
   });
 
-  base('should render inside the sandboxed iframe the snippets use', async ({ page }) => {
+  base('should render inside the sandboxed iframe the snippets use', async ({ page, baseURL }) => {
     failOnDialog(page);
     const embedSrc = `/embed#code:${encodeURIComponent('graph TD\n  A[Sandboxed]-->B')}`;
+    // setContent 的页面是 about:blank，iframe 必须给绝对地址——用 baseURL
+    // 跟随 DEV_PORT（此前硬编码 3000，端口被保留/漂移时 iframe 整页空白）
     await page.setContent(
       `<!doctype html><iframe id="embed" title="embed"
         sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
-        src="http://localhost:3000${embedSrc}"
+        src="${baseURL}${embedSrc}"
         style="width:800px;height:500px;border:0"></iframe>`
     );
     const frame = page.frameLocator('#embed');

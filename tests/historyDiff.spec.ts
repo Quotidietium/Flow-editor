@@ -224,4 +224,59 @@ test.describe('历史版本与当前对比（循环 127）', () => {
     await expect(dialog).toContainText('增 0');
     await expect(page.getByTestId('history-diff-copy-diff')).toBeDisabled();
   });
+
+  test('长段未变行折叠为分隔条，点击展开；重开对话框复位（循环 147）', async ({
+    page,
+    editPage
+  }) => {
+    // 版本 A：graph TD + 14 个节点行（15 行）；版本 B 只改 N0 文本。
+    // 差异在第 2 行 → 上下文 3 行外，N4..N10 共 7 行相同被折叠。
+    const versionA = [
+      'graph TD',
+      ...Array.from({ length: 14 }, (_, i) => `  N${i}[节点${i}]`)
+    ].join('\n');
+    const versionB = versionA.replace('N0[节点0]', 'N0[起点改]');
+    const replaceCode = async (code: string) => {
+      await page.evaluate((c) => navigator.clipboard.writeText(c), code);
+      await editPage.editor.click();
+      await page.keyboard.press('Control+KeyA');
+      await page.keyboard.press('Control+V');
+    };
+    await replaceCode(versionA);
+    await expect(editPage.editor).toContainText('节点13');
+
+    await openHistory(page);
+    await page.getByRole('button', { name: '保存当前状态' }).click();
+    await expect(page.locator('#historyList li')).toHaveCount(1);
+
+    await replaceCode(versionB);
+    await expect(editPage.editor).toContainText('起点改');
+
+    await page.getByRole('button', { name: '与当前对比' }).first().click();
+    const dialog = page.getByTestId('history-diff-dialog');
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText('增 1');
+    await expect(dialog).toContainText('删 1');
+
+    // 折叠条出现：N4..N10 共 7 行收拢；上下文（节点3）与收尾（节点13）仍在
+    const fold = page.getByTestId('history-diff-fold');
+    await expect(fold).toHaveCount(1);
+    await expect(fold).toContainText('已折叠 7 行');
+    await expect(dialog).toContainText('节点3');
+    await expect(dialog).toContainText('节点13');
+    await expect(dialog).not.toContainText('N4[节点4]');
+
+    // 点击展开：折叠条消失，被收拢的行渲染出来
+    await fold.click();
+    await expect(page.getByTestId('history-diff-fold')).toHaveCount(0);
+    await expect(dialog).toContainText('N4[节点4]');
+    await expect(dialog).toContainText('N9[节点9]');
+
+    // 重开对话框：折叠状态复位（展开标记不跨对话框存活）
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await page.getByRole('button', { name: '与当前对比' }).first().click();
+    await expect(page.getByTestId('history-diff-fold')).toContainText('已折叠 7 行');
+    await expect(dialog).not.toContainText('N4[节点4]');
+  });
 });

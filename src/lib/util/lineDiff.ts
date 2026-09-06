@@ -70,3 +70,73 @@ export const diffToText = (rows: DiffRow[]): string =>
     .filter((row) => row.type !== 'same')
     .map((row) => `${row.type === 'add' ? '+' : '-'} ${row.text}`)
     .join('\n');
+
+// ===== 上下文折叠（循环 147）=====
+
+/** 折叠分隔块：连续的未变行被收拢为一条「已折叠 N 行」。 */
+export interface DiffDisplayBlock {
+  kind: 'rows' | 'fold';
+  /** rows 块为待渲染行；fold 块为被收拢的行（供点击展开后渲染） */
+  rows: DiffRow[];
+  /** fold 块被收拢的行数 */
+  foldedCount: number;
+  /** 稳定 key（rows 的起始下标） */
+  key: number;
+}
+
+// 未变行保留为上下文的数量（折叠段每侧各留 N 行）；折叠块少于
+// FOLD_MIN 行时直接显示（太碎的折叠反而干扰）。
+const FOLD_CONTEXT = 3;
+const FOLD_MIN = 4;
+
+/**
+ * GitHub 式上下文折叠：非差异行两侧各保留 context 行上下文，其余
+ * 连续未变行收拢为 fold 块（点击可在 UI 展开）。diff 不足时原样返回
+ * 单一块。key 用行起始下标，稳定可作 each key 与展开标记。
+ */
+export const collapseContext = (rows: DiffRow[], context = FOLD_CONTEXT): DiffDisplayBlock[] => {
+  const keep = new Array<boolean>(rows.length).fill(false);
+  // 头尾各留 context 行：两版本完全一致（全 same）时不至于只剩一条
+  // 折叠条；截断到 MAX_DIFF_ROWS 的切片同样保有收尾。
+  for (let k = 0; k < Math.min(context, rows.length); k += 1) {
+    keep[k] = true;
+    keep[rows.length - 1 - k] = true;
+  }
+  rows.forEach((row, i) => {
+    if (row.type === 'same') {
+      return;
+    }
+    for (let k = Math.max(0, i - context); k <= Math.min(rows.length - 1, i + context); k += 1) {
+      keep[k] = true;
+    }
+  });
+
+  const blocks: DiffDisplayBlock[] = [];
+  let i = 0;
+  while (i < rows.length) {
+    if (!keep[i]) {
+      // 连续未折叠区间 → fold 块
+      const start = i;
+      while (i < rows.length && !keep[i]) {
+        i += 1;
+      }
+      if (i - start >= FOLD_MIN) {
+        blocks.push({
+          kind: 'fold',
+          rows: rows.slice(start, i),
+          foldedCount: i - start,
+          key: start
+        });
+      } else {
+        blocks.push({ kind: 'rows', rows: rows.slice(start, i), foldedCount: 0, key: start });
+      }
+      continue;
+    }
+    const start = i;
+    while (i < rows.length && keep[i]) {
+      i += 1;
+    }
+    blocks.push({ kind: 'rows', rows: rows.slice(start, i), foldedCount: 0, key: start });
+  }
+  return blocks;
+};
