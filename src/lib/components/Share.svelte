@@ -49,6 +49,13 @@
   );
   const snippets = $derived(buildEmbedSnippets(embedUrls, { height, width }));
   const snippet = $derived(format === 'webComponent' ? snippets.webComponent : snippets.iframe);
+
+  // 链接长度指示：pako 哈希把整图塞进 URL，超大图链接在部分聊天/邮件
+  // 工具里被截断即打不开——给读数，过 8000 字符给替代建议。函数在模板
+  // 内联调用（对话框每次打开重挂载时取当下 hash，与 CopyInput 同口径）。
+  const shareLinkLen = (): number =>
+    (window.location.origin + base + '/view' + window.location.hash).length;
+  const shareLinkTooLong = (): boolean => shareLinkLen() > 8000;
 </script>
 
 <Dialog.Root>
@@ -75,6 +82,15 @@
           <CopyInput
             testID="share-view-link"
             value={window.location.origin + base + '/view' + window.location.hash} />
+          <span
+            class="text-xs {shareLinkTooLong()
+              ? 'text-amber-600 dark:text-amber-400'
+              : 'text-muted-foreground'}"
+            data-testid="share-link-length">
+            链接长度 {shareLinkLen()} 字符{shareLinkTooLong()
+              ? '——过长，部分聊天工具会截断导致打不开；建议改用导出 PNG/SVG 或 .mmd 文件分享'
+              : ''}
+          </span>
         </div>
         <Dialog.Description>你创建的图表内容永远不会离开你的浏览器。</Dialog.Description>
       </div>
