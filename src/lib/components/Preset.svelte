@@ -214,7 +214,21 @@
 
   const removeUserSample = (sample: UserSample) => {
     userSamples = deleteUserSample(sample.id);
-    notify(`已删除示例「${sample.label}」`);
+    // 删除可撤销（循环 171）：误点即恢复；同名示例已重建则不覆盖。
+    notify(`已删除示例「${sample.label}」`, {
+      action: {
+        label: '撤销',
+        onClick: () => {
+          if (userSamples.some((s) => s.label === sample.label)) {
+            notify('已存在同名示例，未恢复');
+            return;
+          }
+          userSamples = saveUserSample(sample.label, sample.code);
+          notify(`已恢复示例「${sample.label}」`);
+        }
+      },
+      duration: 8000
+    });
   };
 
   // 双击重命名（历史条目同款交互）：saveUserSample 按新名建条（同名覆盖

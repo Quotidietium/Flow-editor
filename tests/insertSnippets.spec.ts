@@ -159,6 +159,42 @@ test.describe('插入代码片段', () => {
     await expect(page.locator('[data-testid^="user-snippet-snippet-"]')).toHaveCount(0);
   });
 
+  test('删除我的片段可一键撤销（toast 行动钮，循环 171）', async ({ page }) => {
+    await page.goto('/edit');
+    await page.getByTestId('insert-snippet-menu').click();
+    await page.getByTestId('user-snippet-save').click();
+    await page.getByTestId('user-snippet-save-name').fill('撤销演练');
+    await page.getByTestId('user-snippet-save-name').press('Enter');
+    await expect(page.getByText('已保存片段「撤销演练」')).toBeVisible();
+
+    const stored = await page.evaluate(() => {
+      const list = JSON.parse(localStorage.getItem('flowUserSnippets') ?? '[]') as {
+        id: string;
+      }[];
+      return list[0]?.id;
+    });
+    await page.getByTestId('insert-snippet-menu').click();
+    await page.getByTestId(`user-snippet-delete-${stored}`).click();
+    await expect(page.getByText('已删除片段「撤销演练」')).toBeVisible();
+    await expect(page.locator('[data-testid^="user-snippet-snippet-"]')).toHaveCount(0);
+
+    // toast 行动钮一键恢复
+    await page.getByRole('button', { name: '撤销' }).click();
+    await expect(page.getByText('已恢复片段「撤销演练」')).toBeVisible();
+    // 点 toast 属菜单外交互，popover 随之收起——重开验证恢复并顺手清理
+    // （恢复换了新 id——重读存储）
+    await page.keyboard.press('Escape');
+    await page.getByTestId('insert-snippet-menu').click();
+    await expect(page.locator('[data-testid^="user-snippet-snippet-"]')).toHaveCount(1);
+    const restored = await page.evaluate(() => {
+      const list = JSON.parse(localStorage.getItem('flowUserSnippets') ?? '[]') as {
+        id: string;
+      }[];
+      return list[0]?.id;
+    });
+    await page.getByTestId(`user-snippet-delete-${restored}`).click();
+  });
+
   test('我的片段双击重命名（代码保留，循环 118）', async ({ page, editPage }) => {
     await editPage.clearEditor();
     await editPage.typeInEditor('flowchart TD\n  X --> Y');

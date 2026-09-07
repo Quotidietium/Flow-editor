@@ -146,6 +146,102 @@ test.describe('配置模板', () => {
     await expect(page.getByText('森林手绘', { exact: true })).toHaveCount(0);
   });
 
+  test('删除我的模板可一键撤销（toast 行动钮，循环 171）', async ({ page, editPage }) => {
+    await editPage.setEditorMode('配置');
+    await openPresetMenu(page);
+    await page.getByTestId('config-preset-save').click();
+    await page.getByTestId('config-preset-save-name').fill('误删演练');
+    await page.getByTestId('config-preset-save-name').press('Enter');
+    await expect(page.getByText('已保存模板「误删演练」')).toBeVisible();
+
+    const stored = await page.evaluate(() => {
+      const list = JSON.parse(localStorage.getItem('flowUserConfigPresets') ?? '[]') as {
+        id: string;
+      }[];
+      return list[0]?.id;
+    });
+    await openPresetMenu(page);
+    await page.getByTestId(`config-preset-delete-${stored}`).click();
+    await expect(page.getByText('已删除模板「误删演练」')).toBeVisible();
+    await expect(page.getByText('误删演练', { exact: true })).toHaveCount(0);
+
+    // toast 行动钮一键恢复：删除即时生效、后悔有退路
+    await page.getByRole('button', { name: '撤销' }).click();
+    await expect(page.getByText('已恢复模板「误删演练」')).toBeVisible();
+    // 点 toast 属菜单外交互，popover 随之收起——重开验证恢复并顺手清理
+    // （恢复换了新 id——重读存储）
+    await page.keyboard.press('Escape');
+    await openPresetMenu(page);
+    await expect(page.getByText('误删演练', { exact: true })).toBeVisible();
+    const restored = await page.evaluate(() => {
+      const list = JSON.parse(localStorage.getItem('flowUserConfigPresets') ?? '[]') as {
+        id: string;
+      }[];
+      return list[0]?.id;
+    });
+    await page.getByTestId(`config-preset-delete-${restored}`).click();
+  });
+
+  test('删除后重建同名模板，撤销守卫不覆盖新模板（循环 171）', async ({ page, editPage }) => {
+    await editPage.setEditorMode('配置');
+    // 旧版模板带 handDrawn
+    await openPresetMenu(page);
+    await page.getByTestId('config-preset-hand-drawn').click();
+    await openPresetMenu(page);
+    await page.getByTestId('config-preset-save').click();
+    await page.getByTestId('config-preset-save-name').fill('守卫甲');
+    await page.getByTestId('config-preset-save-name').press('Enter');
+    await expect(page.getByText('已保存模板「守卫甲」')).toBeVisible();
+
+    // 删除（旧版带 handDrawn），重置回默认后重建同名模板（内容=默认）
+    const stored = await page.evaluate(() => {
+      const list = JSON.parse(localStorage.getItem('flowUserConfigPresets') ?? '[]') as {
+        id: string;
+      }[];
+      return list[0]?.id;
+    });
+    await openPresetMenu(page);
+    await page.getByTestId(`config-preset-delete-${stored}`).click();
+    await expect(page.getByText('已删除模板「守卫甲」')).toBeVisible();
+    // 删除钮不收菜单（stopPropagation 独立小钮）——直接点重置（动作行自带
+    // popover-close，点完才收）
+    page.once('dialog', (dialog) => void dialog.accept());
+    await page.getByTestId('config-preset-reset').click();
+    await openPresetMenu(page);
+    await page.getByTestId('config-preset-save').click();
+    await page.getByTestId('config-preset-save-name').fill('守卫甲');
+    await page.getByTestId('config-preset-save-name').press('Enter');
+
+    // 撤销旧删除 → 守卫：同名已存在，不覆盖重建版
+    // （手绘应用 toast 的「撤销」可能仍在 8 秒窗口内——按删除 toast 定位）
+    await page
+      .getByRole('listitem')
+      .filter({ hasText: '已删除模板「守卫甲」' })
+      .getByRole('button', { name: '撤销' })
+      .click();
+    await expect(page.getByText('已存在同名模板，未恢复')).toBeVisible();
+    const kept = await page.evaluate(() => {
+      const list = JSON.parse(localStorage.getItem('flowUserConfigPresets') ?? '[]') as {
+        label: string;
+        config: Record<string, unknown>;
+      }[];
+      return list;
+    });
+    expect(kept).toHaveLength(1);
+    expect(JSON.stringify(kept[0]?.config)).not.toContain('handDrawn');
+
+    // 清理（菜单在保存时已收、点 toast 属外交互——Esc 保底收后重开）
+    const keptId = await page.evaluate(() => {
+      const list = JSON.parse(localStorage.getItem('flowUserConfigPresets') ?? '[]') as {
+        id: string;
+      }[];
+      return list[0]?.id;
+    });
+    await page.keyboard.press('Escape');
+    await openPresetMenu(page);
+    await page.getByTestId(`config-preset-delete-${keptId}`).click();
+  });
+
   test('悬停模板预览将修改的叶子键（旧值 → 新值）', async ({ page, editPage }) => {
     await editPage.setEditorMode('配置');
     await openPresetMenu(page);

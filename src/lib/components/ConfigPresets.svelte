@@ -132,7 +132,22 @@
 
   const removeUserPreset = (preset: UserPreset) => {
     userPresets = deleteUserPreset(preset.id);
-    notify(`已删除模板「${preset.label}」`);
+    // 删除可撤销（循环 171）：误点即恢复。守卫诚实——其间同名模板已被
+    // 重建则不覆盖手头内容（与循环 169 应用撤销同口径）。
+    notify(`已删除模板「${preset.label}」`, {
+      action: {
+        label: '撤销',
+        onClick: () => {
+          if (userPresets.some((p) => p.label === preset.label)) {
+            notify('已存在同名模板，未恢复');
+            return;
+          }
+          userPresets = saveUserPreset(preset.label, preset.config);
+          notify(`已恢复模板「${preset.label}」`);
+        }
+      },
+      duration: 8000
+    });
   };
 
   // 双击重命名（我的示例/片段同款）：按新名建条（同名覆盖）+删旧条，

@@ -39,6 +39,39 @@ test.describe('我的示例', () => {
     await expect(page.locator('[data-testid^="user-sample-sample-"]')).toHaveCount(0);
   });
 
+  test('删除我的示例可一键撤销（toast 行动钮，循环 171）', async ({ page, editPage }) => {
+    await editPage.toggleSampleDiagrams();
+    await page.getByRole('button', { name: '流程图', exact: true }).waitFor();
+    await page.getByTestId('user-sample-save').click();
+    await page.getByTestId('user-sample-save-name').fill('撤销演练');
+    await page.getByTestId('user-sample-save-name').press('Enter');
+    await expect(page.getByText('已保存示例「撤销演练」')).toBeVisible();
+
+    const stored = await page.evaluate(() => {
+      const list = JSON.parse(localStorage.getItem('flowUserSamples') ?? '[]') as {
+        id: string;
+      }[];
+      return list[0]?.id;
+    });
+    await page.getByTestId(`user-sample-delete-${stored}`).click();
+    await expect(page.getByText('已删除示例「撤销演练」')).toBeVisible();
+    await expect(page.locator('[data-testid^="user-sample-sample-"]')).toHaveCount(0);
+
+    // toast 行动钮一键恢复
+    await page.getByRole('button', { name: '撤销' }).click();
+    await expect(page.getByText('已恢复示例「撤销演练」')).toBeVisible();
+    await expect(page.locator('[data-testid^="user-sample-sample-"]')).toHaveCount(1);
+
+    // 清理（恢复换了新 id——重读存储）
+    const restored = await page.evaluate(() => {
+      const list = JSON.parse(localStorage.getItem('flowUserSamples') ?? '[]') as {
+        id: string;
+      }[];
+      return list[0]?.id;
+    });
+    await page.getByTestId(`user-sample-delete-${restored}`).click();
+  });
+
   test('我的示例行吃同一个搜索词（标签过滤，入口常显）', async ({ page, editPage }) => {
     await editPage.toggleSampleDiagrams();
     await page.getByRole('button', { name: '流程图', exact: true }).waitFor();

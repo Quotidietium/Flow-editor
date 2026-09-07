@@ -152,7 +152,21 @@
 
   const removeUserSnippet = (snippet: UserSnippet) => {
     userSnippets = deleteUserSnippet(snippet.id);
-    notify(`已删除片段「${snippet.label}」`);
+    // 删除可撤销（循环 171）：误点即恢复；同名片段已重建则不覆盖。
+    notify(`已删除片段「${snippet.label}」`, {
+      action: {
+        label: '撤销',
+        onClick: () => {
+          if (userSnippets.some((s) => s.label === snippet.label)) {
+            notify('已存在同名片段，未恢复');
+            return;
+          }
+          userSnippets = saveUserSnippet(snippet.label, snippet.code);
+          notify(`已恢复片段「${snippet.label}」`);
+        }
+      },
+      duration: 8000
+    });
   };
 
   // 双击重命名（我的示例/历史条目同款）：按新名建条（同名覆盖）+删旧条，
