@@ -151,7 +151,7 @@ test.describe('配置模板', () => {
     await openPresetMenu(page);
     const diff = page.getByTestId('config-preset-diff');
     // 未悬停时的引导文案
-    await expect(diff).toContainText('悬停模板可预览将修改的配置项');
+    await expect(diff).toContainText('选中模板可预览将修改的配置项');
 
     // 悬停深色主题：theme 由 default → dark
     await page.getByTestId('config-preset-theme-dark').hover();
@@ -169,6 +169,64 @@ test.describe('配置模板', () => {
 
     // 预览不干扰应用本身
     await page.getByTestId('config-preset-theme-dark').click();
+    await expect(page.locator('.monaco-editor')).toContainText('"theme": "dark"');
+  });
+
+  test('搜索过滤与 ↑/↓ 导航：差异预览跟随高亮，Enter 应用高亮项（循环 168）', async ({
+    page,
+    editPage
+  }) => {
+    await editPage.setEditorMode('配置');
+    await openPresetMenu(page);
+    const search = page.getByTestId('config-preset-search');
+    await expect(search).toBeFocused();
+
+    // 键入即筛：「深色」只剩深色/Neo 深色，其它模板与动作行隐去
+    await search.fill('深色');
+    await expect(page.getByTestId('config-preset-theme-dark')).toBeVisible();
+    await expect(page.getByTestId('config-preset-theme-neo-dark')).toBeVisible();
+    await expect(page.getByTestId('config-preset-hand-drawn')).toHaveCount(0);
+    await expect(page.getByTestId('config-preset-format')).toHaveCount(0);
+
+    // 高亮钉首匹配，差异预览跟随（theme: default → dark）
+    await expect(page.getByTestId('config-preset-theme-dark')).toHaveAttribute(
+      'data-active',
+      'true'
+    );
+    const diff = page.getByTestId('config-preset-diff');
+    await expect(diff).toContainText('「深色主题」将修改');
+    await expect(diff).toContainText('theme: default → dark');
+
+    // ↓ 挪到 Neo 深色，预览跟随切换；Enter 应用高亮项并关菜单
+    await search.press('ArrowDown');
+    await expect(page.getByTestId('config-preset-theme-neo-dark')).toHaveAttribute(
+      'data-active',
+      'true'
+    );
+    await expect(diff).toContainText('「Neo 深色」将修改');
+    await search.press('Enter');
+    await expect(page.locator('.monaco-editor')).toContainText('"theme": "neo-dark"');
+    await expect(search).toHaveCount(0);
+
+    // 无匹配空态 → Esc 清词恢复全量（不关菜单）
+    await openPresetMenu(page);
+    await search.fill('不存在的东西');
+    await expect(page.getByTestId('config-preset-search-empty')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('config-preset-search-empty')).toHaveCount(0);
+    await expect(page.getByTestId('config-preset-hand-drawn')).toBeVisible();
+    // 空词再 Esc 收菜单——避免悬浮层开着时点编辑器被关闭焦点回跳干扰
+    await page.keyboard.press('Escape');
+    await expect(search).toHaveCount(0);
+
+    // 动作行也进导航：过滤「格式化」→ Enter 直接格式化压缩 JSON
+    await replaceConfig(page, '{"theme":"dark"}');
+    await openPresetMenu(page);
+    await search.fill('格式化');
+    await expect(page.getByTestId('config-preset-format')).toHaveAttribute('data-active', 'true');
+    await search.press('Enter');
+    await expect(page.getByText('已格式化配置 JSON')).toBeVisible();
+    // 格式化后冒号带空格（压缩态为 "theme":"dark"），与同规格格式化用例同口径
     await expect(page.locator('.monaco-editor')).toContainText('"theme": "dark"');
   });
 
@@ -226,5 +284,26 @@ test.describe('配置模板', () => {
     await expect(page.getByText('当前配置 JSON 无法解析，未保存')).toBeVisible();
     const stored = await page.evaluate(() => localStorage.getItem('flowUserConfigPresets'));
     expect(stored ?? '[]').toBe('[]');
+  });
+});
+
+test.describe('配置模板（移动端）', () => {
+  test.use({ viewport: { height: 844, width: 390 } });
+
+  test('打开菜单不聚焦搜索框（不弹虚拟键盘，循环 167）', async ({ page }) => {
+    // editPage 夹具按桌面布局展开示例卡片，移动端不适用——手动导航
+    await page.goto('/edit');
+    // 移动端滑动布局：先切到「编辑」半屏（默认停在「预览」），等滑屏动画结束
+    await page.locator('#editorMode').click();
+    await page.waitForTimeout(400);
+    await page.getByRole('tab').getByText('配置').click();
+    await page.getByTestId(TID.configPresetMenu).click();
+    const search = page.getByTestId('config-preset-search');
+    // 搜索框在场但未被自动聚焦——聚焦会弹起虚拟键盘把菜单顶出屏
+    await expect(search).toBeVisible();
+    await expect(search).not.toBeFocused();
+    // 点按模板照常应用
+    await page.getByTestId('config-preset-theme-dark').click();
+    await expect(page.locator('.cm-content')).toContainText('"theme": "dark"');
   });
 });

@@ -233,12 +233,6 @@
   const activeItem = $derived(activeIndex >= 0 ? flatItems[activeIndex] : undefined);
 
   let contentEl: HTMLDivElement | null = $state(null);
-  // 高亮项保持可见（长列表/循环回绕越界时）。
-  $effect(() => {
-    if (activeIndex >= 0) {
-      contentEl?.querySelector('[data-active="true"]')?.scrollIntoView({ block: 'nearest' });
-    }
-  });
 
   const moveActive = (delta: 1 | -1) => {
     const count = flatItems.length;
@@ -247,6 +241,9 @@
     }
     const base = activeIndex === -1 ? (delta === 1 ? -1 : 0) : activeIndex;
     manualIndex = (base + delta + count) % count;
+    // 键盘导航让高亮项滚入可视区（按 id 直取，不等渲染）。悬停路径不做：
+    // 鼠标下的行本就可见，滚动反而在超长菜单里酿成「滚动-悬停」互追。
+    contentEl?.querySelector(`#snippet-opt-${manualIndex}`)?.scrollIntoView({ block: 'nearest' });
   };
   // Enter 插入高亮项；尚未动过方向键时等价首个匹配（键入即达不变）。
   const insertActive = () => {
@@ -280,7 +277,11 @@
     class="flex max-h-[70vh] w-56 flex-col gap-0.5 overflow-y-auto p-1"
     onOpenAutoFocus={(event) => {
       event.preventDefault();
-      searchEl?.focus();
+      // 移动端不抢焦点：聚焦输入框会弹起虚拟键盘把菜单顶出屏
+      // （宽度口径与编辑页 isMobile 一致）；桌面保持打开即键入。
+      if (window.innerWidth >= 768) {
+        searchEl?.focus();
+      }
     }}>
     <!-- 打开即聚焦搜索框（抢 bits-ui 默认焦点），直接键入即过滤 -->
     <input

@@ -212,3 +212,22 @@ test.describe('插入代码片段', () => {
     );
   });
 });
+
+test.describe('插入代码片段（移动端）', () => {
+  test.use({ viewport: { height: 844, width: 390 } });
+
+  test('打开菜单不聚焦搜索框（不弹虚拟键盘，循环 167）', async ({ page }) => {
+    await page.goto('/edit');
+    // 移动端滑动布局：先切到「编辑」半屏（默认停在「预览」），等滑屏动画结束
+    await page.locator('#editorMode').click();
+    await page.waitForTimeout(400);
+    await page.getByTestId('insert-snippet-menu').click();
+    const search = page.getByTestId('snippet-search');
+    // 搜索框在场但未被自动聚焦——聚焦会弹起虚拟键盘把菜单顶出屏
+    await expect(search).toBeVisible();
+    await expect(search).not.toBeFocused();
+    // 点按条目照常插入（不聚焦不碍事）
+    await page.getByTestId('insert-snippet-node').click();
+    await expect(page.locator('.cm-content')).toContainText('A[标签]');
+  });
+});
