@@ -44,4 +44,33 @@ test.describe('应用级快捷键帮助', () => {
       )
       .toContain('?');
   });
+
+  test('桌面端帮助列出 Monaco 编辑器键位区块（循环 170）', async ({ page }) => {
+    await page.goto('/edit');
+
+    await page.locator('nav button').first().click();
+    await page.getByTestId('menu-shortcuts').click();
+    const dialog = page.getByTestId('app-shortcuts-dialog');
+    // Monaco 自带键位此前不可发现：F1 命令面板是全部命令的总入口
+    await expect(dialog).toContainText('代码编辑器（桌面端 Monaco）自带');
+    await expect(dialog).toContainText('命令面板');
+    await expect(dialog).toContainText('跳转到行');
+    await expect(dialog).toContainText('Ctrl+Shift+K');
+    await page.keyboard.press('Escape');
+  });
+
+  test('移动端不渲染 Monaco 区块（CodeMirror 键位不同，循环 170）', async ({ page }) => {
+    await page.setViewportSize({ height: 844, width: 390 });
+    await page.goto('/edit');
+
+    await page.locator('nav button').first().click();
+    await page.getByTestId('menu-shortcuts').click();
+    const dialog = page.getByTestId('app-shortcuts-dialog');
+    await expect(dialog).toBeVisible();
+    // 应用级条目仍在，Monaco 区块不出（移动端编辑器是 CodeMirror）
+    await expect(dialog).toContainText('收藏当前图到历史');
+    await expect(dialog).not.toContainText('Monaco');
+    await expect(dialog).not.toContainText('命令面板');
+    await page.keyboard.press('Escape');
+  });
 });

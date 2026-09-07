@@ -283,6 +283,21 @@
           <kbd class="rounded border bg-muted px-1.5 py-0.5 text-xs whitespace-nowrap">{keys}</kbd>
         </div>
       {/each}
+      <!-- Monaco（桌面端代码/配置编辑器）自带键位此前完全不可发现——F1 命令
+           面板里藏着格式化/折叠/跳转等全部命令。移动端是 CodeMirror（键位
+           不同），不渲染本区块。对话框随开随挂，打开时求值一次即可。 -->
+      {#if window.innerWidth >= 768}
+        <div class="mt-2 border-t pt-2 text-xs font-medium text-muted-foreground">
+          代码编辑器（桌面端 Monaco）自带
+        </div>
+        {#each [['F1', '命令面板：编辑器全部命令总入口'], ['Ctrl+G', '跳转到行'], ['Ctrl+D', '选中下一个相同词（多处同改）'], ['Alt+↑/↓', '移动当前行'], ['Shift+Alt+↓', '向下复制当前行'], ['Ctrl+Shift+K', '删除当前行'], ['Ctrl+/', '注释 / 取消注释']] as [keys, desc] (keys)}
+          <div class="flex items-center justify-between gap-4 text-sm">
+            <span>{desc}</span>
+            <kbd class="rounded border bg-muted px-1.5 py-0.5 text-xs whitespace-nowrap"
+              >{keys}</kbd>
+          </div>
+        {/each}
+      {/if}
       <div class="mt-2 text-xs text-muted-foreground">
         可视化编辑器的完整操作（24 项）见其工具栏的「快捷键与操作帮助」按钮。
       </div>
