@@ -172,6 +172,34 @@ test.describe('配置模板', () => {
     await expect(page.locator('.monaco-editor')).toContainText('"theme": "dark"');
   });
 
+  test('应用模板可一键撤销（toast 行动钮，循环 169）', async ({ page, editPage }) => {
+    await editPage.setEditorMode('配置');
+    const editor = page.locator('.monaco-editor');
+    await openPresetMenu(page);
+    await page.getByTestId('config-preset-theme-dark').click();
+    await expect(editor).toContainText('"theme": "dark"');
+
+    // toast 上的「撤销」一键回到应用前
+    await page.getByRole('button', { name: '撤销' }).click();
+    await expect(page.getByText('已撤销模板「深色主题」')).toBeVisible();
+    await expect(editor).toContainText('"theme": "default"');
+    await expect(editor).not.toContainText('"theme": "dark"');
+  });
+
+  test('应用后再改动配置，撤销守卫不覆盖手头内容（循环 169）', async ({ page, editPage }) => {
+    await editPage.setEditorMode('配置');
+    const editor = page.locator('.monaco-editor');
+    await openPresetMenu(page);
+    await page.getByTestId('config-preset-theme-dark').click();
+    await expect(editor).toContainText('"theme": "dark"');
+
+    // 应用后用户又改了配置：撤销不得覆盖手头内容
+    await replaceConfig(page, '{"theme":"forest"}');
+    await page.getByRole('button', { name: '撤销' }).click();
+    await expect(page.getByText('配置已变化，未撤销')).toBeVisible();
+    await expect(editor).toContainText('"theme":"forest"');
+  });
+
   test('搜索过滤与 ↑/↓ 导航：差异预览跟随高亮，Enter 应用高亮项（循环 168）', async ({
     page,
     editPage

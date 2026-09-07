@@ -18,7 +18,7 @@
     type UserPreset
   } from '$/util/configPresets';
   import { notify } from '$/util/notify';
-  import { updateConfig, validatedState } from '$/util/state.svelte';
+  import { inputState, updateConfig, validatedState } from '$/util/state.svelte';
   import { cn } from '$lib/utils';
   import PresetIcon from '~icons/material-symbols/dashboard-customize-outline-rounded';
   import DeleteIcon from '~icons/material-symbols/delete-outline-rounded';
@@ -26,14 +26,31 @@
 
   // 模板按深合并写入：同名标量覆盖、对象递归、数组替换——用户既有的
   // 其它键全部保留；JSON 无法解析时不做任何写入（手头内容优先）。
+  // 应用后 toast 附「撤销」：一键合并此前无确认无回头路，点错主题/版式
+  // 只能手改回去。守卫：配置又被改动过则不覆盖（读 inputState 同步值，
+  // 不用经异步校验的 validatedState，避免校验窗口期误判）。
   const applyPreset = (preset: ConfigPreset) => {
+    const previous = inputState.mermaid;
     const next = applyConfigPreset(validatedState.current.mermaid, preset);
     if (next === undefined) {
       notify('当前配置 JSON 无法解析，模板未应用（可先「重置为默认」）');
       return;
     }
     updateConfig(next);
-    notify(`已应用模板「${preset.label}」`);
+    notify(`已应用模板「${preset.label}」`, {
+      action: {
+        label: '撤销',
+        onClick: () => {
+          if (inputState.mermaid !== next) {
+            notify('配置已变化，未撤销（可手动改回）');
+            return;
+          }
+          updateConfig(previous);
+          notify(`已撤销模板「${preset.label}」`);
+        }
+      },
+      duration: 8000
+    });
   };
 
   const formatCurrent = () => {
