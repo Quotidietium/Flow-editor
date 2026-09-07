@@ -43,6 +43,84 @@ test.describe('插入代码片段', () => {
     await editPage.checkTextInView('分组');
   });
 
+  test('搜索过滤：键入即筛、Enter 插入首个匹配、Esc 清词再按关菜单（循环 165）', async ({
+    page,
+    editPage
+  }) => {
+    await editPage.clearEditor();
+    await editPage.typeInEditor('flowchart TD\n  ');
+
+    await page.getByTestId('insert-snippet-menu').click();
+    const search = page.getByTestId('snippet-search');
+    await expect(search).toBeFocused();
+
+    // 键入即筛：只剩子图骨架，其它条目与组名隐去
+    await search.fill('subgraph');
+    await expect(page.getByTestId('insert-snippet-subgraph')).toBeVisible();
+    await expect(page.getByTestId('insert-snippet-node')).toHaveCount(0);
+    await expect(page.getByTestId('insert-snippet-loop')).toHaveCount(0);
+
+    // Enter 插入首个匹配并关菜单（键盘闭环）
+    await search.press('Enter');
+    await expect(editPage.editor).toContainText('subgraph 分组');
+    await expect(search).toHaveCount(0);
+
+    // 无匹配空态 → Esc 清词恢复全量（不关菜单）
+    await page.getByTestId('insert-snippet-menu').click();
+    await search.fill('不存在的东西');
+    await expect(page.getByTestId('snippet-search-empty')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('snippet-search-empty')).toHaveCount(0);
+    await expect(page.getByTestId('insert-snippet-node')).toBeVisible();
+
+    // 空词时 Esc 照常关菜单；重开关键词归零
+    await page.keyboard.press('Escape');
+    await expect(search).toHaveCount(0);
+    await page.getByTestId('insert-snippet-menu').click();
+    await expect(page.getByTestId('snippet-search')).toHaveValue('');
+  });
+
+  test('键盘导航：↑/↓ 移动高亮、Enter 插入高亮项、循环回绕（循环 166）', async ({
+    page,
+    editPage
+  }) => {
+    await editPage.clearEditor();
+    await editPage.typeInEditor('flowchart TD\n  ');
+
+    await page.getByTestId('insert-snippet-menu').click();
+    const search = page.getByTestId('snippet-search');
+
+    // 键入组名「时序」：5 条时序骨架全留，高亮钉在首个匹配（参与者）
+    await search.fill('时序');
+    await expect(page.getByTestId('insert-snippet-participant')).toHaveAttribute(
+      'data-active',
+      'true'
+    );
+
+    // ↓↓ 挪到第三项（循环块），Enter 插入高亮项并收菜单
+    await search.press('ArrowDown');
+    await search.press('ArrowDown');
+    await expect(page.getByTestId('insert-snippet-loop')).toHaveAttribute('data-active', 'true');
+    await expect(search).toHaveAttribute('aria-activedescendant', 'snippet-opt-2');
+    await search.press('Enter');
+    await expect(editPage.editor).toContainText('loop 循环描述');
+    await expect(search).toHaveCount(0);
+
+    // 循环回绕：首项 ↑ 到末项（时序激活），末项 ↓ 回首项
+    await page.getByTestId('insert-snippet-menu').click();
+    await search.fill('时序');
+    await search.press('ArrowUp');
+    await expect(page.getByTestId('insert-snippet-activate')).toHaveAttribute(
+      'data-active',
+      'true'
+    );
+    await search.press('ArrowDown');
+    await expect(page.getByTestId('insert-snippet-participant')).toHaveAttribute(
+      'data-active',
+      'true'
+    );
+  });
+
   test('我的片段：保存当前代码、光标处插回、删除', async ({ page, editPage }) => {
     // 造一段可辨识的代码
     await editPage.clearEditor();
